@@ -1,0 +1,299 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Statistics</h1>
+        <p>{{ stats.subLabel }}</p>
+    </div>
+    <div class="header-actions">
+        <div class="segmented-control" aria-label="Statistics range">
+            {% for range in stats.ranges %}
+                <a class="{{ range.active ? 'is-active' : '' }}" href="{{ range.href }}">{{ range.label }}</a>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="stats-page">
+        {% if stats.hasTrending %}
+            <section class="trending-section" aria-label="Trending media">
+                <header class="stats-section-header">
+                    <strong>Trending</strong>
+                    <span>Most-watched this period</span>
+                    <i></i>
+                </header>
+                <div class="trending-row">
+                    {% for item in stats.trending %}
+                        {% include "statistics/_title_card.twig" with { item: item, rank: loop.index } only %}
+                    {% endfor %}
+                </div>
+            </section>
+        {% endif %}
+
+        {% if stats.hasMostWatched %}
+            <section class="trending-section" aria-label="Most watched of all time">
+                <header class="stats-section-header">
+                    <strong>Most Watched</strong>
+                    <span>All-time favourites - by play count</span>
+                    <i></i>
+                </header>
+                {% if stats.mostWatched.series is not empty %}
+                    <span class="trending-strip-label">TV Shows</span>
+                    <div class="trending-row">
+                        {% for item in stats.mostWatched.series %}
+                            {% include "statistics/_title_card.twig" with { item: item, rank: loop.index } only %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% if stats.mostWatched.movies is not empty %}
+                    <span class="trending-strip-label">Movies</span>
+                    <div class="trending-row">
+                        {% for item in stats.mostWatched.movies %}
+                            {% include "statistics/_title_card.twig" with { item: item, rank: loop.index } only %}
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </section>
+        {% endif %}
+
+        <section class="stats-kpi-grid" aria-label="Key playback metrics">
+            {% for kpi in stats.kpis %}
+                <article class="stats-kpi">
+                    <span><i style="background: {{ kpi.color }}"></i>{{ kpi.label }}</span>
+                    <strong>{{ kpi.value }}</strong>
+                    <small style="color: {{ kpi.deltaColor }}">{{ kpi.delta }}</small>
+                </article>
+            {% endfor %}
+        </section>
+
+        <header class="stats-section-header">
+            <strong>General</strong>
+            <span>Total watch time - top users</span>
+            <i></i>
+        </header>
+
+        <section class="stats-general-grid">
+            <article class="stats-card stats-watch-card">
+                <div class="stats-card-head">
+                    <div>
+                        <span class="stats-eyebrow">Total Watch Time</span>
+                        <strong>{{ stats.totalWatch }}</strong>
+                        <small style="color: {{ stats.totalWatchDeltaColor }}">{{ stats.totalWatchDelta }}</small>
+                    </div>
+                    <span class="stats-mono-chip">{{ stats.trendUnit }}</span>
+                </div>
+                <div class="stats-trend-bars" aria-label="Watch time trend">
+                    {% for bar in stats.trend %}
+                        <span>
+                            <i style="height: {{ bar.h }}"></i>
+                            <b>{{ bar.label }}</b>
+                        </span>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="stats-card">
+                <div class="stats-list-head">
+                    <strong>Top Users</strong>
+                    <span>by watch time</span>
+                </div>
+                <div class="stats-user-list">
+                    {% for user in stats.topUsers %}
+                        <div class="stats-user-row">
+                            <span class="watcher-avatar" style="background: {{ user.avatarBg }}">{{ user.initials }}</span>
+                            <div>
+                                <p><strong>{{ user.user }}</strong><small>{{ user.watch }}</small></p>
+                                <span class="stats-track"><i style="width: {{ user.w }}; background: {{ user.color }}"></i></span>
+                            </div>
+                        </div>
+                    {% else %}
+                        <p class="stats-empty-note">No user history in this range.</p>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        <header class="stats-section-header">
+            <strong>Transcoding</strong>
+            <span>Directness - codecs - reasons</span>
+            <i></i>
+        </header>
+
+        <section class="stats-transcoding-grid">
+            <article class="stats-card stats-donut-card">
+                <div>
+                    <strong>Playback Directness</strong>
+                    <span>session mix</span>
+                </div>
+                <div class="stats-donut-layout">
+                    <div class="stats-donut" style="background: {{ stats.directnessConic }}">
+                        <span><strong>{{ stats.directVal }}</strong><small>Direct</small></span>
+                    </div>
+                    <div class="stats-legend">
+                        {% for item in stats.directnessLegend %}
+                            <p><i style="background: {{ item.color }}"></i><span>{{ item.label }}</span><b>{{ item.pct }}</b></p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </article>
+
+            <article class="stats-card">
+                <div class="stats-list-head">
+                    <strong>Codec Usage</strong>
+                    <span>source video codecs</span>
+                </div>
+                {% if stats.hasCodecData %}
+                    <div class="stats-bars">
+                        {% for item in stats.codecs %}
+                            <div class="stats-bar-row">
+                                <p><span>{{ item.name }}</span><b>{{ item.pct }}</b></p>
+                                <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="stats-empty-note">Codec data will appear as new playback sessions are logged.</p>
+                {% endif %}
+            </article>
+
+            <article class="stats-card">
+                <div class="stats-list-head">
+                    <strong>Transcoding Reasons</strong>
+                    <span>logged by Jellyfin session metadata</span>
+                </div>
+                {% if stats.hasReasonData %}
+                    <div class="stats-bars">
+                        {% for item in stats.reasons %}
+                            <div class="stats-bar-row">
+                                <p><span>{{ item.name }}</span><b>{{ item.pct }}</b></p>
+                                <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="stats-empty-note">Reason data will appear for newly logged transcodes.</p>
+                {% endif %}
+            </article>
+        </section>
+
+        <header class="stats-section-header">
+            <strong>Clients</strong>
+            <span>Breakdown - popularity - transcoding - usage</span>
+            <i></i>
+        </header>
+
+        <section class="stats-client-grid">
+            <article class="stats-card stats-donut-card">
+                <div>
+                    <strong>Client Breakdown</strong>
+                    <span>sessions by client</span>
+                </div>
+                <div class="stats-donut-layout">
+                    <div class="stats-donut" style="background: {{ stats.clientsConic }}">
+                        <span><strong>{{ stats.totalSessionsVal }}</strong><small>Sessions</small></span>
+                    </div>
+                    <div class="stats-legend">
+                        {% for item in stats.clientBreakdown %}
+                            <p><i style="background: {{ item.color }}"></i><span>{{ item.name }}</span><b>{{ item.pct }}</b></p>
+                        {% else %}
+                            <p class="stats-empty-note">No clients in this range.</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </article>
+
+            <article class="stats-card">
+                <div class="stats-list-head">
+                    <strong>Most Popular Clients</strong>
+                    <span>ranked by sessions</span>
+                </div>
+                <div class="stats-bars">
+                    {% for item in stats.clientsRanked %}
+                        <div class="stats-ranked-row">
+                            <b>{{ item.rank }}</b>
+                            <div>
+                                <p><span>{{ item.name }}</span><small>{{ item.sessions }} sessions</small></p>
+                                <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
+                            </div>
+                        </div>
+                    {% else %}
+                        <p class="stats-empty-note">No client sessions in this range.</p>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="stats-card">
+                <div class="stats-list-head has-inline-legend">
+                    <div>
+                        <strong>Transcoding by Client</strong>
+                        <span>direct vs transcode</span>
+                    </div>
+                    <p><i class="dot-green"></i>Direct <i class="dot-amber"></i>Transcode</p>
+                </div>
+                <div class="stats-bars">
+                    {% for item in stats.clientsTranscode %}
+                        <div class="stats-stack-row">
+                            <p><span>{{ item.name }}</span><b>{{ item.transcodeVal }}</b></p>
+                            <span class="stats-stack-track">
+                                <i style="width: {{ item.directPct }}"></i>
+                                <b style="width: {{ item.transcodePctStr }}"></b>
+                            </span>
+                        </div>
+                    {% else %}
+                        <p class="stats-empty-note">No client sessions in this range.</p>
+                    {% endfor %}
+                </div>
+            </article>
+
+            <article class="stats-card">
+                <div class="stats-list-head">
+                    <strong>Client Usage</strong>
+                    <span>watch time per client</span>
+                </div>
+                <div class="stats-bars">
+                    {% for item in stats.clientsUsage %}
+                        <div class="stats-bar-row">
+                            <p><span>{{ item.name }}</span><b>{{ item.watch }}</b></p>
+                            <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
+                        </div>
+                    {% else %}
+                        <p class="stats-empty-note">No client usage in this range.</p>
+                    {% endfor %}
+                </div>
+            </article>
+        </section>
+
+        <header class="stats-section-header">
+            <strong>Users</strong>
+            <span>Watch time - plays - average per play</span>
+            <i></i>
+        </header>
+
+        <section class="stats-user-table" aria-label="User statistics">
+            <div class="stats-user-head">
+                <span>User</span>
+                <span>Watch Time</span>
+                <span>Plays</span>
+                <span>Avg / Play</span>
+                <span>Share</span>
+            </div>
+            {% for user in stats.usersTable %}
+                <article class="stats-user-table-row">
+                    <div class="stats-user-name">
+                        <span class="watcher-avatar" style="background: {{ user.avatarBg }}">{{ user.initials }}</span>
+                        <strong>{{ user.user }}</strong>
+                    </div>
+                    <span class="history-mono">{{ user.watch }}</span>
+                    <span class="history-mono">{{ user.plays }}</span>
+                    <span class="history-mono">{{ user.avg }}</span>
+                    <span class="stats-track"><i style="width: {{ user.w }}"></i></span>
+                </article>
+            {% else %}
+                <article class="stats-user-table-row is-empty">
+                    <span>No user statistics in this range.</span>
+                </article>
+            {% endfor %}
+        </section>
+    </div>
+{% endblock %}

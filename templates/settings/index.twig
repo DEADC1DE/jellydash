@@ -1,0 +1,91 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Settings</h1>
+        <p>Preferences stored in the database; infrastructure stays in <code>.env</code></p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    {% if saved %}
+        <div class="settings-saved" role="status">Settings saved.</div>
+    {% endif %}
+
+    <form class="settings-form" action="?req=settings" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <section class="settings-card">
+            <header>
+                <strong>General</strong>
+                <span>Branding shown in the sidebar</span>
+            </header>
+            <label class="settings-field">
+                <span>Server label</span>
+                <input type="text" name="server_label" maxlength="64" value="{{ server_label_value }}" placeholder="e.g. media.example.com">
+                <small>Shown under the Jellydash brand. Leave empty to hide.</small>
+            </label>
+        </section>
+
+        <section class="settings-card">
+            <header>
+                <strong>Statistics</strong>
+                <span>Libraries excluded from Trending and Most Watched</span>
+            </header>
+            {% if libraries is not null and libraries is not empty %}
+                <div class="settings-checks">
+                    {% for library in libraries %}
+                        <label class="settings-check">
+                            <input type="checkbox" name="trending_exclude[]" value="{{ library }}"
+                                {{ library|lower in excluded|map(l => l|lower) ? 'checked' : '' }}>
+                            <span>{{ library }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <label class="settings-field">
+                    <span>Additional names (comma-separated)</span>
+                    <input type="text" name="trending_exclude_extra" value="{{ extra_excluded }}" placeholder="Optional">
+                    <small>For libraries Jellyfin didn't report just now.</small>
+                </label>
+            {% else %}
+                <label class="settings-field">
+                    <span>Excluded libraries (comma-separated)</span>
+                    <input type="text" name="trending_exclude_extra" value="{{ excluded|join(', ') }}" placeholder="e.g. Home Videos">
+                    <small>Jellyfin didn't report its libraries. Enter names manually.</small>
+                </label>
+            {% endif %}
+        </section>
+
+        <section class="settings-card">
+            <header>
+                <strong>Notifications</strong>
+                <span>Users whose playback never triggers a push alert</span>
+            </header>
+            {% if users is not empty %}
+                <div class="settings-checks">
+                    {% for user in users %}
+                        <label class="settings-check">
+                            <input type="checkbox" name="push_ignore[]" value="{{ user }}"
+                                {{ user|lower in ignored_users|map(u => u|lower) ? 'checked' : '' }}>
+                            <span>{{ user }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <label class="settings-field">
+                    <span>Additional users (comma-separated)</span>
+                    <input type="text" name="push_ignore_extra" value="{{ extra_ignored }}" placeholder="Optional">
+                </label>
+                <small class="settings-note">Users appear here once they show up in play history. Typically you exclude yourself.</small>
+            {% else %}
+                <label class="settings-field">
+                    <span>Ignored users (comma-separated)</span>
+                    <input type="text" name="push_ignore_extra" value="{{ ignored_users|join(', ') }}" placeholder="e.g. your own username">
+                </label>
+            {% endif %}
+        </section>
+
+        <div class="settings-actions">
+            <button type="submit" class="settings-save-btn">Save settings</button>
+        </div>
+    </form>
+{% endblock %}

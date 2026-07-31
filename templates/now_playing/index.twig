@@ -1,0 +1,65 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Now Playing</h1>
+        <p><span class="live-dot {{ streams|length > 0 ? 'is-live' : 'is-idle' }}" data-live-dot></span><span data-live-label>{{ is_loading|default(false) ? 'Loading sessions...' : (streams|length > 0 ? streams|length ~ ' streams - ' ~ stats.active_users ~ ' users' : 'No active sessions') }}</span></p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div data-now-playing-root>
+        {% if is_loading|default(false) %}
+            {% include "now_playing/_loading.twig" %}
+        {% elseif streams is empty %}
+            {% include "now_playing/_empty.twig" %}
+        {% else %}
+            <div class="stream-grid">
+                {% for stream in streams %}
+                    {% include "now_playing/_stream_card.twig" with { stream: stream } %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block dashboard_footer %}
+    <div class="stat-cell">
+        <span><i class="dot-purple"></i>Watch time today</span>
+        <strong data-stat="watch_today">{{ stats.watch_today }}</strong>
+    </div>
+    <div class="stat-cell">
+        <span><i class="dot-green"></i>Active streams</span>
+        <strong data-stat-block="active_streams">
+            {% if stats.active_streams > 0 %}
+                <span>{{ stats.active_streams }}</span> <small>{{ stats.active_streams == 1 ? 'user' : 'users' }}</small>
+            {% else %}
+                <span class="stat-placeholder">Idle</span>
+            {% endif %}
+        </strong>
+    </div>
+    <div class="stat-cell">
+        <span><i class="dot-blue"></i>Bandwidth in use</span>
+        <strong data-stat-block="bandwidth">
+            {% if stats.active_streams > 0 %}
+                <span>{{ stats.bandwidth_mbps }}</span> <small>Mbps</small>
+            {% else %}
+                <span class="stat-placeholder">Idle</span>
+            {% endif %}
+        </strong>
+    </div>
+    <div class="stat-cell">
+        <span><i class="dot-amber"></i>Transcoding</span>
+        <strong data-stat-block="transcoding">
+            {% if stats.active_streams > 0 %}
+                <span>{{ stats.transcodes }}</span> <small>of {{ stats.active_streams }} streams</small>
+            {% else %}
+                <span class="stat-placeholder">None</span>
+            {% endif %}
+        </strong>
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+    <script src="/assets/js/now-playing.js?v=20260730-live"></script>
+{% endblock %}

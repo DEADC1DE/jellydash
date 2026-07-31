@@ -1,0 +1,100 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Jellyseerr</h1>
+        <p>Latest requests from your users</p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    {% if not configured %}
+        <div class="empty-state">
+            <div class="empty-orbit" aria-hidden="true">
+                <span></span>
+                <svg viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 9.8l5-.7z"></path>
+                </svg>
+            </div>
+            <h2>Jellyseerr isn't connected</h2>
+            <p>Set <code>JELLYSEER_URL</code> and <code>JELLYSEER_API_TOKEN</code> in your environment to see requests here.</p>
+        </div>
+    {% elseif error %}
+        <div class="empty-state">
+            <div class="empty-orbit" aria-hidden="true">
+                <span></span>
+                <svg viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M12 8v5"></path>
+                    <path d="M12 16.5v.01"></path>
+                </svg>
+            </div>
+            <h2>Could not load requests</h2>
+            <p>{{ error }}</p>
+        </div>
+    {% elseif requests is empty %}
+        <div class="empty-state">
+            <div class="empty-orbit" aria-hidden="true">
+                <span></span>
+                <svg viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 9.8l5-.7z"></path>
+                </svg>
+            </div>
+            <h2>No requests yet</h2>
+            <p>New Jellyseerr requests show up here and ping your phone the moment they arrive.</p>
+        </div>
+    {% else %}
+        <div class="seerr-grid">
+            {% for request in requests %}
+                <article class="seerr-card">
+                    <div class="seerr-poster">
+                        {% if request.poster %}
+                            <img src="{{ request.poster }}" alt="" loading="lazy" decoding="async">
+                        {% else %}
+                            <span class="seerr-poster-fallback" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" role="img" focusable="false">
+                                    <path d="M4 5.5h16v13H4z"></path>
+                                    <path d="M4 10h16"></path>
+                                    <path d="M9 5.5v4.5"></path>
+                                </svg>
+                            </span>
+                        {% endif %}
+                        <span class="seerr-status is-{{ request.status_kind }}">{{ request.status_label }}</span>
+                        {% if request.is_4k %}<span class="seerr-4k">4K</span>{% endif %}
+                    </div>
+
+                    <div class="seerr-body">
+                        <strong class="seerr-title" title="{{ request.title }}">{{ request.title }}</strong>
+                        <span class="seerr-meta">
+                            {{ request.type_label }}{% if request.year %} · {{ request.year }}{% endif %}{% if request.seasons %} · {{ request.seasons }} season{{ request.seasons > 1 ? 's' : '' }}{% endif %}
+                        </span>
+
+                        <div class="seerr-foot">
+                            <span class="seerr-avatar" aria-hidden="true">{{ request.initials }}</span>
+                            <span class="seerr-user" title="{{ request.requester }}">{{ request.requester }}</span>
+                            <span class="seerr-time">{{ request.requested_ago }}</span>
+                        </div>
+                    </div>
+                </article>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block dashboard_footer %}
+    <div class="stat-cell">
+        <span><i class="dot-purple"></i>Showing</span>
+        <strong>{{ summary.total }}</strong>
+    </div>
+    <div class="stat-cell">
+        <span><i class="dot-green"></i>Available</span>
+        <strong>{{ summary.available ?: 'None' }}</strong>
+    </div>
+    <div class="stat-cell">
+        <span><i class="dot-blue"></i>Requested</span>
+        <strong>{{ summary.requested ?: 'None' }}</strong>
+    </div>
+    <div class="stat-cell">
+        <span><i class="dot-amber"></i>Awaiting approval</span>
+        <strong>{{ summary.pending ?: 'None' }}</strong>
+    </div>
+{% endblock %}

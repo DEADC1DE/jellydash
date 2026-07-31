@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="content-language" content="en">
+    <title>{{ layout.title ? layout.title ~ ' | Jellydash' : 'Jellydash' }}</title>
+
+    {# Favicons + installable web-app icons #}
+    <link rel="icon" type="image/x-icon" sizes="16x16" href="/favicon_16.ico">
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="/favicon_32.ico">
+    <link rel="icon" type="image/x-icon" sizes="48x48" href="/favicon_48.ico">
+    <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials">
+    <meta name="theme-color" content="#0a0910">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Jellydash">
+    {% if push_enabled and vapid_public_key %}
+        <meta name="vapid-public-key" content="{{ vapid_public_key }}">
+    {% endif %}
+
+    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260801-loginhint">
+    {% for href in module_styles %}
+        <link rel="stylesheet" href="{{ href }}">
+    {% endfor %}
+</head>
+<body>
+<div class="app-shell">
+    <header class="mobile-topbar">
+        <button class="nav-toggle" type="button" aria-label="Open menu" aria-controls="dashboard-sidebar" aria-expanded="false" data-nav-toggle>
+            <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                <path d="M4 7h16"></path>
+                <path d="M4 12h16"></path>
+                <path d="M4 17h16"></path>
+            </svg>
+        </button>
+        <a class="mobile-brand" href="/now-playing" aria-label="Jellydash">
+            <span class="brand-mark" aria-hidden="true">
+                <img src="/assets/img/jellydash_logo.png" alt="">
+            </span>
+            <strong>Jellydash</strong>
+        </a>
+        {% if push_enabled and vapid_public_key %}
+            <button class="topbar-bell" type="button" data-push-toggle aria-label="Playback notifications" aria-pressed="false" hidden>
+                <svg class="bell-off" viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+                </svg>
+                <svg class="bell-on" viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                    <path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+                    <circle class="bell-dot" cx="18" cy="6" r="3.2"></circle>
+                </svg>
+            </button>
+        {% endif %}
+    </header>
+
+    <div class="nav-backdrop" data-nav-backdrop hidden></div>
+
+    {% include "_sidebar.twig" %}
+
+    <main class="dashboard-main">
+        <header class="dashboard-header">
+            {% block dashboard_header %}{% endblock %}
+        </header>
+
+        <section class="dashboard-content">
+            {% block dashboard_content %}{% endblock %}
+        </section>
+
+        {% if not layout.hide_footer|default(false) %}
+            <footer class="dashboard-footer">
+                {% block dashboard_footer %}{% endblock %}
+            </footer>
+        {% endif %}
+    </main>
+</div>
+
+{% block page_scripts %}{% endblock %}
+<script src="/assets/js/pwa.js?v=20260624-pwa"></script>
+<script src="/assets/js/push.js?v=20260802-pushlog"></script>
+<script src="/assets/js/nav.js?v=20260620-nav"></script>
+<script src="/assets/js/server-stats.js?v=20260620-stats"></script>
+{% for src in module_scripts %}
+    <script src="{{ src }}"></script>
+{% endfor %}
+</body>
+</html>

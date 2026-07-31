@@ -1,0 +1,165 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Mk\Framework\Jellyseerr;
+
+use Mk\Framework\Log;
+
+/**
+ * Keeps the local request mirror in step with Jellyseerr.
+ *
+ * One list call refreshes every known request's status; only requests we've
+ * never seen cost an extra TMDB detail lookup for their title and poster.
+ */
+final class RequestSyncService
+{
+    // How many of the newest requests to track. Comfortably more than the page
+    // shows, so status changes on slightly older entries still get picked up.
+    private const FETCH_COUNT = 40;
+
+    public function __construct(
+        private ?JellyseerrClient $client = null,
+        private ?SeerrRequestRepository $repository = null,
+    ) {
+    }
+
+    /**
+     * Pull the latest requests. Returns how many brand-new ones were stored.
+     * On the very first sync everything is marked as already notified, so
+     * enabling the feature never fires a burst of alerts for old requests.
+     */
+    public function sync(): int
+    {
+        $client = $this->client ?? new JellyseerrClient();
+        if (!$client->isConfigured()) {
+            return 0;
+        }
+
+        $repo = $this->repository ?? new SeerrRequestRepository();
+        $firstRun = $repo->isEmpty();
+        $requests = $client->requests(self::FETCH_COUNT);
+
+        if ($requests === []) {
+            return 0;
+        }
+
+        $ids = [];
+        foreach ($requests as $request) {
+            $id = (int) ($request['id'] ?? 0);
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+
+        $known = $repo->knownIds($ids);
+        $now = (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+        $new = 0;
+
+        foreach ($requests as $request) {
+            $requestId = (int) ($request['id'] ?? 0);
+            $media = is_array($request['media'] ?? null) ? $request['media'] : [];
+            $mediaType = (string) ($media['mediaType'] ?? 'movie');
+            $tmdbId = (int) ($media['tmdbId'] ?? 0);
+
+            if ($requestId <= 0 || $tmdbId <= 0) {
+                continue;
+            }
+
+            $requestStatus = (int) ($request['status'] ?? 0);
+            $mediaStatus = (int) ($media['status'] ?? 0);
+
+            if (in_array($requestId, $known, true)) {
+                $repo->updateStatuses($requestId, $requestStatus, $mediaStatus);
+                continue;
+            }
+
+            $details = $this->detailsFor($client, $mediaType, $tmdbId);
+
+            $repo->insert([
+                'request_id' => $requestId,
+                'media_type' => $mediaType,
+                'tmdb_id' => $tmdbId,
+                'title' => $details['title'],
+                'year' => $details['year'],
+                'poster_path' => $details['posterPath'],
+                'requested_by' => $this->requesterName($request),
+                'request_status' => $requestStatus,
+                'media_status' => $mediaStatus,
+                'is_4k' => ($request['is4k'] ?? false) ? 1 : 0,
+                'season_count' => isset($request['seasonCount']) ? (int) $request['seasonCount'] : null,
+                'requested_at' => $this->requestedAt($request, $now),
+                'notified' => $firstRun ? 1 : 0,
+                'created_at' => $now,
+            ]);
+
+            $new++;
+        }
+
+        return $new;
+    }
+
+    /**
+     * Title/year/poster for a request. A detail-lookup failure must not abort
+     * the sync: we store a placeholder so the request still shows up and still
+     * triggers its notification.
+     *
+     * @return array{title: string, year: ?string, posterPath: ?string}
+     */
+    private function detailsFor(JellyseerrClient $client, string $mediaType, int $tmdbId): array
+    {
+        try {
+            $detail = $mediaType === 'tv' ? $client->tv($tmdbId) : $client->movie($tmdbId);
+
+            return RequestMapper::details($detail, $mediaType);
+        } catch (\Throwable $e) {
+            Log::logException($e);
+
+            return ['title' => $mediaType === 'tv' ? 'Unknown series' : 'Unknown title', 'year' => null, 'posterPath' => null];
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $request
+     */
+    private function requesterName(array $request): ?string
+    {
+        $by = is_array($request['requestedBy'] ?? null) ? $request['requestedBy'] : [];
+
+        foreach (['displayName', 'jellyfinUsername', 'username', 'email'] as $key) {
+            $value = trim((string) ($by[$key] ?? ''));
+            if ($value !== '') {
+                return mb_substr($value, 0, 128);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Jellyseerr timestamps are UTC ISO-8601; store them in the app's timezone
+     * so they line up with the rest of the dashboard.
+     *
+     * @param array<string, mixed> $request
+     */
+    private function requestedAt(array $request, string $fallback): string
+    {
+        $raw = trim((string) ($request['createdAt'] ?? ''));
+        if ($raw === '') {
+            return $fallback;
+        }
+
+        // Pin the target zone to the app's constant rather than whatever the
+        // ambient default happens to be; a caller that skipped the usual
+        // bootstrap would otherwise store UTC and skew every "x ago" label.
+        $zone = defined('TIMEZONE_EU') ? TIMEZONE_EU : date_default_timezone_get();
+
+        try {
+            return (new \DateTimeImmutable($raw))
+                ->setTimezone(new \DateTimeZone($zone))
+                ->format('Y-m-d H:i:s');
+        } catch (\Exception) {
+            return $fallback;
+        }
+    }
+}

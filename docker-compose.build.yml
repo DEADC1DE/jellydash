@@ -1,0 +1,11 @@
+# Build the app image from this checkout instead of pulling it from GHCR.
+# Use together with the main compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jellydash:local

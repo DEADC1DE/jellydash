@@ -1,0 +1,25 @@
+<section class="history-day">
+    <header class="history-day-header">
+        <div>
+            <h2>{{ group.label }}</h2>
+            <span>{{ group.dateSub }}</span>
+        </div>
+        <strong>{{ group.summary }}</strong>
+    </header>
+
+    <div class="history-table">
+        <div class="history-head">
+            <span>Time</span>
+            <span>User</span>
+            <span>Item</span>
+            <span>Method</span>
+            <span>Client</span>
+            <span>Device</span>
+            <span>Watched</span>
+        </div>
+
+        {% for play in group.plays %}
+            {% include "history/_history_row.twig" with { play: play } %}
+        {% endfor %}
+    </div>
+</section>

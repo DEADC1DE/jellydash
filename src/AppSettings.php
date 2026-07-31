@@ -1,0 +1,102 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Mk\Framework;
+
+/**
+ * DB-backed application settings (the Settings page writes these).
+ *
+ * Distinct from Config (environment): env carries infrastructure (DB
+ * credentials, service URLs, secrets) while these are user preferences
+ * editable from the UI. A key that has never been saved returns null, letting
+ * callers fall back to a legacy env var; an explicitly saved empty string is a
+ * real value ("user cleared this") and does NOT fall through.
+ *
+ * Reads are cached for the request; a DB outage degrades to defaults instead
+ * of breaking the page.
+ */
+final class AppSettings
+{
+    /** @var array<string, string>|null */
+    private static ?array $cache = null;
+    private static bool $schemaEnsured = false;
+
+    public static function get(string $key, ?string $default = null): ?string
+    {
+        $all = self::load();
+
+        return $all[$key] ?? $default;
+    }
+
+    public static function set(string $key, ?string $value): void
+    {
+        $db = Container::db()->getDibi();
+        self::ensureSchema($db);
+
+        if ($value === null) {
+            $db->delete('app_settings')->where('setting_key = %s', $key)->execute();
+        } else {
+            $now = (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s');
+            try {
+                $db->insert('app_settings', [
+                    'setting_key' => $key,
+                    'setting_value' => $value,
+                    'updated_at' => $now,
+                ])->execute();
+            } catch (\Dibi\UniqueConstraintViolationException) {
+                $db->update('app_settings', ['setting_value' => $value, 'updated_at' => $now])
+                    ->where('setting_key = %s', $key)
+                    ->execute();
+            }
+        }
+
+        if (self::$cache !== null) {
+            if ($value === null) {
+                unset(self::$cache[$key]);
+            } else {
+                self::$cache[$key] = $value;
+            }
+        }
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function load(): array
+    {
+        if (self::$cache !== null) {
+            return self::$cache;
+        }
+
+        try {
+            $db = Container::db()->getDibi();
+            self::ensureSchema($db);
+            $rows = $db->select('setting_key, setting_value')->from('app_settings')->fetchPairs('setting_key', 'setting_value');
+            self::$cache = array_map('strval', $rows);
+        } catch (\Throwable $e) {
+            Log::logException($e);
+            self::$cache = [];
+        }
+
+        return self::$cache;
+    }
+
+    private static function ensureSchema(\Dibi\Connection $db): void
+    {
+        if (self::$schemaEnsured) {
+            return;
+        }
+
+        $db->query(
+            'CREATE TABLE IF NOT EXISTS `app_settings` (
+                `setting_key` varchar(64) NOT NULL,
+                `setting_value` text NOT NULL,
+                `updated_at` datetime NOT NULL,
+                PRIMARY KEY (`setting_key`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+
+        self::$schemaEnsured = true;
+    }
+}

@@ -1,0 +1,39 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Libraries</h1>
+        <p>At-a-glance stats for selected media libraries</p>
+    </div>
+    <div class="header-actions">
+        <span class="library-status-chip" data-libraries-status>
+            <i></i>
+            {{ refreshedLabel }}
+        </span>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="libraries-page" data-libraries-root>
+        <section class="library-summary-grid is-loading" aria-label="Library summary" data-library-summary>
+            {% for label in ['Libraries', 'Total Items', 'Storage Used', 'Total Plays'] %}
+                <article class="library-summary-card is-loading">
+                    <span><i></i>{{ label }}</span>
+                    <strong>...</strong>
+                    <small>Loading</small>
+                </article>
+            {% endfor %}
+        </section>
+
+        <section class="library-grid is-loading" aria-label="Media libraries" data-library-grid>
+            <article class="library-empty-state">
+                <strong>Loading library stats...</strong>
+                <span>The dashboard is still usable while Jellyfin is scanned.</span>
+            </article>
+        </section>
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+    <script src="/assets/js/libraries.js?v=20260620-async"></script>
+{% endblock %}

@@ -1,0 +1,3 @@
+# The Twig cache holds compiled .php templates. Block all direct web access.
+# (Interim measure. Phase 4 moves this dir outside the web root entirely.)
+Require all denied

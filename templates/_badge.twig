@@ -1,0 +1,6 @@
+{% set badge_item = item|default({}) %}
+{% set is_transcode = badge_item.isTranscode|default(false) %}
+<span class="method-badge {{ is_transcode ? 'is-transcode' : 'is-direct' }}">
+    <i></i>
+    <span>{{ badge_item.methodLabel|default(is_transcode ? 'Transcoding' : 'Direct Play') }}</span>
+</span>

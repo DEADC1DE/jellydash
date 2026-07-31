@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign in | Jellydash</title>
+
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="/favicon_32.ico">
+    <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
+    <meta name="theme-color" content="#0a0910">
+
+    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260801-loginhint">
+</head>
+<body class="login-body">
+<main class="login-card">
+    <div class="login-brand">
+        <span class="brand-mark" aria-hidden="true">
+            <img src="/assets/img/jellydash_logo.png" alt="">
+        </span>
+        <strong>Jellydash</strong>
+    </div>
+
+    <p class="login-hint">Sign in to your dashboard</p>
+
+    {% if no_users %}
+        <div class="login-notice" role="alert">
+            No user account exists yet, so signing in cannot work. Set
+            AUTH_ADMIN_USER and AUTH_ADMIN_PASSWORD (at least 8 characters)
+            in your .env and restart the container. The container log shows
+            the reason when the account could not be created.
+        </div>
+    {% elseif error_msg %}
+        <div class="login-error" role="alert">{{ error_msg }}</div>
+    {% endif %}
+
+    <form action="?auth=login" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label class="settings-field">
+            <span>Username</span>
+            <input type="text" name="username" autocomplete="username" autofocus required>
+        </label>
+        <label class="settings-field">
+            <span>Password</span>
+            <input type="password" name="pwd" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="settings-save-btn login-submit">Sign in</button>
+    </form>
+</main>
+</body>
+</html>

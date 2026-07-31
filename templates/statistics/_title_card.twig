@@ -1,0 +1,18 @@
+{# Poster card shared by the Trending and Most Watched strips.
+   Expects: item (title/poster/href/meta/multi/users), rank (1-based). #}
+<a class="trending-card{{ item.multi ? ' is-hot' : '' }}" href="{{ item.href }}">
+    <div class="trending-poster" style="background-image: {{ item.poster }}">
+        <span class="trending-rank">{{ rank }}</span>
+        {% if item.multi %}
+            <span class="trending-tag">
+                <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                    <path d="M4 17l5-5 4 3 6-7"></path>
+                    <path d="M16 8h3v3"></path>
+                </svg>
+                {{ item.users }}
+            </span>
+        {% endif %}
+    </div>
+    <strong class="trending-title">{{ item.title }}</strong>
+    <span class="trending-meta">{{ item.meta }}</span>
+</a>

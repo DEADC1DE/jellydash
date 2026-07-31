@@ -1,0 +1,84 @@
+services:
+  app:
+    image: ghcr.io/themartz90/jellydash:latest
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    environment:
+      APP_ENV: "${APP_ENV:-production}"
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      APP_TIMEZONE: "${APP_TIMEZONE:-UTC}"
+      # Bundled MariaDB below. Using your own database server instead? Point
+      # DB_HOST at it and drop the db service in docker-compose.override.yml.
+      DB_HOST: "${DB_HOST:-db}"
+      DB_PORT: "${DB_PORT:-3306}"
+      DB_DRIVER: mysqli
+      DB_NAME: "${DB_NAME:-jellydash}"
+      DB_USER: "${DB_USER:-jellydash}"
+      DB_PASS: "${DB_PASS:-change-me}"
+      JELLYFIN_URL: "${JELLYFIN_URL}"
+      JELLYFIN_API_TOKEN: "${JELLYFIN_API_TOKEN}"
+      JELLYFIN_VERIFY_SSL: "${JELLYFIN_VERIFY_SSL:-true}"
+      LIBRARIES_CACHE_TTL: "${LIBRARIES_CACHE_TTL:-300}"
+      # Jellyseerr (optional; the page hides until these are set)
+      JELLYSEER_URL: "${JELLYSEER_URL:-}"
+      JELLYSEER_API_TOKEN: "${JELLYSEER_API_TOKEN:-}"
+      JELLYSEER_VERIFY_SSL: "${JELLYSEER_VERIFY_SSL:-true}"
+      SEERR_POLL_INTERVAL: "${SEERR_POLL_INTERVAL:-120}"
+      SEERR_NOTIFY_ENABLED: "${SEERR_NOTIFY_ENABLED:-true}"
+      # Background poller (history recording, cache warming, alerts)
+      POLLER_ENABLED: "${POLLER_ENABLED:-true}"
+      POLL_INTERVAL: "${POLL_INTERVAL:-30}"
+      # Web Push notifications (optional; generate keys once, see README)
+      PUSH_ENABLED: "${PUSH_ENABLED:-true}"
+      VAPID_PUBLIC_KEY: "${VAPID_PUBLIC_KEY:-}"
+      VAPID_PRIVATE_KEY: "${VAPID_PRIVATE_KEY:-}"
+      VAPID_SUBJECT: "${VAPID_SUBJECT:-mailto:admin@example.com}"
+      PUSH_IGNORE_USERS: "${PUSH_IGNORE_USERS:-}"
+      # Public base URL (optional): external alert links point back here.
+      APP_URL: "${APP_URL:-}"
+      # Extra notification channels; each is active once its config is set.
+      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
+      TELEGRAM_CHAT_ID: "${TELEGRAM_CHAT_ID:-}"
+      PUSHOVER_APP_TOKEN: "${PUSHOVER_APP_TOKEN:-}"
+      PUSHOVER_USER_KEY: "${PUSHOVER_USER_KEY:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      # Libraries hidden from Trending/Most Watched (also editable in Settings)
+      TRENDING_EXCLUDE_LIBRARIES: "${TRENDING_EXCLUDE_LIBRARIES:-}"
+      # Optional login gate (recommended when internet-facing)
+      AUTH_ENABLED: "${AUTH_ENABLED:-false}"
+      AUTH_ADMIN_USER: "${AUTH_ADMIN_USER:-}"
+      AUTH_ADMIN_PASSWORD: "${AUTH_ADMIN_PASSWORD:-}"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_cache:/var/www/html/cache
+      - app_runtime_cache:/var/www/html/var/cache
+      - app_logs:/var/www/html/var/log
+      - app_uploads:/var/www/html/public/uploads
+      # Drop-in feature modules (see docs/MODULES.md), e.g.:
+      # - ./my-modules/downloads:/var/www/html/modules/downloads:ro
+
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+      MARIADB_DATABASE: "${DB_NAME:-jellydash}"
+      MARIADB_USER: "${DB_USER:-jellydash}"
+      MARIADB_PASSWORD: "${DB_PASS:-change-me}"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  app_cache:
+  app_runtime_cache:
+  app_logs:
+  app_uploads:
+  db_data:

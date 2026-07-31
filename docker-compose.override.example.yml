@@ -1,0 +1,19 @@
+# Host-specific tweaks live in docker-compose.override.yml (git-ignored), so
+# updates never conflict with your local setup. Copy this file to
+# docker-compose.override.yml and keep only what you need.
+
+services:
+  app:
+    # Mount drop-in feature modules (see docs/MODULES.md):
+    # volumes:
+    #   - ./my-modules/downloads:/var/www/html/modules/downloads:ro
+
+    # Using your own database server instead of the bundled one? Point the app
+    # at it (and see below for removing the bundled db):
+    # environment:
+    #   DB_HOST: my-mariadb-host
+
+  # To disable the bundled MariaDB entirely, uncomment:
+  # db:
+  #   deploy:
+  #     replicas: 0

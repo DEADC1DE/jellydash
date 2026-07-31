@@ -1,0 +1,39 @@
+<article class="stream-card">
+    <div class="stream-backdrop" style="background-image: {{ stream.backdrop }}"></div>
+    <div class="stream-card-overlay"></div>
+    <div class="stream-watermark">{{ stream.initials }}</div>
+
+    <div class="stream-card-content">
+        <div class="stream-card-top">
+            <span class="now-pill {{ stream.isPaused|default(false) ? 'is-paused' : '' }}"><i></i>{{ stream.statusLabel|default('Now Playing') }}</span>
+            <div class="playback-stack">
+                {% include "_badge.twig" with { item: stream } %}
+                <span class="quality-chip">{{ stream.quality }}</span>
+            </div>
+        </div>
+
+        <div class="stream-card-spacer"></div>
+
+        <div>
+            <div class="kind-label">{{ stream.kindLabel }}</div>
+            <h3>{{ stream.title }}</h3>
+            <p>{{ stream.subtitle }}</p>
+        </div>
+
+        <div class="watcher-row">
+            <span class="watcher-avatar" style="background: {{ stream.avatarBg }}">{{ stream.initials }}</span>
+            <span>
+                <strong>{{ stream.user }}</strong>
+                <small>{{ stream.deviceLine }}</small>
+            </span>
+        </div>
+
+        <div class="progress-block">
+            <div class="progress-track"><span style="width: {{ stream.progressPct }}"></span></div>
+            <div class="progress-labels">
+                <span>{{ stream.timeLabel }}</span>
+                <span>{{ stream.remaining }}</span>
+            </div>
+        </div>
+    </div>
+</article>

@@ -1,0 +1,8 @@
+parameters:
+    level: 5
+    paths:
+        - src
+        - modules
+    bootstrapFiles:
+        - phpstan-bootstrap.php
+    reportUnmatchedIgnoredErrors: false

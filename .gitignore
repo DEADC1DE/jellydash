@@ -1,0 +1,55 @@
+# Dependencies
+/vendor/
+/node_modules/
+
+# Composer
+composer.phar
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Host-specific Docker Compose overrides (bind mounts, ports, etc.). Each host
+# keeps its own; never tracked, so `git pull` never conflicts on compose config.
+docker-compose.override.yml
+
+# Twig compiled cache
+/cache/*
+!/cache/.gitkeep
+!/cache/.htaccess
+
+# User uploads (now under the public/ web root)
+/public/uploads/*
+!/public/uploads/.gitkeep
+!/public/uploads/.htaccess
+!/public/uploads/images/.gitkeep
+
+# IDE
+/.idea/
+/.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/var/log/*
+!/var/log/.gitkeep
+/var/cache/*
+!/var/cache/.gitkeep
+
+# Tooling caches
+/.phpunit.cache/
+/.php-cs-fixer.cache
+
+# Drop-in feature modules are deployment-specific (mounted or copied in);
+# the empty directory is tracked via .gitkeep.
+/modules/*
+!/modules/.gitkeep
+
+# Local design scratchpad (raw exports, drafts). Final README images are
+# committed under docs/assets/ instead.
+/Assets/
