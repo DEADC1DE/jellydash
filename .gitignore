@@ -53,3 +53,9 @@ Thumbs.db
 # Local design scratchpad (raw exports, drafts). Final README images are
 # committed under docs/assets/ instead.
 /Assets/
+
+# Local dev router for php -S (see launch config), not shipped
+/dev-router.php
+
+# Landing page lives on the project website, not in this repo
+/landing/

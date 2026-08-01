@@ -9,6 +9,10 @@
   A self-hosted dashboard for your Jellyfin server. See who is watching, keep full play history, dig into statistics and get push notifications on your phone.
 </p>
 
+<p align="center">
+  <a href="https://jellydash.madebymartz.com">jellydash.madebymartz.com</a>
+</p>
+
 ---
 
 ## What is Jellydash?
