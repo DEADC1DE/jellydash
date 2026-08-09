@@ -18,6 +18,8 @@ require_once ROOT_DIR . '/vendor/autoload.php';
 
 Dotenv::createImmutable(ROOT_DIR)->safeLoad();
 
+header('X-Content-Type-Options: nosniff');
+
 $module = (string) ($_GET['m'] ?? '');
 $file = (string) ($_GET['f'] ?? '');
 

@@ -45,6 +45,9 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
+      - name: Dependency audit
+        run: composer audit --no-interaction
+
       - name: PHPStan
         run: composer stan
 

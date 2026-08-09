@@ -17,6 +17,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Jellydash">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     {% if push_enabled and vapid_public_key %}
         <meta name="vapid-public-key" content="{{ vapid_public_key }}">
     {% endif %}
@@ -80,7 +81,7 @@
 
 {% block page_scripts %}{% endblock %}
 <script src="/assets/js/pwa.js?v=20260624-pwa"></script>
-<script src="/assets/js/push.js?v=20260802-pushlog"></script>
+<script src="/assets/js/push.js?v=20260809-csrf"></script>
 <script src="/assets/js/nav.js?v=20260620-nav"></script>
 <script src="/assets/js/server-stats.js?v=20260620-stats"></script>
 {% for src in module_scripts %}

@@ -60,7 +60,7 @@ final class WebPushSender
                     'publicKey' => $this->publicKey,
                     'privateKey' => $this->privateKey,
                 ],
-            ]);
+            ], [], 30, self::clientOptions());
         } catch (\Throwable $e) {
             Log::logException($e);
 
@@ -70,6 +70,12 @@ final class WebPushSender
         $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         foreach ($subscriptions as $sub) {
+            if (!PushSubscriptionValidator::isValid($sub['endpoint'], $sub['p256dh'], $sub['auth'])) {
+                $result['failed']++;
+                $result['expired'][] = $sub['endpoint'];
+                continue;
+            }
+
             try {
                 $webPush->queueNotification(
                     Subscription::create([
@@ -103,5 +109,11 @@ final class WebPushSender
         }
 
         return $result;
+    }
+
+    /** @return array{allow_redirects: false} */
+    private static function clientOptions(): array
+    {
+        return ['allow_redirects' => false];
     }
 }

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 use Dotenv\Dotenv;
 use Mk\Framework\Config;
+use Mk\Framework\Csrf;
 use Mk\Framework\Log;
 use Mk\Framework\Push\PushSubscriptionRepository;
+use Mk\Framework\Push\PushSubscriptionValidator;
 
 define('ROOT_DIR', dirname(__DIR__, 3));
 
@@ -17,10 +19,6 @@ Dotenv::createImmutable(ROOT_DIR)->safeLoad();
 include_once ROOT_DIR . '/utils/@settings.php';
 include_once ROOT_DIR . '/utils/@api-guard.php';
 
-if (session_status() === PHP_SESSION_ACTIVE) {
-    session_write_close();
-}
-
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 
@@ -31,13 +29,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     return;
 }
 
+Csrf::checkHeader();
+
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
+
 try {
     $body = json_decode((string) file_get_contents('php://input'), true);
     $endpoint = is_array($body) ? (string) ($body['endpoint'] ?? '') : '';
 
-    if ($endpoint !== '') {
-        (new PushSubscriptionRepository())->delete($endpoint);
+    if (!PushSubscriptionValidator::isValidEndpoint($endpoint)) {
+        http_response_code(422);
+        echo json_encode(['error' => 'Invalid subscription']);
+
+        return;
     }
+
+    (new PushSubscriptionRepository())->delete($endpoint);
 
     echo json_encode(['ok' => true]);
 } catch (\Throwable $e) {

@@ -34,6 +34,23 @@ class Csrf
             && hash_equals($_SESSION[self::SESSION_KEY], $token);
     }
 
+    public static function validateHeader(): bool
+    {
+        $token = isset($_SERVER['HTTP_X_CSRF_TOKEN'])
+            ? (string) $_SERVER['HTTP_X_CSRF_TOKEN']
+            : null;
+
+        return self::validate($token);
+    }
+
+    public static function checkHeader(): void
+    {
+        if (!self::validateHeader()) {
+            http_response_code(419);
+            exit('Invalid or missing CSRF token.');
+        }
+    }
+
     // Guard a POST handler: aborts the request if the token is missing/invalid.
     public static function check(): void
     {

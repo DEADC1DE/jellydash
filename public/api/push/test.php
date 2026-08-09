@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Dotenv\Dotenv;
 use Mk\Framework\Config;
+use Mk\Framework\Csrf;
 use Mk\Framework\Log;
 use Mk\Framework\Push\PlaybackNotifier;
 
@@ -17,10 +18,6 @@ Dotenv::createImmutable(ROOT_DIR)->safeLoad();
 include_once ROOT_DIR . '/utils/@settings.php';
 include_once ROOT_DIR . '/utils/@api-guard.php';
 
-if (session_status() === PHP_SESSION_ACTIVE) {
-    session_write_close();
-}
-
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store, no-cache, must-revalidate');
 
@@ -29,6 +26,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     echo json_encode(['error' => 'Method not allowed']);
 
     return;
+}
+
+Csrf::checkHeader();
+
+if (session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
 }
 
 try {

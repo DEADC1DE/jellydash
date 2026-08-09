@@ -16,6 +16,8 @@ declare(strict_types=1);
 use Mk\Framework\Authorization;
 use Mk\Framework\Config;
 
+header('X-Content-Type-Options: nosniff');
+
 if (Config::bool('AUTH_ENABLED', false) && !(new Authorization())->isUserLoggedIn()) {
     header('Content-Type: application/json; charset=utf-8');
     http_response_code(401);

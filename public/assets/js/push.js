@@ -5,12 +5,14 @@
     'use strict';
 
     var meta = document.querySelector('meta[name="vapid-public-key"]');
+    var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     var toggles = Array.prototype.slice.call(document.querySelectorAll('[data-push-toggle]'));
-    if (!meta || !meta.content || toggles.length === 0) {
+    if (!meta || !meta.content || !csrfMeta || !csrfMeta.content || toggles.length === 0) {
         return; // Server hasn't configured VAPID, or nothing to wire up.
     }
 
     var VAPID_KEY = meta.content;
+    var CSRF_TOKEN = csrfMeta.content;
     var supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     var busy = false;
 
@@ -55,7 +57,10 @@
     function postJson(url, body) {
         return fetch(url, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': CSRF_TOKEN
+            },
             credentials: 'same-origin',
             body: body ? JSON.stringify(body) : null
         });

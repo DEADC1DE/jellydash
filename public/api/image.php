@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Dotenv\Dotenv;
 use Mk\Framework\Config;
+use Mk\Framework\Http\ImageContentType;
 use Mk\Framework\Log;
 
 define('ROOT_DIR', dirname(__DIR__, 2));
@@ -126,7 +127,12 @@ foreach ($fallbackTypes as $imageType) {
         continue;
     }
 
-    header('Content-Type: ' . ($contentType !== '' ? $contentType : 'image/jpeg'));
+    $safeContentType = ImageContentType::normalize($contentType);
+    if ($safeContentType === null) {
+        continue;
+    }
+
+    header('Content-Type: ' . $safeContentType);
     header('Cache-Control: public, max-age=300');
     echo $body;
     exit;

@@ -28,6 +28,10 @@ final class PushSubscriptionRepository
      */
     public function save(string $endpoint, string $p256dh, string $auth, ?string $userAgent): void
     {
+        if (!PushSubscriptionValidator::isValid($endpoint, $p256dh, $auth)) {
+            throw new \InvalidArgumentException('Invalid Web Push subscription.');
+        }
+
         $hash = hash('sha256', $endpoint);
         $now = (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s');
 

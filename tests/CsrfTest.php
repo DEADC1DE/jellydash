@@ -12,6 +12,7 @@ final class CsrfTest extends TestCase
     {
         $_SESSION = [];
         $_POST = [];
+        unset($_SERVER['HTTP_X_CSRF_TOKEN']);
     }
 
     public function testTokenIsStableWithinSession(): void
@@ -40,5 +41,14 @@ final class CsrfTest extends TestCase
     {
         // No token generated yet, so nothing should validate.
         $this->assertFalse(Csrf::validate('anything'));
+    }
+
+    public function testValidateHeaderUsesTheCustomRequestHeader(): void
+    {
+        $_SERVER['HTTP_X_CSRF_TOKEN'] = Csrf::token();
+        $this->assertTrue(Csrf::validateHeader());
+
+        $_SERVER['HTTP_X_CSRF_TOKEN'] = 'wrong-token';
+        $this->assertFalse(Csrf::validateHeader());
     }
 }
