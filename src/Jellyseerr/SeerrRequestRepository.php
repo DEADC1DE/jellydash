@@ -111,12 +111,19 @@ final class SeerrRequestRepository
             return [];
         }
 
-        $ids = array_map(static fn ($r): int => (int) $r['id'], $rows);
-        $this->db->update('seerr_requests', ['notified' => 1])
-            ->where('id IN %in', $ids)
-            ->execute();
+        $claimed = [];
+        foreach ($rows as $row) {
+            $this->db->update('seerr_requests', ['notified' => 1])
+                ->where('id = %i', (int) $row['id'])
+                ->where('notified = 0')
+                ->execute();
 
-        return $rows;
+            if ($this->db->getAffectedRows() === 1) {
+                $claimed[] = $row;
+            }
+        }
+
+        return $claimed;
     }
 
     private function ensureSchema(): void

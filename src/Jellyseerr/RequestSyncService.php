@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mk\Framework\Jellyseerr;
 
+use Mk\Framework\Config;
 use Mk\Framework\Log;
 
 /**
@@ -149,10 +150,9 @@ final class RequestSyncService
             return $fallback;
         }
 
-        // Pin the target zone to the app's constant rather than whatever the
-        // ambient default happens to be; a caller that skipped the usual
-        // bootstrap would otherwise store UTC and skew every "x ago" label.
-        $zone = defined('TIMEZONE_EU') ? TIMEZONE_EU : date_default_timezone_get();
+        // Read the configured zone directly so this stays correct even when a
+        // caller did not run the normal web bootstrap first.
+        $zone = Config::get('APP_TIMEZONE', TIMEZONE_DEFAULT) ?? TIMEZONE_DEFAULT;
 
         try {
             return (new \DateTimeImmutable($raw))

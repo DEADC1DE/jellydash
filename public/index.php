@@ -8,8 +8,6 @@ use Mk\Framework\ErrorHandler;
 use Mk\Framework\Router;
 use Mk\Framework\View;
 
-const FRAMEWORK_VERSION = "Beta 2.0";
-
 // DOCUMENT ROOT: project root is the parent of this public/ webroot
 define('ROOT_DIR', dirname(__DIR__));
 

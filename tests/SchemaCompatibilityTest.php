@@ -141,6 +141,46 @@ final class SchemaCompatibilityTest extends TestCase
         $this->assertSame('Schema Movie', (string) $this->dibi->select('title')->from('seerr_requests')->fetchSingle());
     }
 
+    public function testConcurrentJellyseerrWorkersClaimRequestOnlyOnce(): void
+    {
+        new SeerrRequestRepository($this->database);
+        $this->dibi->insert('seerr_requests', [
+            'request_id' => 9002,
+            'media_type' => 'movie',
+            'tmdb_id' => 43,
+            'title' => 'Concurrent Movie',
+            'request_status' => 1,
+            'media_status' => 2,
+            'is_4k' => 0,
+            'requested_at' => '2026-08-09 12:00:00',
+            'notified' => 0,
+            'created_at' => '2026-08-09 12:00:00',
+        ])->execute();
+
+        // Hold the first claim update long enough for a second worker to read
+        // the same unclaimed row. A safe claim lets only one worker return it.
+        $this->dibi->query(
+            'CREATE TRIGGER `delay_seerr_claim`
+             BEFORE UPDATE ON `seerr_requests`
+             FOR EACH ROW
+             SET @claim_delay = IF(OLD.notified = 0 AND NEW.notified = 1, SLEEP(1), 0)'
+        );
+
+        $first = $this->startClaimWorker();
+        usleep(150_000);
+        $second = $this->startClaimWorker();
+
+        $firstResult = $this->finishClaimWorker($first);
+        $secondResult = $this->finishClaimWorker($second);
+
+        $this->assertSame('', $firstResult['error']);
+        $this->assertSame('', $secondResult['error']);
+        $this->assertSame(0, $firstResult['exitCode'], $firstResult['error'] . $firstResult['output']);
+        $this->assertSame(0, $secondResult['exitCode'], $secondResult['error'] . $secondResult['output']);
+        $this->assertSame(1, $firstResult['claimed'] + $secondResult['claimed']);
+        $this->assertSame(1, (int) $this->dibi->select('notified')->from('seerr_requests')->fetchSingle());
+    }
+
     private function initializeAllSchemas(): void
     {
         $this->database->ensureAuthSchema();
@@ -148,6 +188,66 @@ final class SchemaCompatibilityTest extends TestCase
         new PlayHistoryRepository($this->database);
         new PushSubscriptionRepository($this->database);
         new SeerrRequestRepository($this->database);
+    }
+
+    /**
+     * @return array{process: resource, pipes: array<int, resource>}
+     */
+    private function startClaimWorker(): array
+    {
+        $pipes = [];
+        $environment = getenv();
+        if (!is_array($environment)) {
+            $environment = [];
+        }
+        $environment = array_replace($environment, [
+            'APP_ENV' => 'testing',
+            'DB_DRIVER' => (string) DATABASE_DRIVER_DIBI,
+            'DB_HOST' => (string) DATABASE_HOST,
+            'DB_PORT' => (string) DATABASE_PORT,
+            'DB_NAME' => $this->databaseName,
+            'DB_USER' => (string) DATABASE_USERNAME,
+            'DB_PASS' => (string) DATABASE_PASSWORD,
+        ]);
+
+        $process = proc_open(
+            [PHP_BINARY, ROOT_DIR . '/tests/fixtures/seerr-claim-worker.php'],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
+            ROOT_DIR,
+            $environment
+        );
+
+        if (!is_resource($process)) {
+            throw new \RuntimeException('Could not start Jellyseerr claim worker.');
+        }
+
+        fclose($pipes[0]);
+
+        return ['process' => $process, 'pipes' => $pipes];
+    }
+
+    /**
+     * @param array{process: resource, pipes: array<int, resource>} $worker
+     * @return array{claimed: int, output: string, error: string, exitCode: int}
+     */
+    private function finishClaimWorker(array $worker): array
+    {
+        $output = stream_get_contents($worker['pipes'][1]);
+        $error = stream_get_contents($worker['pipes'][2]);
+        fclose($worker['pipes'][1]);
+        fclose($worker['pipes'][2]);
+
+        return [
+            'claimed' => (int) trim((string) $output),
+            'output' => trim((string) $output),
+            'error' => trim((string) $error),
+            'exitCode' => proc_close($worker['process']),
+        ];
     }
 
     /** @return array<int, string> */

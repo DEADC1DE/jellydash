@@ -73,7 +73,10 @@ final class NowPlayingService
         $transcodes = 0;
 
         foreach ($streams as $stream) {
-            $users[(string) ($stream['user'] ?? '')] = true;
+            $user = (string) ($stream['user'] ?? '');
+            if ($user !== '') {
+                $users[$user] = true;
+            }
             $bitrate += (int) ($stream['bitrate'] ?? 0);
             if (($stream['isTranscode'] ?? false) === true) {
                 $transcodes++;
@@ -83,7 +86,7 @@ final class NowPlayingService
         return [
             'watch_today' => $this->durationLabel($watchToday),
             'active_streams' => count($streams),
-            'active_users' => count(array_filter(array_keys($users))),
+            'active_users' => count($users),
             'bandwidth_mbps' => number_format($bitrate / 1000000, 1, '.', ''),
             'transcodes' => $transcodes,
         ];

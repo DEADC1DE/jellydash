@@ -19,46 +19,10 @@ class Main
         return isset($_GET[$get]) ? (string) $_GET[$get] : null;
     }
 
-    public static function captureGetInt($get): ?int
-    {
-        // Filter $_GET int input and validates
-        // If int is valid, it's returned
-        return filter_input(INPUT_GET, $get, FILTER_VALIDATE_INT);
-
-    }
-
     public static function capturePostString($post): ?string
     {
         // Captured raw. Validate where needed; Twig escapes on output.
         return isset($_POST[$post]) ? (string) $_POST[$post] : null;
-    }
-
-    public static function captureHTML($post): ?string
-    {
-        if (isset($_POST[$post]) && $_POST[$post] !== '') {
-            // The specific item is not empty
-            return $_POST[$post];
-        } else {
-            // The specific item is empty or not set
-            // Handle the case accordingly
-            return null;
-        }
-    }
-
-    public static function capturePostEmail($post): ?string
-    {
-        // Filter $_POST string input and sanitize
-        // Value can be checked with !$var / $var or empty($var)
-        $sanitizedEmail = filter_input(INPUT_POST, $post, FILTER_SANITIZE_EMAIL);
-        return self::validateEmail($sanitizedEmail) ? $sanitizedEmail : null;
-    }
-
-    public static function capturePostInt($post): ?int
-    {
-        // Filter $_POST int input
-        // Value can be checked with !$var / $var or empty($var)
-        // Min, max value optional
-        return filter_input(INPUT_POST, $post, FILTER_VALIDATE_INT);
     }
 
     // Validate NON $_POST Email
