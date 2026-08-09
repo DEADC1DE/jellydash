@@ -55,12 +55,14 @@ try {
             // AUTH_ADMIN_USER/AUTH_ADMIN_PASSWORD are set): creates the user if
             // missing, never touches an existing one, so a password changed in
             // the app isn't reset on every container restart.
-            $username = $argv[2] ?? null;
-            $password = $argv[3] ?? null;
+            $useEnvironment = !isset($argv[2]) && !isset($argv[3]);
+            $username = $useEnvironment ? Config::get('AUTH_ADMIN_USER') : ($argv[2] ?? null);
+            $password = $useEnvironment ? Config::get('AUTH_ADMIN_PASSWORD') : ($argv[3] ?? null);
             $name = $argv[4] ?? $username;
 
             if (!$username || !$password) {
-                exit("Usage: php bin/console.php user:ensure <username> <password> [name]\n");
+                exit("Usage: php bin/console.php user:ensure <username> <password> [name]\n"
+                    . "   or: set AUTH_ADMIN_USER and AUTH_ADMIN_PASSWORD, then run without arguments\n");
             }
 
             if (strlen($password) < Database::MIN_PASSWORD_LENGTH) {

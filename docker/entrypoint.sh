@@ -22,7 +22,7 @@ find /var/www/html/cache -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} + 2>/de
 # Optional auth: seed the initial admin when configured. Idempotent: an
 # existing user is never touched, so in-app password changes survive restarts.
 if [ -n "${AUTH_ADMIN_USER:-}" ] && [ -n "${AUTH_ADMIN_PASSWORD:-}" ]; then
-    php /var/www/html/bin/console.php user:ensure "${AUTH_ADMIN_USER}" "${AUTH_ADMIN_PASSWORD}" || true
+    php /var/www/html/bin/console.php user:ensure || true
 fi
 
 # Background workers (disable all with POLLER_ENABLED=false). Each runs detached
