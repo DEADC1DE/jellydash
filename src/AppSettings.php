@@ -60,6 +60,13 @@ final class AppSettings
         }
     }
 
+    public static function bool(string $key, bool $default = false): bool
+    {
+        $value = self::get($key);
+
+        return $value === null ? $default : filter_var($value, FILTER_VALIDATE_BOOL);
+    }
+
     /**
      * @return array<string, string>
      */

@@ -1,16 +1,14 @@
 (function () {
     const card = document.querySelector('[data-server-card]');
+    const status = card ? card.querySelector('[data-server-status]') : null;
+    const cpu = card ? card.querySelector('[data-server-cpu]') : null;
+    const cpuBar = card ? card.querySelector('[data-server-cpu-bar]') : null;
+    const ram = card ? card.querySelector('[data-server-ram]') : null;
+    const ramBar = card ? card.querySelector('[data-server-ram-bar]') : null;
 
     if (!card) {
         return;
     }
-
-    const status = card.querySelector('[data-server-status]');
-    const cpu = card.querySelector('[data-server-cpu]');
-    const cpuBar = card.querySelector('[data-server-cpu-bar]');
-    const ram = card.querySelector('[data-server-ram]');
-    const ramBar = card.querySelector('[data-server-ram-bar]');
-    const navCount = document.querySelector('[data-nav-count]');
 
     function pct(value) {
         const number = Number(value || 0);
@@ -50,30 +48,8 @@
         apply(await response.json());
     }
 
-    async function refreshNowPlayingCount() {
-        if (!navCount) {
-            return;
-        }
-
-        const response = await fetch('/api/now-playing.php', {
-            headers: { Accept: 'application/json' },
-            cache: 'no-store',
-        });
-
-        if (!response.ok) {
-            throw new Error('Now Playing count request failed with HTTP ' + response.status);
-        }
-
-        const payload = await response.json();
-        const stats = payload.stats || {};
-        navCount.textContent = String(Number(stats.active_streams || 0));
-        navCount.classList.remove('is-loading');
-    }
-
     refresh().catch(() => apply({ available: false, status: 'Unavailable' }));
-    refreshNowPlayingCount().catch(() => {});
     window.setInterval(() => {
         refresh().catch(() => apply({ available: false, status: 'Unavailable' }));
-        refreshNowPlayingCount().catch(() => {});
     }, 10000);
 }());

@@ -9,6 +9,7 @@ use Mk\Framework\Database;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
 use Mk\Framework\Push\PushSubscriptionRepository;
+use Mk\Framework\View;
 use PHPUnit\Framework\TestCase;
 
 final class SchemaCompatibilityTest extends TestCase
@@ -141,6 +142,27 @@ final class SchemaCompatibilityTest extends TestCase
         $this->assertSame('Schema Movie', (string) $this->dibi->select('title')->from('seerr_requests')->fetchSingle());
     }
 
+    public function testServerStatsPreferenceDefaultsOnAndCanBeToggled(): void
+    {
+        $previousValue = AppSettings::get('show_server_stats');
+
+        try {
+            AppSettings::set('show_server_stats', null);
+            $this->assertTrue(AppSettings::bool('show_server_stats', true));
+            $this->assertStringContainsString('data-server-card', $this->renderSidebar());
+
+            AppSettings::set('show_server_stats', '0');
+            $this->assertFalse(AppSettings::bool('show_server_stats', true));
+            $this->assertStringNotContainsString('data-server-card', $this->renderSidebar());
+
+            AppSettings::set('show_server_stats', '1');
+            $this->assertTrue(AppSettings::bool('show_server_stats', true));
+            $this->assertStringContainsString('data-server-card', $this->renderSidebar());
+        } finally {
+            AppSettings::set('show_server_stats', $previousValue);
+        }
+    }
+
     public function testConcurrentJellyseerrWorkersClaimRequestOnlyOnce(): void
     {
         new SeerrRequestRepository($this->database);
@@ -188,6 +210,26 @@ final class SchemaCompatibilityTest extends TestCase
         new PlayHistoryRepository($this->database);
         new PushSubscriptionRepository($this->database);
         new SeerrRequestRepository($this->database);
+    }
+
+    private function renderSidebar(): string
+    {
+        $previousDebug = $_ENV['APP_DEBUG'] ?? null;
+        $_ENV['APP_DEBUG'] = 'true';
+
+        try {
+            ob_start();
+            (new View())->render('_sidebar', ['layout' => ['page' => 'settings']]);
+            $output = (string) ob_get_clean();
+        } finally {
+            if ($previousDebug === null) {
+                unset($_ENV['APP_DEBUG']);
+            } else {
+                $_ENV['APP_DEBUG'] = $previousDebug;
+            }
+        }
+
+        return $output;
     }
 
     /**

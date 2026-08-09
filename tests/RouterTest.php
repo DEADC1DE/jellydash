@@ -58,6 +58,35 @@ final class RouterTest extends TestCase
         $this->assertSame(200, http_response_code());
     }
 
+    public function testSettingsRouteMakesExclusionsExplicit(): void
+    {
+        $previousDebug = $_ENV['APP_DEBUG'] ?? null;
+        $_ENV['APP_DEBUG'] = 'true';
+
+        try {
+            ob_start();
+            (new Router(new View()))->dispatch('settings', null);
+            $output = (string) ob_get_clean();
+        } finally {
+            if ($previousDebug === null) {
+                unset($_ENV['APP_DEBUG']);
+            } else {
+                $_ENV['APP_DEBUG'] = $previousDebug;
+            }
+        }
+
+        $this->assertStringContainsString('Show server statistics', $output);
+        $this->assertStringContainsString('Statistics exclusions', $output);
+        $this->assertStringContainsString('Selected libraries are hidden from Trending and Most Watched.', $output);
+        $this->assertStringContainsString('Notification exclusions', $output);
+        $this->assertStringContainsString('Selected users never trigger playback alerts.', $output);
+        $this->assertStringContainsString('/assets/js/server-stats.js?v=20260809-settings', $output);
+        $this->assertStringContainsString('/assets/js/nav-count.js?v=20260809-settings', $output);
+        $this->assertStringContainsString('data-update-status', $output);
+        $this->assertStringContainsString('/assets/js/update-status.js?v=20260810-update', $output);
+        $this->assertSame(200, http_response_code());
+    }
+
     public function testUnknownRouteRendersNotFound(): void
     {
         ob_start();

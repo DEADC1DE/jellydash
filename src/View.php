@@ -42,6 +42,7 @@ class View
 
         // Sidebar subtitle under the brand: user-configurable, empty hides it.
         $this->twig->addGlobal('server_label', AppSettings::get('server_label', 'Jellyfin dashboard'));
+        $this->twig->addGlobal('show_server_stats', AppSettings::bool('show_server_stats', true));
 
         // Jellyseerr nav entry only shows once the integration is configured.
         $this->twig->addGlobal('seerr_enabled', (new Jellyseerr\JellyseerrClient())->isConfigured());

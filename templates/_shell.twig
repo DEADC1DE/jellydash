@@ -22,7 +22,7 @@
         <meta name="vapid-public-key" content="{{ vapid_public_key }}">
     {% endif %}
 
-    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260801-loginhint">
+    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260810-update">
     {% for href in module_styles %}
         <link rel="stylesheet" href="{{ href }}">
     {% endfor %}
@@ -83,7 +83,9 @@
 <script src="/assets/js/pwa.js?v=20260624-pwa"></script>
 <script src="/assets/js/push.js?v=20260809-csrf"></script>
 <script src="/assets/js/nav.js?v=20260620-nav"></script>
-<script src="/assets/js/server-stats.js?v=20260620-stats"></script>
+<script src="/assets/js/server-stats.js?v=20260809-settings"></script>
+<script src="/assets/js/nav-count.js?v=20260809-settings"></script>
+<script src="/assets/js/update-status.js?v=20260810-update"></script>
 {% for src in module_scripts %}
     <script src="{{ src }}"></script>
 {% endfor %}
