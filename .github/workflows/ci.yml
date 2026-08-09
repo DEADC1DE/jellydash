@@ -45,9 +45,6 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist --no-progress
 
-      - name: Import database schema
-        run: mysql -h 127.0.0.1 -uroot jellyfin_dashboard < framework.sql
-
       - name: PHPStan
         run: composer stan
 
