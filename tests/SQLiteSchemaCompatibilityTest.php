@@ -224,10 +224,10 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
     {
         $properties = [
             [AppSettings::class, 'cache', null],
-            [AppSettings::class, 'schemaEnsured', false],
-            [PlayHistoryRepository::class, 'schemaEnsured', false],
-            [PushSubscriptionRepository::class, 'schemaEnsured', false],
-            [SeerrRequestRepository::class, 'schemaEnsured', false],
+            [AppSettings::class, 'schemaConnections', null],
+            [PlayHistoryRepository::class, 'schemaConnections', null],
+            [PushSubscriptionRepository::class, 'schemaConnections', null],
+            [SeerrRequestRepository::class, 'schemaConnections', null],
         ];
 
         foreach ($properties as [$class, $property, $value]) {

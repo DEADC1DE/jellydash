@@ -177,6 +177,32 @@ try {
             }
             break;
 
+        case 'database:migrate-to-sqlite':
+            $requestedPath = $argv[2] ?? '';
+            $confirmedStopped = in_array('--confirm-stopped', array_slice($argv, 3), true);
+            if ($requestedPath === '' || !$confirmedStopped) {
+                fwrite(STDERR, "Usage: php bin/console.php database:migrate-to-sqlite <sqlite-file> --confirm-stopped\n");
+                fwrite(STDERR, "Stop the web app and every poller before running this command.\n");
+                exit(1);
+            }
+
+            $directory = realpath(dirname($requestedPath));
+            if ($directory === false && dirname($requestedPath) === '.') {
+                $directory = ROOT_DIR;
+            }
+            if ($directory === false) {
+                throw new \InvalidArgumentException('The destination directory does not exist.');
+            }
+            $destination = $directory . DIRECTORY_SEPARATOR . basename($requestedPath);
+
+            echo "Copying MariaDB into a new SQLite database. The MariaDB source will not be changed.\n";
+            $counts = (new Migration\MariaDbToSqliteMigrator($db))->migrate($destination);
+            foreach ($counts as $table => $count) {
+                echo "  {$table}: {$count} row(s)\n";
+            }
+            echo "Migration verified successfully: {$destination}\n";
+            break;
+
         case 'trending:debug':
             // Diagnose why a library is / isn't excluded from the Trending strip.
             $range = $argv[2] ?? 'week';
@@ -225,6 +251,7 @@ try {
             echo "  php bin/console.php user:list\n";
             echo "  php bin/console.php history:poll   (record currently-playing sessions)\n";
             echo "  php bin/console.php libraries:warm (refresh the cached library overview)\n";
+            echo "  php bin/console.php database:migrate-to-sqlite <file> --confirm-stopped\n";
             echo "  php bin/console.php seerr:poll     (sync Jellyseerr requests + alert on new ones)\n";
             echo "  php bin/console.php push:vapid     (generate a Web Push VAPID keypair)\n";
             echo "  php bin/console.php push:test      (send a test notification to subscribers)\n\n";

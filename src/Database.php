@@ -28,6 +28,11 @@ class Database
         return $this->platform;
     }
 
+    public static function sqlite(string $path): self
+    {
+        return new self(new \Dibi\Connection(self::sqliteConnectionConfig($path)));
+    }
+
     // Minimum length enforced when creating a user.
     public const MIN_PASSWORD_LENGTH = 8;
 
@@ -83,16 +88,7 @@ class Database
     private function connectionConfig(): array
     {
         if (DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
-            return [
-                'driver' => 'sqlite3',
-                'database' => DATABASE_NAME,
-                'formatDate' => "'Y-m-d'",
-                'formatDateTime' => "'Y-m-d H:i:s'",
-                'onConnect' => [
-                    'PRAGMA busy_timeout = 5000',
-                    'PRAGMA journal_mode = WAL',
-                ],
-            ];
+            return self::sqliteConnectionConfig(DATABASE_NAME);
         }
 
         $config = [
@@ -108,6 +104,21 @@ class Database
         }
 
         return $config;
+    }
+
+    /** @return array<string, mixed> */
+    private static function sqliteConnectionConfig(string $path): array
+    {
+        return [
+            'driver' => 'sqlite3',
+            'database' => $path,
+            'formatDate' => "'Y-m-d'",
+            'formatDateTime' => "'Y-m-d H:i:s'",
+            'onConnect' => [
+                'PRAGMA busy_timeout = 5000',
+                'PRAGMA journal_mode = WAL',
+            ],
+        ];
     }
 
     /* CREATE NEW USER IN THE 'users' TABLE,

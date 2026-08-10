@@ -20,7 +20,8 @@ final class AppSettings
 {
     /** @var array<string, string>|null */
     private static ?array $cache = null;
-    private static bool $schemaEnsured = false;
+    /** @var \WeakMap<\Dibi\Connection, true>|null */
+    private static ?\WeakMap $schemaConnections = null;
 
     public static function get(string $key, ?string $default = null): ?string
     {
@@ -31,8 +32,9 @@ final class AppSettings
 
     public static function set(string $key, ?string $value): void
     {
-        $db = Container::db()->getDibi();
-        self::ensureSchema($db);
+        $database = Container::db();
+        $db = $database->getDibi();
+        self::ensureSchema($database);
 
         if ($value === null) {
             $db->delete('app_settings')->where('setting_key = %s', $key)->execute();
@@ -77,8 +79,9 @@ final class AppSettings
         }
 
         try {
-            $db = Container::db()->getDibi();
-            self::ensureSchema($db);
+            $database = Container::db();
+            $db = $database->getDibi();
+            self::ensureSchema($database);
             $rows = $db->select('setting_key, setting_value')->from('app_settings')->fetchPairs('setting_key', 'setting_value');
             self::$cache = array_map('strval', $rows);
         } catch (\Throwable $e) {
@@ -89,9 +92,11 @@ final class AppSettings
         return self::$cache;
     }
 
-    private static function ensureSchema(\Dibi\Connection $db): void
+    public static function ensureSchema(Database $database): void
     {
-        if (self::$schemaEnsured) {
+        $db = $database->getDibi();
+        self::$schemaConnections ??= new \WeakMap();
+        if (isset(self::$schemaConnections[$db])) {
             return;
         }
 
@@ -109,6 +114,6 @@ final class AppSettings
             )'
         );
 
-        self::$schemaEnsured = true;
+        self::$schemaConnections[$db] = true;
     }
 }

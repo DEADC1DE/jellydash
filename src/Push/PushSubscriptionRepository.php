@@ -16,7 +16,8 @@ final class PushSubscriptionRepository
 {
     private \Dibi\Connection $db;
     private DatabasePlatform $platform;
-    private static bool $schemaEnsured = false;
+    /** @var \WeakMap<\Dibi\Connection, true>|null */
+    private static ?\WeakMap $schemaConnections = null;
 
     public function __construct(?Database $database = null)
     {
@@ -99,7 +100,8 @@ final class PushSubscriptionRepository
 
     private function ensureSchema(): void
     {
-        if (self::$schemaEnsured) {
+        self::$schemaConnections ??= new \WeakMap();
+        if (isset(self::$schemaConnections[$this->db])) {
             return;
         }
 
@@ -131,6 +133,6 @@ final class PushSubscriptionRepository
             )'
         );
 
-        self::$schemaEnsured = true;
+        self::$schemaConnections[$this->db] = true;
     }
 }

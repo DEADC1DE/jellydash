@@ -12,7 +12,8 @@ final class PlayHistoryRepository
 {
     private \Dibi\Connection $db;
     private DatabasePlatform $platform;
-    private static bool $schemaEnsured = false;
+    /** @var \WeakMap<\Dibi\Connection, true>|null */
+    private static ?\WeakMap $schemaConnections = null;
 
     // A gap longer than this between updates means the previous play ended and a
     // new viewing started (e.g. a re-watch on a client that keeps one session id
@@ -302,7 +303,8 @@ final class PlayHistoryRepository
 
     private function ensureSchema(): void
     {
-        if (self::$schemaEnsured) {
+        self::$schemaConnections ??= new \WeakMap();
+        if (isset(self::$schemaConnections[$this->db])) {
             return;
         }
 
@@ -406,7 +408,7 @@ final class PlayHistoryRepository
             $this->db->query('UPDATE `play_history` SET `notified` = 1');
         }
 
-        self::$schemaEnsured = true;
+        self::$schemaConnections[$this->db] = true;
     }
 
     private function ensureColumn(string $column, string $mariaDbDefinition, string $sqliteDefinition): void

@@ -2,8 +2,22 @@
 
 declare(strict_types=1);
 
+use Mk\Framework\Config;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
 
 require dirname(__DIR__) . '/bootstrap.php';
 
-echo count((new SeerrRequestRepository())->claimUnnotified());
+$repository = new SeerrRequestRepository();
+$barrier = Config::get('TEST_CLAIM_BARRIER');
+if ($barrier !== null) {
+    $deadline = microtime(true) + 5;
+    while (!is_file($barrier)) {
+        if (microtime(true) >= $deadline) {
+            fwrite(STDERR, "Timed out waiting for the claim barrier.\n");
+            exit(1);
+        }
+        usleep(10_000);
+    }
+}
+
+echo count($repository->claimUnnotified());
