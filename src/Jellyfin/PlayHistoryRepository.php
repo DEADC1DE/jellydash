@@ -6,10 +6,12 @@ namespace Mk\Framework\Jellyfin;
 
 use Mk\Framework\Container;
 use Mk\Framework\Database;
+use Mk\Framework\DatabasePlatform;
 
 final class PlayHistoryRepository
 {
     private \Dibi\Connection $db;
+    private DatabasePlatform $platform;
     private static bool $schemaEnsured = false;
 
     // A gap longer than this between updates means the previous play ended and a
@@ -20,7 +22,9 @@ final class PlayHistoryRepository
 
     public function __construct(?Database $database = null)
     {
-        $this->db = ($database ?? Container::db())->getDibi();
+        $database ??= Container::db();
+        $this->db = $database->getDibi();
+        $this->platform = $database->getPlatform();
         $this->ensureSchema();
     }
 
@@ -302,7 +306,7 @@ final class PlayHistoryRepository
             return;
         }
 
-        $this->db->query(
+        $this->platform->createTable(
             'CREATE TABLE IF NOT EXISTS `play_history` (
                 `id` bigint NOT NULL AUTO_INCREMENT,
                 `session_key` varchar(128) NOT NULL,
@@ -339,37 +343,76 @@ final class PlayHistoryRepository
                 KEY `idx_started_at` (`started_at`),
                 KEY `idx_user_name` (`user_name`),
                 KEY `idx_library` (`library`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `play_history` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+                `session_key` TEXT NOT NULL,
+                `user_id` TEXT DEFAULT NULL,
+                `user_name` TEXT DEFAULT NULL,
+                `item_id` TEXT NOT NULL,
+                `item_type` TEXT NOT NULL,
+                `series_name` TEXT DEFAULT NULL,
+                `item_name` TEXT DEFAULT NULL,
+                `season_ep` TEXT DEFAULT NULL,
+                `library` TEXT DEFAULT NULL,
+                `play_method` TEXT NOT NULL,
+                `play_method_detail` TEXT DEFAULT NULL,
+                `client` TEXT DEFAULT NULL,
+                `device` TEXT DEFAULT NULL,
+                `source_video_codec` TEXT DEFAULT NULL,
+                `source_audio_codec` TEXT DEFAULT NULL,
+                `source_container` TEXT DEFAULT NULL,
+                `target_video_codec` TEXT DEFAULT NULL,
+                `target_audio_codec` TEXT DEFAULT NULL,
+                `target_container` TEXT DEFAULT NULL,
+                `is_video_direct` INTEGER DEFAULT NULL,
+                `is_audio_direct` INTEGER DEFAULT NULL,
+                `transcode_reasons` TEXT DEFAULT NULL,
+                `watched_sec` INTEGER NOT NULL DEFAULT 0,
+                `runtime_sec` INTEGER NOT NULL DEFAULT 0,
+                `started_at` TEXT NOT NULL,
+                `updated_at` TEXT NOT NULL,
+                `ended_at` TEXT DEFAULT NULL,
+                `is_finished` INTEGER NOT NULL DEFAULT 0,
+                `notified` INTEGER NOT NULL DEFAULT 0,
+                UNIQUE (`session_key`, `item_id`)
+            )'
         );
 
-        $this->ensureColumn('play_method_detail', '`play_method_detail` varchar(64) DEFAULT NULL AFTER `play_method`');
-        $this->ensureColumn('source_video_codec', '`source_video_codec` varchar(64) DEFAULT NULL AFTER `device`');
-        $this->ensureColumn('source_audio_codec', '`source_audio_codec` varchar(64) DEFAULT NULL AFTER `source_video_codec`');
-        $this->ensureColumn('source_container', '`source_container` varchar(64) DEFAULT NULL AFTER `source_audio_codec`');
-        $this->ensureColumn('target_video_codec', '`target_video_codec` varchar(64) DEFAULT NULL AFTER `source_container`');
-        $this->ensureColumn('target_audio_codec', '`target_audio_codec` varchar(64) DEFAULT NULL AFTER `target_video_codec`');
-        $this->ensureColumn('target_container', '`target_container` varchar(64) DEFAULT NULL AFTER `target_audio_codec`');
-        $this->ensureColumn('is_video_direct', '`is_video_direct` tinyint(1) DEFAULT NULL AFTER `target_container`');
-        $this->ensureColumn('is_audio_direct', '`is_audio_direct` tinyint(1) DEFAULT NULL AFTER `is_video_direct`');
-        $this->ensureColumn('transcode_reasons', '`transcode_reasons` text DEFAULT NULL AFTER `is_audio_direct`');
+        $this->platform->createSqliteIndex('idx_started_at', 'play_history', ['started_at']);
+        $this->platform->createSqliteIndex('idx_user_name', 'play_history', ['user_name']);
+        $this->platform->createSqliteIndex('idx_library', 'play_history', ['library']);
+
+        $this->ensureColumn('play_method_detail', '`play_method_detail` varchar(64) DEFAULT NULL AFTER `play_method`', '`play_method_detail` TEXT DEFAULT NULL');
+        $this->ensureColumn('source_video_codec', '`source_video_codec` varchar(64) DEFAULT NULL AFTER `device`', '`source_video_codec` TEXT DEFAULT NULL');
+        $this->ensureColumn('source_audio_codec', '`source_audio_codec` varchar(64) DEFAULT NULL AFTER `source_video_codec`', '`source_audio_codec` TEXT DEFAULT NULL');
+        $this->ensureColumn('source_container', '`source_container` varchar(64) DEFAULT NULL AFTER `source_audio_codec`', '`source_container` TEXT DEFAULT NULL');
+        $this->ensureColumn('target_video_codec', '`target_video_codec` varchar(64) DEFAULT NULL AFTER `source_container`', '`target_video_codec` TEXT DEFAULT NULL');
+        $this->ensureColumn('target_audio_codec', '`target_audio_codec` varchar(64) DEFAULT NULL AFTER `target_video_codec`', '`target_audio_codec` TEXT DEFAULT NULL');
+        $this->ensureColumn('target_container', '`target_container` varchar(64) DEFAULT NULL AFTER `target_audio_codec`', '`target_container` TEXT DEFAULT NULL');
+        $this->ensureColumn('is_video_direct', '`is_video_direct` tinyint(1) DEFAULT NULL AFTER `target_container`', '`is_video_direct` INTEGER DEFAULT NULL');
+        $this->ensureColumn('is_audio_direct', '`is_audio_direct` tinyint(1) DEFAULT NULL AFTER `is_video_direct`', '`is_audio_direct` INTEGER DEFAULT NULL');
+        $this->ensureColumn('transcode_reasons', '`transcode_reasons` text DEFAULT NULL AFTER `is_audio_direct`', '`transcode_reasons` TEXT DEFAULT NULL');
 
         // Playback-notification flag. On an existing install, backfill every row
         // to "already notified" so adding the column never fires a burst of
         // alerts for historical plays.
-        if (!$this->db->query('SHOW COLUMNS FROM `play_history` LIKE %s', 'notified')->fetch()) {
-            $this->db->query('ALTER TABLE `play_history` ADD COLUMN `notified` tinyint(1) NOT NULL DEFAULT 0 AFTER `is_finished`');
+        if (!$this->platform->columnExists('play_history', 'notified')) {
+            $this->platform->addColumn(
+                'play_history',
+                '`notified` tinyint(1) NOT NULL DEFAULT 0 AFTER `is_finished`',
+                '`notified` INTEGER NOT NULL DEFAULT 0',
+            );
             $this->db->query('UPDATE `play_history` SET `notified` = 1');
         }
 
         self::$schemaEnsured = true;
     }
 
-    private function ensureColumn(string $column, string $definition): void
+    private function ensureColumn(string $column, string $mariaDbDefinition, string $sqliteDefinition): void
     {
-        $exists = $this->db->query('SHOW COLUMNS FROM `play_history` LIKE %s', $column)->fetch();
-
-        if (!$exists) {
-            $this->db->query('ALTER TABLE `play_history` ADD COLUMN ' . $definition);
+        if (!$this->platform->columnExists('play_history', $column)) {
+            $this->platform->addColumn('play_history', $mariaDbDefinition, $sqliteDefinition);
         }
     }
 

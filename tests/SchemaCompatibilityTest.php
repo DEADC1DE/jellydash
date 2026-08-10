@@ -308,12 +308,7 @@ final class SchemaCompatibilityTest extends TestCase
 
     private function databaseUsing(\Dibi\Connection $connection): Database
     {
-        $reflection = new \ReflectionClass(Database::class);
-        $database = $reflection->newInstanceWithoutConstructor();
-        $this->assertInstanceOf(Database::class, $database);
-        $reflection->getProperty('dibi')->setValue($database, $connection);
-
-        return $database;
+        return new Database($connection);
     }
 
     private function resetSchemaState(): void

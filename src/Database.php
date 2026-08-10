@@ -7,30 +7,25 @@ namespace Mk\Framework;
 class Database
 {
     private \Dibi\Connection $dibi;
+    private DatabasePlatform $platform;
 
-    public function __construct()
+    public function __construct(?\Dibi\Connection $connection = null)
     {
-        $config = [
-            'driver' => DATABASE_DRIVER_DIBI,
-            'host' => DATABASE_HOST,
-            'username' => DATABASE_USERNAME,
-            'password' => DATABASE_PASSWORD,
-            'database' => DATABASE_NAME,
-        ];
-
-        if (defined('DATABASE_PORT') && DATABASE_PORT !== null && DATABASE_PORT !== '') {
-            $config['port'] = (int) DATABASE_PORT;
-        }
-
         // Throws \Dibi\Exception on failure; handled centrally by ErrorHandler,
         // or by the caller where a graceful fallback exists (e.g. the login flow).
-        $this->dibi = new \Dibi\Connection($config);
+        $this->dibi = $connection ?? new \Dibi\Connection($this->connectionConfig());
+        $this->platform = new DatabasePlatform($this->dibi);
     }
 
     // Return whole Dibi instance
     public function getDibi(): \Dibi\Connection
     {
         return $this->dibi;
+    }
+
+    public function getPlatform(): DatabasePlatform
+    {
+        return $this->platform;
     }
 
     // Minimum length enforced when creating a user.
@@ -43,7 +38,7 @@ class Database
      */
     public function ensureAuthSchema(): void
     {
-        $this->dibi->query(
+        $this->platform->createTable(
             'CREATE TABLE IF NOT EXISTS `users` (
                 `id` mediumint(9) NOT NULL AUTO_INCREMENT,
                 `username` varchar(100) NOT NULL,
@@ -52,10 +47,18 @@ class Database
                 `role` tinyint(4) NOT NULL,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `uniq_username` (`username`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `users` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+                `username` TEXT NOT NULL,
+                `password` TEXT NOT NULL,
+                `name` TEXT NOT NULL,
+                `role` INTEGER NOT NULL,
+                UNIQUE (`username`)
+            )'
         );
 
-        $this->dibi->query(
+        $this->platform->createTable(
             'CREATE TABLE IF NOT EXISTS `login_attempts` (
                 `id` int NOT NULL AUTO_INCREMENT,
                 `identifier` varchar(190) NOT NULL,
@@ -64,8 +67,47 @@ class Database
                 `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `uniq_identifier` (`identifier`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `login_attempts` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+                `identifier` TEXT NOT NULL,
+                `attempts` INTEGER NOT NULL DEFAULT 0,
+                `locked_until` TEXT DEFAULT NULL,
+                `updated_at` TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (`identifier`)
+            )'
         );
+    }
+
+    /** @return array<string, mixed> */
+    private function connectionConfig(): array
+    {
+        if (DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
+            return [
+                'driver' => 'sqlite3',
+                'database' => DATABASE_NAME,
+                'formatDate' => "'Y-m-d'",
+                'formatDateTime' => "'Y-m-d H:i:s'",
+                'onConnect' => [
+                    'PRAGMA busy_timeout = 5000',
+                    'PRAGMA journal_mode = WAL',
+                ],
+            ];
+        }
+
+        $config = [
+            'driver' => DATABASE_DRIVER_DIBI,
+            'host' => DATABASE_HOST,
+            'username' => DATABASE_USERNAME,
+            'password' => DATABASE_PASSWORD,
+            'database' => DATABASE_NAME,
+        ];
+
+        if (defined('DATABASE_PORT') && DATABASE_PORT !== null && DATABASE_PORT !== '') {
+            $config['port'] = (int) DATABASE_PORT;
+        }
+
+        return $config;
     }
 
     /* CREATE NEW USER IN THE 'users' TABLE,

@@ -6,6 +6,7 @@ namespace Mk\Framework\Jellyseerr;
 
 use Mk\Framework\Container;
 use Mk\Framework\Database;
+use Mk\Framework\DatabasePlatform;
 
 /**
  * Local mirror of Jellyseerr requests.
@@ -18,11 +19,14 @@ use Mk\Framework\Database;
 final class SeerrRequestRepository
 {
     private \Dibi\Connection $db;
+    private DatabasePlatform $platform;
     private static bool $schemaEnsured = false;
 
     public function __construct(?Database $database = null)
     {
-        $this->db = ($database ?? Container::db())->getDibi();
+        $database ??= Container::db();
+        $this->db = $database->getDibi();
+        $this->platform = $database->getPlatform();
         $this->ensureSchema();
     }
 
@@ -132,7 +136,7 @@ final class SeerrRequestRepository
             return;
         }
 
-        $this->db->query(
+        $this->platform->createTable(
             'CREATE TABLE IF NOT EXISTS `seerr_requests` (
                 `id` bigint NOT NULL AUTO_INCREMENT,
                 `request_id` int NOT NULL,
@@ -152,8 +156,27 @@ final class SeerrRequestRepository
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `uniq_request_id` (`request_id`),
                 KEY `idx_requested_at` (`requested_at`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `seerr_requests` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+                `request_id` INTEGER NOT NULL,
+                `media_type` TEXT NOT NULL,
+                `tmdb_id` INTEGER NOT NULL,
+                `title` TEXT NOT NULL,
+                `year` TEXT DEFAULT NULL,
+                `poster_path` TEXT DEFAULT NULL,
+                `requested_by` TEXT DEFAULT NULL,
+                `request_status` INTEGER NOT NULL DEFAULT 0,
+                `media_status` INTEGER NOT NULL DEFAULT 0,
+                `is_4k` INTEGER NOT NULL DEFAULT 0,
+                `season_count` INTEGER DEFAULT NULL,
+                `requested_at` TEXT NOT NULL,
+                `notified` INTEGER NOT NULL DEFAULT 0,
+                `created_at` TEXT NOT NULL,
+                UNIQUE (`request_id`)
+            )'
         );
+        $this->platform->createSqliteIndex('idx_requested_at', 'seerr_requests', ['requested_at']);
 
         self::$schemaEnsured = true;
     }

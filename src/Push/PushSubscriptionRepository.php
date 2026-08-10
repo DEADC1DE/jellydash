@@ -6,6 +6,7 @@ namespace Mk\Framework\Push;
 
 use Mk\Framework\Container;
 use Mk\Framework\Database;
+use Mk\Framework\DatabasePlatform;
 
 /**
  * Stores browser Web Push subscriptions (the endpoint + keys a PushSubscription
@@ -14,11 +15,14 @@ use Mk\Framework\Database;
 final class PushSubscriptionRepository
 {
     private \Dibi\Connection $db;
+    private DatabasePlatform $platform;
     private static bool $schemaEnsured = false;
 
     public function __construct(?Database $database = null)
     {
-        $this->db = ($database ?? Container::db())->getDibi();
+        $database ??= Container::db();
+        $this->db = $database->getDibi();
+        $this->platform = $database->getPlatform();
         $this->ensureSchema();
     }
 
@@ -99,7 +103,7 @@ final class PushSubscriptionRepository
             return;
         }
 
-        $this->db->query(
+        $this->platform->createTable(
             'CREATE TABLE IF NOT EXISTS `push_subscriptions` (
                 `id` bigint NOT NULL AUTO_INCREMENT,
                 `endpoint` text NOT NULL,
@@ -112,7 +116,19 @@ final class PushSubscriptionRepository
                 `last_success_at` datetime DEFAULT NULL,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `uniq_endpoint_hash` (`endpoint_hash`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `push_subscriptions` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+                `endpoint` TEXT NOT NULL,
+                `endpoint_hash` TEXT NOT NULL,
+                `p256dh` TEXT NOT NULL,
+                `auth` TEXT NOT NULL,
+                `user_agent` TEXT DEFAULT NULL,
+                `failure_count` INTEGER NOT NULL DEFAULT 0,
+                `created_at` TEXT NOT NULL,
+                `last_success_at` TEXT DEFAULT NULL,
+                UNIQUE (`endpoint_hash`)
+            )'
         );
 
         self::$schemaEnsured = true;

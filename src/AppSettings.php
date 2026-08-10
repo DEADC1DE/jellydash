@@ -95,13 +95,18 @@ final class AppSettings
             return;
         }
 
-        $db->query(
+        (new DatabasePlatform($db))->createTable(
             'CREATE TABLE IF NOT EXISTS `app_settings` (
                 `setting_key` varchar(64) NOT NULL,
                 `setting_value` text NOT NULL,
                 `updated_at` datetime NOT NULL,
                 PRIMARY KEY (`setting_key`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `app_settings` (
+                `setting_key` TEXT NOT NULL PRIMARY KEY,
+                `setting_value` TEXT NOT NULL,
+                `updated_at` TEXT NOT NULL
+            )'
         );
 
         self::$schemaEnsured = true;
