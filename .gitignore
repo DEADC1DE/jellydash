@@ -41,6 +41,9 @@ Thumbs.db
 /var/cache/*
 !/var/cache/.gitkeep
 
+# SQLite database from the optional Docker setup
+/sqlite-data/
+
 # Tooling caches
 /.phpunit.cache/
 /.php-cs-fixer.cache

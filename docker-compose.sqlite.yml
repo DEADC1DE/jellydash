@@ -1,0 +1,34 @@
+# Optional SQLite setup for a new, small Jellydash install.
+#
+# Use this file on its own:
+#   docker compose -f docker-compose.sqlite.yml up -d
+#
+# It deliberately does not include MariaDB. Existing MariaDB installs should
+# keep using docker-compose.yml unless they have completed the documented
+# migration first.
+
+services:
+  app:
+    image: ghcr.io/themartz90/jellydash:latest
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    env_file:
+      - .env
+    environment:
+      DB_DRIVER: sqlite3
+      DB_NAME: /var/www/html/var/data/jellydash.sqlite
+    volumes:
+      - app_cache:/var/www/html/cache
+      - app_runtime_cache:/var/www/html/var/cache
+      - app_logs:/var/www/html/var/log
+      - app_uploads:/var/www/html/public/uploads
+      - ./sqlite-data:/var/www/html/var/data
+      # Drop-in feature modules (see docs/MODULES.md), e.g.:
+      # - ./my-modules/downloads:/var/www/html/modules/downloads:ro
+
+volumes:
+  app_cache:
+  app_runtime_cache:
+  app_logs:
+  app_uploads:

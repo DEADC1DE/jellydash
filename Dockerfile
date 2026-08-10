@@ -16,6 +16,7 @@ RUN apt-get update \
         curl \
         mbstring \
         mysqli \
+        sqlite3 \
         gmp \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
@@ -33,8 +34,8 @@ COPY docker/php/app.ini /usr/local/etc/php/conf.d/app.ini
 COPY docker/entrypoint.sh /usr/local/bin/jellydash-entrypoint
 
 RUN chmod +x /usr/local/bin/jellydash-entrypoint \
-    && mkdir -p cache var/cache var/log public/uploads public/uploads/images \
-    && chown -R www-data:www-data cache var/cache var/log public/uploads
+    && mkdir -p cache var/cache var/data var/log public/uploads public/uploads/images \
+    && chown -R www-data:www-data cache var/cache var/data var/log public/uploads
 
 ENTRYPOINT ["jellydash-entrypoint"]
 CMD ["apache2-foreground"]

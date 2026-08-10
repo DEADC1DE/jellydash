@@ -91,6 +91,44 @@ Open `http://your-host:8080` and you are done. The database schema creates itsel
 
 **For setting up notifications, check the section down below**
 
+### SQLite setup (optional)
+
+SQLite is there for a small new install where you do not want to run a separate database container. It keeps the database in `./sqlite-data/jellydash.sqlite`, so backing it up is as simple as copying that folder while Jellydash is stopped.
+
+MariaDB remains the default. If you already use the normal MariaDB setup, do not just swap Compose files. Use the migration steps below instead.
+
+```bash
+mkdir jellydash && cd jellydash
+curl -LO https://raw.githubusercontent.com/themartz90/jellydash/main/docker-compose.sqlite.yml
+curl -L -o .env https://raw.githubusercontent.com/themartz90/jellydash/main/.env.example
+# edit .env, at minimum: JELLYFIN_URL and JELLYFIN_API_TOKEN
+docker compose -f docker-compose.sqlite.yml up -d
+```
+
+In PowerShell, replace `$(pwd)` in the migration command below with `$(Get-Location)`.
+
+For SQLite, add `-f docker-compose.sqlite.yml` to the Compose commands in this README. For example, updating becomes:
+
+```bash
+docker compose -f docker-compose.sqlite.yml pull && docker compose -f docker-compose.sqlite.yml up -d
+```
+
+### Moving from MariaDB to SQLite
+
+This is optional and one way. Stop Jellydash first so no plays or settings change during the copy. The command creates a new SQLite file, checks every copied value, and leaves the MariaDB data untouched.
+
+Run this from your existing Jellydash folder after downloading `docker-compose.sqlite.yml` there:
+
+```bash
+docker compose stop app
+mkdir -p sqlite-data
+docker compose run --rm --no-deps -v "$(pwd)/sqlite-data:/export" app php bin/console.php database:migrate-to-sqlite /export/jellydash.sqlite --confirm-stopped
+docker compose down
+docker compose -f docker-compose.sqlite.yml up -d
+```
+
+Keep the old MariaDB volume until you have checked the SQLite install and made a backup. To go back before using SQLite, stop the SQLite setup and start the normal `docker compose up -d` setup again.
+
 ### Updating
 
 ```bash
@@ -109,7 +147,7 @@ cp .env.example .env
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-Updating then means `git pull` and running the same command again.
+Updating then means `git pull` and running the same command again. For a source-built SQLite install, replace `docker-compose.yml` with `docker-compose.sqlite.yml`.
 
 ## Notifications
 

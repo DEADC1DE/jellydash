@@ -1,8 +1,18 @@
 #!/bin/sh
 set -eu
 
+# A MariaDB-to-SQLite migration runs from a one-off container after the normal
+# app has stopped. Do not seed auth or start any background workers first: the
+# migration must only read from the MariaDB source.
+if [ "${1:-}" = "php" ] \
+    && { [ "${2:-}" = "bin/console.php" ] || [ "${2:-}" = "/var/www/html/bin/console.php" ]; } \
+    && [ "${3:-}" = "database:migrate-to-sqlite" ]; then
+    exec "$@"
+fi
+
 mkdir -p /var/www/html/cache \
     /var/www/html/var/cache \
+    /var/www/html/var/data \
     /var/www/html/var/log \
     /var/www/html/public/uploads \
     /var/www/html/public/uploads/images
@@ -10,6 +20,7 @@ mkdir -p /var/www/html/cache \
 chown -R www-data:www-data \
     /var/www/html/cache \
     /var/www/html/var/cache \
+    /var/www/html/var/data \
     /var/www/html/var/log \
     /var/www/html/public/uploads
 
