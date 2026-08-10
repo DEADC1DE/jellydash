@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Mk\Framework\Config;
 use Mk\Framework\Database;
+use Mk\Framework\DatabasePlatform;
 use Mk\Framework\DatabaseSchemaInitializer;
 use Mk\Framework\Migration\MariaDbToSqliteMigrator;
 use PHPUnit\Framework\TestCase;
@@ -20,6 +21,10 @@ final class MariaDbToSqliteMigratorTest extends TestCase
 
     protected function setUp(): void
     {
+        if (DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
+            $this->markTestSkipped('This migration test requires a MariaDB source.');
+        }
+
         $config = [
             'driver' => DATABASE_DRIVER_DIBI,
             'host' => DATABASE_HOST,

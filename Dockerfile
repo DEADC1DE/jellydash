@@ -12,6 +12,7 @@ RUN apt-get update \
         libcurl4-openssl-dev \
         libonig-dev \
         libgmp-dev \
+        libsqlite3-dev \
     && docker-php-ext-install \
         curl \
         mbstring \

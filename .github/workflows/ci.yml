@@ -2,23 +2,25 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  test:
+  test-mariadb:
+    name: PHP 8.3 / MariaDB
     runs-on: ubuntu-latest
 
     services:
-      mysql:
-        image: mysql:8.0
+      mariadb:
+        image: mariadb:11
         env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
-          MYSQL_DATABASE: jellyfin_dashboard
+          MARIADB_ROOT_PASSWORD: test-root
+          MARIADB_DATABASE: jellyfin_dashboard
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
@@ -28,7 +30,7 @@ jobs:
       DB_DRIVER: mysqli
       DB_NAME: jellyfin_dashboard
       DB_USER: root
-      DB_PASS: ""
+      DB_PASS: test-root
       APP_ENV: testing
       APP_DEBUG: "true"
 
@@ -39,7 +41,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.3"
-          extensions: mysqli, mbstring, intl
+          extensions: mysqli, sqlite3, mbstring, intl
           coverage: none
 
       - name: Install dependencies
@@ -53,3 +55,83 @@ jobs:
 
       - name: PHPUnit
         run: composer test
+
+  test-sqlite:
+    name: PHP 8.3 / SQLite
+    runs-on: ubuntu-latest
+
+    env:
+      DB_DRIVER: sqlite3
+      DB_NAME: /tmp/jellydash-ci.sqlite
+      APP_ENV: testing
+      APP_DEBUG: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: sqlite3, mbstring, intl
+          coverage: none
+
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: PHPUnit
+        run: composer test
+
+  docker-sqlite:
+    name: Docker / SQLite smoke test
+    runs-on: ubuntu-latest
+    needs: [test-mariadb, test-sqlite]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate SQLite Compose file
+        run: |
+          cp .env.example .env
+          docker compose -f docker-compose.sqlite.yml config -q
+
+      - name: Build image
+        run: docker build --tag jellydash:ci .
+
+      - name: Check database extensions
+        run: |
+          docker run --rm --entrypoint php jellydash:ci -r "exit(extension_loaded('mysqli') && extension_loaded('sqlite3') ? 0 : 1);"
+
+      - name: Boot Jellydash with SQLite
+        run: |
+          mkdir -p "$RUNNER_TEMP/jellydash-sqlite"
+          docker run --detach --name jellydash-sqlite-ci \
+            --publish 18080:80 \
+            --env APP_ENV=production \
+            --env APP_DEBUG=false \
+            --env POLLER_ENABLED=false \
+            --env DB_DRIVER=sqlite3 \
+            --env DB_NAME=/var/www/html/var/data/jellydash.sqlite \
+            --env JELLYFIN_URL=http://127.0.0.1:9 \
+            --env JELLYFIN_API_TOKEN=ci-placeholder \
+            --volume "$RUNNER_TEMP/jellydash-sqlite:/var/www/html/var/data" \
+            jellydash:ci
+
+          trap 'docker rm --force jellydash-sqlite-ci >/dev/null 2>&1 || true' EXIT
+          ready=false
+          for attempt in {1..30}; do
+            if curl --fail --silent --max-time 2 http://127.0.0.1:18080/settings >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+
+          if [ "$ready" != "true" ]; then
+            docker logs jellydash-sqlite-ci
+            exit 1
+          fi
+
+          docker exec jellydash-sqlite-ci test -f /var/www/html/var/data/jellydash.sqlite
+          docker exec jellydash-sqlite-ci php -r '$db = new SQLite3("/var/www/html/var/data/jellydash.sqlite"); exit($db->querySingle("PRAGMA integrity_check") === "ok" ? 0 : 1);'
+          test -f "$RUNNER_TEMP/jellydash-sqlite/jellydash.sqlite"

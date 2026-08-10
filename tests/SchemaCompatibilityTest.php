@@ -6,6 +6,7 @@ use Mk\Framework\AppSettings;
 use Mk\Framework\Config;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
+use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
 use Mk\Framework\Push\PushSubscriptionRepository;
@@ -23,6 +24,10 @@ final class SchemaCompatibilityTest extends TestCase
 
     protected function setUp(): void
     {
+        if (DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
+            $this->markTestSkipped('This compatibility test uses a temporary MariaDB database.');
+        }
+
         $config = [
             'driver' => DATABASE_DRIVER_DIBI,
             'host' => DATABASE_HOST,
