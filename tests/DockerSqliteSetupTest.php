@@ -13,7 +13,9 @@ final class DockerSqliteSetupTest extends TestCase
 
         $this->assertIsString($dockerfile);
         $this->assertIsString($entrypoint);
-        $this->assertStringContainsString('sqlite3', $dockerfile);
+        $this->assertStringContainsString("extension_loaded('sqlite3')", $dockerfile);
+        $this->assertStringNotContainsString('libsqlite3-dev', $dockerfile);
+        $this->assertDoesNotMatchRegularExpression('/^\s+sqlite3\s+\\\\$/m', $dockerfile);
         $this->assertStringContainsString('/var/www/html/var/data', $entrypoint);
         $this->assertStringContainsString('database:migrate-to-sqlite', $entrypoint);
     }

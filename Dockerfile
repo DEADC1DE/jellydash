@@ -12,13 +12,12 @@ RUN apt-get update \
         libcurl4-openssl-dev \
         libonig-dev \
         libgmp-dev \
-        libsqlite3-dev \
     && docker-php-ext-install \
         curl \
         mbstring \
         mysqli \
-        sqlite3 \
         gmp \
+    && php -r "exit(extension_loaded('sqlite3') ? 0 : 1);" \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 
