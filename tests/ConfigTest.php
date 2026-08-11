@@ -12,7 +12,7 @@ final class ConfigTest extends TestCase
     {
         // Fully clear test keys from every source Config reads (a loaded .env
         // populates $_ENV, $_SERVER and getenv).
-        foreach (['CFG_FOO', 'CFG_FLAG', 'APP_DEBUG', 'APP_ENV'] as $key) {
+        foreach (['CFG_FOO', 'CFG_FLAG', 'CFG_PROCESS', 'APP_DEBUG', 'APP_ENV'] as $key) {
             unset($_ENV[$key], $_SERVER[$key]);
             putenv($key);
         }
@@ -28,6 +28,15 @@ final class ConfigTest extends TestCase
     {
         $_ENV['CFG_FOO'] = 'bar';
         $this->assertSame('bar', Config::get('CFG_FOO'));
+    }
+
+    public function testProcessEnvironmentOverridesLoadedEnvironmentArrays(): void
+    {
+        putenv('CFG_PROCESS=process-value');
+        $_ENV['CFG_PROCESS'] = 'dotenv-value';
+        $_SERVER['CFG_PROCESS'] = 'server-value';
+
+        $this->assertSame('process-value', Config::get('CFG_PROCESS'));
     }
 
     public function testBoolParsing(): void

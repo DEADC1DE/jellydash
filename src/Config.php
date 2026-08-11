@@ -16,8 +16,10 @@ class Config
     // Raw string lookup with fallback.
     public static function get(string $key, ?string $default = null): ?string
     {
-        // The ?? chain already eliminates null; getenv() yields false when unset.
-        $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
+        // Real process variables must override values loaded from .env. Some
+        // SAPIs expose them only through getenv(), not through the PHP arrays.
+        $processValue = getenv($key);
+        $value = $processValue !== false ? $processValue : ($_ENV[$key] ?? $_SERVER[$key] ?? false);
 
         if ($value === false || $value === '') {
             return $default;
