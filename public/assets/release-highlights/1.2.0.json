@@ -1,0 +1,21 @@
+{
+  "version": "1.2.0",
+  "auto_show": true,
+  "title": "What's new in Jellydash v1.2.0",
+  "summary": "Jellydash can now run with SQLite, giving new installations a lighter option with one container and one database file.",
+  "highlights": [
+    "New installations can choose SQLite instead of running a separate MariaDB container.",
+    "Already using MariaDB? Nothing changes, and you do not need to migrate.",
+    "If you want to switch, Jellydash includes an optional migration that verifies every copied value and leaves the original MariaDB database untouched."
+  ],
+  "links": [
+    {
+      "label": "SQLite Quick Start",
+      "url": "https://github.com/themartz90/jellydash/blob/main/README.md#quick-start"
+    },
+    {
+      "label": "Release notes and migration",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.2.0"
+    }
+  ]
+}

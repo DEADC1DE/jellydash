@@ -113,7 +113,7 @@
         </button>
     {% endif %}
 
-    <div class="sidebar-settings" data-update-status>
+    <div class="sidebar-settings" data-update-status data-app-version="{{ app_version }}">
         <a class="settings-row {{ active_page == 'settings' ? 'is-active' : '' }}" href="/settings" aria-label="Settings">
             <span class="settings-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" role="img" focusable="false">
@@ -140,6 +140,15 @@
             </svg>
             <span>You're on the latest release</span>
         </span>
+        <button class="update-status update-status-changes" type="button" data-release-changes hidden>
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 4h9a3 3 0 0 1 3 3v13H9a3 3 0 0 1-3-3V4z"></path>
+                <path d="M9 4v13a3 3 0 0 0 3 3"></path>
+                <path d="M12 8h3"></path>
+                <path d="M12 12h3"></path>
+            </svg>
+            <span data-release-changes-label>See changes</span>
+        </button>
     </div>
 
     {% if auth_enabled and layout.user %}

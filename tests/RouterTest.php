@@ -84,6 +84,9 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('/assets/js/nav-count.js?v=20260809-settings', $output);
         $this->assertStringContainsString('data-update-status', $output);
         $this->assertStringContainsString('/assets/js/update-status.js?v=20260810-update', $output);
+        $this->assertStringContainsString('data-release-changes', $output);
+        $this->assertStringContainsString('data-release-dialog', $output);
+        $this->assertStringContainsString('/assets/js/release-highlights.js?v=20260811-release', $output);
         $this->assertSame(200, http_response_code());
     }
 

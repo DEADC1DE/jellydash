@@ -488,6 +488,153 @@ svg {
     color: var(--color-green);
 }
 
+.update-status-changes {
+    width: fit-content;
+    border: 0;
+    background: transparent;
+    appearance: none;
+}
+
+.update-status-changes:hover {
+    color: var(--color-purple-soft);
+}
+
+.release-dialog {
+    width: min(560px, calc(100vw - 36px));
+    max-height: calc(100dvh - 36px);
+    padding: 0;
+    overflow: auto;
+    color: var(--color-text);
+    border: 1px solid rgba(124, 92, 255, .28);
+    border-radius: 22px;
+    background: #100f18;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, .72);
+}
+
+.release-dialog::backdrop {
+    background: rgba(4, 3, 8, .76);
+    backdrop-filter: blur(5px);
+}
+
+.release-dialog-card {
+    position: relative;
+    padding: 30px;
+    background:
+        radial-gradient(85% 70% at 10% 0%, rgba(124, 92, 255, .16), transparent 66%),
+        #100f18;
+}
+
+.release-dialog-close {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    display: grid;
+    width: 36px;
+    height: 36px;
+    padding: 9px;
+    place-items: center;
+    color: var(--color-muted);
+    border: 1px solid rgba(255, 255, 255, .09);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .04);
+}
+
+.release-dialog-close:hover {
+    color: var(--color-text);
+    background: rgba(255, 255, 255, .08);
+}
+
+.release-dialog-kicker {
+    display: block;
+    margin-bottom: 10px;
+    color: var(--color-purple-soft);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.release-dialog h2 {
+    max-width: calc(100% - 42px);
+    margin: 0;
+    font-size: clamp(24px, 4vw, 34px);
+    line-height: 1.15;
+}
+
+.release-dialog-summary {
+    margin: 14px 0 0;
+    color: var(--color-muted);
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.release-dialog-highlights {
+    display: grid;
+    gap: 11px;
+    margin: 22px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.release-dialog-highlights li {
+    position: relative;
+    padding-left: 23px;
+    color: rgba(255, 255, 255, .82);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.release-dialog-highlights li::before {
+    position: absolute;
+    top: 8px;
+    left: 2px;
+    width: 7px;
+    height: 7px;
+    content: "";
+    border-radius: 50%;
+    background: var(--color-purple);
+    box-shadow: 0 0 12px rgba(124, 92, 255, .7);
+}
+
+.release-dialog-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.release-dialog-links a,
+.release-dialog-dismiss {
+    min-height: 40px;
+    padding: 10px 14px;
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid rgba(124, 92, 255, .38);
+    border-radius: 11px;
+    background: rgba(124, 92, 255, .13);
+}
+
+.release-dialog-links a:hover {
+    border-color: rgba(124, 92, 255, .68);
+    background: rgba(124, 92, 255, .22);
+}
+
+.release-dialog-dismiss {
+    width: 100%;
+    margin-top: 12px;
+    color: var(--color-muted);
+    border-color: rgba(255, 255, 255, .08);
+    background: rgba(255, 255, 255, .035);
+}
+
+.release-dialog-dismiss:hover {
+    color: var(--color-text);
+    background: rgba(255, 255, 255, .07);
+}
+
 /* ── Settings page ───────────────────────────────────────────────────────── */
 
 .settings-form {
@@ -3135,6 +3282,30 @@ svg {
 }
 
 @media (max-width: 600px) {
+    .release-dialog {
+        width: calc(100vw - 24px);
+        max-height: calc(100dvh - 24px);
+        border-radius: 18px;
+    }
+
+    .release-dialog-card {
+        padding: 24px 20px 20px;
+    }
+
+    .release-dialog-close {
+        top: 14px;
+        right: 14px;
+    }
+
+    .release-dialog-links {
+        flex-direction: column;
+    }
+
+    .release-dialog-links a {
+        width: 100%;
+        text-align: center;
+    }
+
     /* Keep the status pill and method badge side by side on phone-width cards;
        just shrink the method badge (Direct Play / Transcode) so it fits on the
        line, with the quality chip still tucked underneath it. */
