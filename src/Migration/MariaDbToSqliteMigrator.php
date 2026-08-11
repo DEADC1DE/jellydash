@@ -103,8 +103,8 @@ final class MariaDbToSqliteMigrator
         }
 
         $directory = dirname($path);
-        if (!is_dir($directory) || !is_writable($directory)) {
-            throw new \InvalidArgumentException('The destination directory does not exist or is not writable.');
+        if (!is_dir($directory)) {
+            throw new \InvalidArgumentException('The destination directory does not exist.');
         }
 
         $handle = @fopen($path, 'x+b');

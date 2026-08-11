@@ -211,6 +211,27 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $this->assertSame('keep me', file_get_contents($this->destinationPath));
     }
 
+    public function testUsesExclusiveFileCreationWhenWritableProbeIsUnreliable(): void
+    {
+        $directory = ROOT_DIR . '/var/cache';
+        if (is_writable($directory)) {
+            $this->markTestSkipped('This platform does not reproduce the Windows is_writable false-negative.');
+        }
+
+        $probePath = $directory . '/migration-write-probe-' . bin2hex(random_bytes(4));
+        $this->assertNotFalse(file_put_contents($probePath, 'probe'));
+        $this->assertTrue(unlink($probePath));
+
+        $this->destinationPath = $directory
+            . '/jellydash-migration-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.sqlite';
+        DatabaseSchemaInitializer::initialize($this->source);
+
+        $counts = (new MariaDbToSqliteMigrator($this->source))->migrate($this->destinationPath);
+
+        $this->assertSame(0, $counts['play_history']);
+        $this->assertFileExists($this->destinationPath);
+    }
+
     private function seedSource(): void
     {
         $this->sourceConnection->insert('users', [
