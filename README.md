@@ -97,13 +97,15 @@ The lighter setup runs only Jellydash and keeps its database in `./sqlite-data/j
 
 ```bash
 mkdir jellydash && cd jellydash
-curl -LO https://raw.githubusercontent.com/themartz90/jellydash/main/docker-compose.sqlite.yml
+curl -L -o docker-compose.yml https://raw.githubusercontent.com/themartz90/jellydash/main/docker-compose.sqlite.yml
 curl -L -o .env https://raw.githubusercontent.com/themartz90/jellydash/main/.env.example
 # edit .env, at minimum: JELLYFIN_URL and JELLYFIN_API_TOKEN
-docker compose -f docker-compose.sqlite.yml up -d
+docker compose up -d
 ```
 
 Open `http://your-host:8080` and you are done. Both setups create everything they need automatically, there is nothing to import.
+
+Whichever database you choose, the active setup is saved as `docker-compose.yml`. Normal commands, aliases and update scripts work the same way for both.
 
 If you want to use your own MariaDB server or mount modules, copy [docker-compose.override.example.yml](docker-compose.override.example.yml) to `docker-compose.override.yml` and adjust it there.
 
@@ -111,18 +113,26 @@ If you want to use your own MariaDB server or mount modules, copy [docker-compos
 
 ### Updating
 
-MariaDB:
+For both MariaDB and SQLite:
 
 ```bash
 docker compose pull && docker compose up -d
 ```
 
-SQLite:
+If you installed SQLite using the first v1.2.0 instructions, you may still have a file named `docker-compose.sqlite.yml`. If there is no `docker-compose.yml` beside it, make SQLite the default once:
 
 ```bash
-docker compose -f docker-compose.sqlite.yml pull
-docker compose -f docker-compose.sqlite.yml up -d
+cp docker-compose.sqlite.yml docker-compose.yml
 ```
+
+If `docker-compose.yml` is your old MariaDB setup, preserve it first:
+
+```bash
+cp -n docker-compose.yml docker-compose.mariadb.yml
+cmp -s docker-compose.yml docker-compose.mariadb.yml && cp docker-compose.sqlite.yml docker-compose.yml && echo "SQLite is now the default Compose setup"
+```
+
+These commands only copy the Compose files. They do not change either database. Afterward, the normal update command above manages SQLite.
 
 ### Moving from MariaDB to SQLite
 
@@ -130,7 +140,14 @@ You do not need to migrate. Existing MariaDB installations continue working exac
 
 Stop Jellydash first so no plays or settings change during the copy. The migration checks every copied value and leaves the original MariaDB data untouched.
 
-Run this from your existing Jellydash folder:
+First preserve your current MariaDB Compose file for rollback. This will not overwrite an existing backup. Continue only when it prints `MariaDB Compose backup verified`:
+
+```bash
+cp -n docker-compose.yml docker-compose.mariadb.yml
+cmp -s docker-compose.yml docker-compose.mariadb.yml && echo "MariaDB Compose backup verified"
+```
+
+Then run:
 
 ```bash
 curl -LO https://raw.githubusercontent.com/themartz90/jellydash/main/docker-compose.sqlite.yml
@@ -139,10 +156,19 @@ docker compose stop app
 mkdir -p sqlite-data
 docker compose run --rm --no-deps -v "$(pwd)/sqlite-data:/export" app php bin/console.php database:migrate-to-sqlite /export/jellydash.sqlite --confirm-stopped
 docker compose down
-docker compose -f docker-compose.sqlite.yml up -d
+cp docker-compose.sqlite.yml docker-compose.yml
+docker compose up -d
 ```
 
-Keep the old MariaDB volume until you have checked the SQLite install and made a backup. To go back, stop the SQLite setup and run the normal `docker compose up -d` setup again.
+From then on, the normal `docker compose` commands manage SQLite. Keep the old MariaDB volume until you have checked the SQLite install and made a backup.
+
+To go back to MariaDB:
+
+```bash
+docker compose down
+cp docker-compose.mariadb.yml docker-compose.yml
+docker compose up -d
+```
 
 ### Building from source
 

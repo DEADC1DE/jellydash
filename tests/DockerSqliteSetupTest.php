@@ -31,4 +31,23 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertStringNotContainsString("\n  db:", $compose);
         $this->assertStringNotContainsString('depends_on:', $compose);
     }
+
+    public function testReadmeMakesTheSelectedComposeSetupTheDefault(): void
+    {
+        $readme = file_get_contents(ROOT_DIR . '/README.md');
+
+        $this->assertIsString($readme);
+        $this->assertStringContainsString(
+            'curl -L -o docker-compose.yml https://raw.githubusercontent.com/themartz90/jellydash/main/docker-compose.sqlite.yml',
+            $readme,
+        );
+        $this->assertStringContainsString('For both MariaDB and SQLite:', $readme);
+        $this->assertStringContainsString('docker compose pull && docker compose up -d', $readme);
+        $this->assertStringContainsString('cp -n docker-compose.yml docker-compose.mariadb.yml', $readme);
+        $this->assertStringContainsString('MariaDB Compose backup verified', $readme);
+        $this->assertStringContainsString('cp docker-compose.sqlite.yml docker-compose.yml', $readme);
+        $this->assertStringContainsString('cp docker-compose.mariadb.yml docker-compose.yml', $readme);
+        $this->assertStringNotContainsString('docker compose -f docker-compose.sqlite.yml pull', $readme);
+        $this->assertStringNotContainsString('docker compose -f docker-compose.sqlite.yml up -d', $readme);
+    }
 }
