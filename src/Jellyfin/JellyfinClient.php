@@ -81,19 +81,6 @@ final class JellyfinClient
     }
 
     /**
-     * @return array<int, array<string, mixed>>
-     */
-    public function users(): array
-    {
-        $payload = $this->getJson('/Users');
-        if (!is_array($payload)) {
-            return [];
-        }
-
-        return array_values(array_filter($payload, 'is_array'));
-    }
-
-    /**
      * @param array<string, string|int|bool> $query
      */
     public function itemCount(array $query): int
@@ -111,6 +98,33 @@ final class JellyfinClient
     public function baseUrl(): string
     {
         return $this->baseUrl;
+    }
+
+    /**
+     * Jellyfin users (id + name). Needs an admin API token.
+     *
+     * @return array<int, array{id: string, name: string}>
+     */
+    public function users(): array
+    {
+        $payload = $this->getJson('/Users');
+        if (!is_array($payload)) {
+            return [];
+        }
+
+        $users = [];
+        foreach ($payload as $user) {
+            if (!is_array($user)) {
+                continue;
+            }
+            $id = (string) ($user['Id'] ?? '');
+            $name = trim((string) ($user['Name'] ?? ''));
+            if ($id !== '' && $name !== '') {
+                $users[] = ['id' => $id, 'name' => $name];
+            }
+        }
+
+        return $users;
     }
 
     /**
@@ -166,6 +180,139 @@ final class JellyfinClient
     }
 
     /**
+     * Runtime and real library name for items that still exist in Jellyfin.
+     * Library is resolved from the item path against VirtualFolders. Missing
+     * items are omitted; items with no matching folder keep library = ''.
+     *
+     * @param array<int, string> $ids
+     * @return array<string, array{runtime_sec: int, library: string}>
+     */
+    public function itemImportMeta(array $ids): array
+    {
+        $unique = [];
+        foreach ($ids as $id) {
+            $normalized = $this->normalizedItemId((string) $id);
+            if ($normalized !== '') {
+                $unique[$normalized] = $normalized;
+            }
+        }
+
+        $locations = [];
+        $names = [];
+        $librariesLoaded = false;
+        $meta = [];
+        foreach (array_chunk(array_values($unique), 100) as $chunk) {
+            $payload = $this->getJson('/Items?' . http_build_query(
+                [
+                    'Ids' => implode(',', $chunk),
+                    'Fields' => 'RunTimeTicks,Path',
+                    'Limit' => count($chunk),
+                ],
+                '',
+                '&',
+                PHP_QUERY_RFC3986
+            ), 15);
+
+            $items = is_array($payload) && is_array($payload['Items'] ?? null)
+                ? array_values(array_filter($payload['Items'], 'is_array'))
+                : [];
+
+            foreach ($items as $item) {
+                $id = $this->normalizedItemId((string) ($item['Id'] ?? ''));
+                if ($id === '') {
+                    continue;
+                }
+
+                $ticks = (int) ($item['RunTimeTicks'] ?? 0);
+                $runtime = $ticks > 0 ? (int) floor($ticks / 10000000) : 0;
+                $path = (string) ($item['Path'] ?? '');
+                if ($path !== '' && !$librariesLoaded) {
+                    try {
+                        $locations = $this->libraryLocations();
+                        $names = $this->libraryNames();
+                    } catch (\Throwable) {
+                        $locations = [];
+                        $names = [];
+                    }
+                    $librariesLoaded = true;
+                }
+
+                $library = $path !== ''
+                    ? ($this->libraryNameForPath($path, $locations, $names) ?? '')
+                    : '';
+
+                if ($runtime <= 0 && $library === '') {
+                    continue;
+                }
+
+                $meta[$id] = [
+                    'runtime_sec' => $runtime,
+                    'library' => $library,
+                ];
+            }
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Original-case library name whose folder contains $path. Longest prefix
+     * wins when libraries nest. Pass $locations / $names to avoid a Jellyfin
+     * round-trip (keys of $locations are lowercased library names).
+     *
+     * @param array<string, array<int, string>>|null $locations
+     * @param array<int, string>|null $names
+     */
+    public function libraryNameForPath(string $path, ?array $locations = null, ?array $names = null): ?string
+    {
+        $path = rtrim(str_replace('\\', '/', trim($path)), '/');
+        if ($path === '') {
+            return null;
+        }
+
+        $locations ??= $this->libraryLocations();
+        $names ??= $this->libraryNames();
+
+        $bestName = null;
+        $bestLen = -1;
+        foreach ($locations as $lowerName => $prefixes) {
+            foreach ($prefixes as $prefix) {
+                $prefix = rtrim(str_replace('\\', '/', (string) $prefix), '/');
+                if ($prefix === '') {
+                    continue;
+                }
+                if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                    $len = strlen($prefix);
+                    if ($len > $bestLen) {
+                        $bestLen = $len;
+                        $bestName = (string) $lowerName;
+                    }
+                }
+            }
+        }
+
+        if ($bestName === null) {
+            return null;
+        }
+
+        foreach ($names as $name) {
+            if (mb_strtolower((string) $name) === $bestName) {
+                return (string) $name;
+            }
+        }
+
+        return $bestName;
+    }
+
+    /**
+     * Jellyfin sometimes returns Ids with dashes and sometimes without.
+     */
+    private function normalizedItemId(string $id): string
+    {
+        return strtolower(str_replace('-', '', trim($id)));
+    }
+
+    /**
      * Absolute file path of an item, or '' if unavailable. Cached per process.
      */
     public function itemPath(string $itemId): string
@@ -195,7 +342,25 @@ final class JellyfinClient
     /**
      * @return mixed
      */
-    private function getJson(string $path): mixed
+    public function getJson(string $path, int $timeout = 8): mixed
+    {
+        return $this->requestJson($path, 'GET', null, $timeout);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return mixed
+     */
+    public function postJson(string $path, array $payload, int $timeout = 8): mixed
+    {
+        return $this->requestJson($path, 'POST', $payload, $timeout);
+    }
+
+    /**
+     * @param array<string, mixed>|null $payload
+     * @return mixed
+     */
+    private function requestJson(string $path, string $method = 'GET', ?array $payload = null, int $timeout = 8): mixed
     {
         if ($this->baseUrl === '' || $this->token === '') {
             throw new \RuntimeException('Jellyfin URL or API token is missing.');
@@ -210,17 +375,26 @@ final class JellyfinClient
             throw new \RuntimeException('Could not initialize cURL.');
         }
 
-        curl_setopt_array($handle, [
+        $headers = [
+            'Accept: application/json',
+            'Authorization: MediaBrowser Token="' . $this->token . '"',
+        ];
+        $options = [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'Accept: application/json',
-                'Authorization: MediaBrowser Token="' . $this->token . '"',
-            ],
             CURLOPT_CONNECTTIMEOUT => 3,
-            CURLOPT_TIMEOUT => 8,
+            CURLOPT_TIMEOUT => max(1, $timeout),
             CURLOPT_SSL_VERIFYPEER => $this->verifySsl,
             CURLOPT_SSL_VERIFYHOST => $this->verifySsl ? 2 : 0,
-        ]);
+        ];
+
+        if (strtoupper($method) === 'POST') {
+            $headers[] = 'Content-Type: application/json';
+            $options[CURLOPT_POST] = true;
+            $options[CURLOPT_POSTFIELDS] = json_encode($payload ?? [], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        }
+
+        $options[CURLOPT_HTTPHEADER] = $headers;
+        curl_setopt_array($handle, $options);
 
         $body = curl_exec($handle);
         $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
@@ -232,7 +406,7 @@ final class JellyfinClient
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new \RuntimeException('Jellyfin request failed with HTTP ' . $status . '.');
+            throw new \RuntimeException($this->httpErrorMessage($path, $status));
         }
 
         try {
@@ -240,5 +414,10 @@ final class JellyfinClient
         } catch (\JsonException $e) {
             throw new \RuntimeException('Jellyfin returned invalid JSON.', previous: $e);
         }
+    }
+
+    private function httpErrorMessage(string $path, int $status): string
+    {
+        return 'Jellyfin request failed with HTTP ' . $status . ' (' . $path . ').';
     }
 }

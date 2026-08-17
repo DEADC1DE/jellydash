@@ -21,6 +21,10 @@ final class PlayHistoryRepository
     // play; that's just the viewer seeking within the same play.
     private const PLAY_GAP_SECONDS = 1800;
 
+    // Imported Playback Reporting rows that start within this window of a live
+    // poller row (same user + item) are treated as the same play.
+    private const LIVE_OVERLAP_SECONDS = 300;
+
     public function __construct(?Database $database = null)
     {
         $database ??= Container::db();
@@ -73,7 +77,7 @@ final class PlayHistoryRepository
 
             $previousWatchedSec = ($existing && !$isNewPlay) ? (int) $existing['watched_sec'] : 0;
             $watchedSec = max($position, $previousWatchedSec);
-            $isFinished = $runtimeSec > 0 && $watchedSec >= (int) floor($runtimeSec * 0.95);
+            $isFinished = self::isPlayFinished($watchedSec, $runtimeSec);
 
             $data = [
                 'user_id' => $this->nullableString($stream['userId'] ?? null),
@@ -256,18 +260,24 @@ final class PlayHistoryRepository
     }
 
     /**
-     * @param array<int, string> $libraries
+     * One summary row per item_id: play count, watch time, and the latest play.
+     * Used by the Libraries overview so it does not load every play_history row.
+     *
      * @return array<int, \Dibi\Row>
      */
-    public function rowsForLibraries(array $libraries): array
+    public function itemPlaySummaries(): array
     {
-        $selection = $this->db->select('*')->from('play_history');
-
-        if ($libraries !== []) {
-            $selection->where('library IN %in', $libraries);
-        }
-
-        return $selection->orderBy('started_at')->asc()->fetchAll();
+        return $this->db->query(
+            'SELECT item_id, library, plays, watch_sec, started_at, series_name, item_name, season_ep, user_name
+            FROM (
+                SELECT item_id, library, started_at, series_name, item_name, season_ep, user_name,
+                    COUNT(*) OVER (PARTITION BY item_id) AS plays,
+                    SUM(watched_sec) OVER (PARTITION BY item_id) AS watch_sec,
+                    ROW_NUMBER() OVER (PARTITION BY item_id ORDER BY started_at DESC, id DESC) AS rn
+                FROM play_history
+            ) AS ranked
+            WHERE rn = 1'
+        )->fetchAll();
     }
 
     /**
@@ -288,6 +298,273 @@ final class PlayHistoryRepository
         return $selection->orderBy('started_at')->asc()->fetchAll();
     }
 
+    public static function isPlayFinished(int $watchedSec, int $runtimeSec): bool
+    {
+        return $runtimeSec > 0 && $watchedSec >= (int) floor($runtimeSec * 0.95);
+    }
+
+    /**
+     * Insert historical plays (Playback Reporting import). Already-imported
+     * rows are skipped via the session_key + item_id unique key. A re-import
+     * can still fill runtime_sec when the stored value is 0, and replace a
+     * type-based library label with the real Jellyfin library. Plays that
+     * overlap a live poller row (same user, item, and start time) are skipped.
+     * Imported plays must already have notified=1 so they never fire a
+     * "started watching" alert.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
+     * @return array{inserted: int, skipped: int, repaired: int}
+     */
+    public function importHistoricalPlays(array $rows, bool $dryRun = false, ?callable $onProgress = null): array
+    {
+        $inserted = 0;
+        $skipped = 0;
+        $repaired = 0;
+        $livePlays = $this->livePlaysNearImport($rows);
+        $total = count($rows);
+        $processed = 0;
+
+        foreach ($rows as $row) {
+            $sessionKey = (string) ($row['session_key'] ?? '');
+            $itemId = (string) ($row['item_id'] ?? '');
+            if ($sessionKey === '' || $itemId === '') {
+                $skipped++;
+            } elseif ($this->overlapsLivePlay($row, $livePlays)) {
+                $skipped++;
+            } elseif ($dryRun) {
+                $exists = $this->db->select('id')
+                    ->from('play_history')
+                    ->where('session_key = %s', $sessionKey)
+                    ->where('item_id = %s', $itemId)
+                    ->fetch();
+                if ($exists) {
+                    $skipped++;
+                } else {
+                    $inserted++;
+                }
+            } else {
+                try {
+                    $this->db->insert('play_history', $row)->execute();
+                    $inserted++;
+                } catch (\Dibi\UniqueConstraintViolationException) {
+                    if ($this->repairImportedRow($sessionKey, $itemId, $row)) {
+                        $repaired++;
+                    }
+                    $skipped++;
+                }
+            }
+
+            $processed++;
+            $this->reportImportProgress($onProgress, $processed, $total, $inserted, $skipped);
+        }
+
+        if ($total === 0) {
+            $this->reportImportProgress($onProgress, 0, 0, 0, 0);
+        }
+
+        return ['inserted' => $inserted, 'skipped' => $skipped, 'repaired' => $repaired];
+    }
+
+    /**
+     * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
+     */
+    private function reportImportProgress(?callable $onProgress, int $processed, int $total, int $inserted, int $skipped): void
+    {
+        if ($onProgress === null) {
+            return;
+        }
+
+        if ($processed !== 1 && $processed !== $total && $processed % 10 !== 0) {
+            return;
+        }
+
+        $onProgress([
+            'phase' => 'importing',
+            'processed' => $processed,
+            'total' => $total,
+            'inserted' => $inserted,
+            'skipped' => $skipped,
+        ]);
+    }
+
+    /**
+     * Fill runtime when it was stored as 0, and replace a type-based library
+     * label (Movies / TV Shows / …) with the real Jellyfin library name.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function repairImportedRow(string $sessionKey, string $itemId, array $row): bool
+    {
+        $existing = $this->db->select('id, runtime_sec, library, started_at')
+            ->from('play_history')
+            ->where('session_key = %s', $sessionKey)
+            ->where('item_id = %s', $itemId)
+            ->fetch();
+
+        if (!$existing) {
+            return false;
+        }
+
+        $data = [];
+        $incomingRuntime = max(0, (int) ($row['runtime_sec'] ?? 0));
+        if ($incomingRuntime > 0 && (int) $existing['runtime_sec'] <= 0) {
+            $watchedSec = max(0, (int) ($row['watched_sec'] ?? 0));
+            $finished = self::isPlayFinished($watchedSec, $incomingRuntime);
+            $endedAt = $this->endedAtFromStart((string) ($existing['started_at'] ?? ''), $watchedSec);
+            $data['runtime_sec'] = $incomingRuntime;
+            $data['watched_sec'] = $watchedSec;
+            $data['is_finished'] = $finished ? 1 : 0;
+            $data['updated_at'] = $endedAt ?? ($row['updated_at'] ?? null);
+            $data['ended_at'] = $finished ? $endedAt : null;
+        }
+
+        $incomingLibrary = $this->nullableString($row['library'] ?? null);
+        $storedLibrary = trim((string) ($existing['library'] ?? ''));
+        if ($incomingLibrary !== null && $this->shouldReplaceLibrary($storedLibrary, $incomingLibrary)) {
+            $data['library'] = $incomingLibrary;
+        }
+
+        if ($data === []) {
+            return false;
+        }
+
+        $this->db->update('play_history', $data)
+            ->where('id = %i', (int) $existing['id'])
+            ->execute();
+
+        return true;
+    }
+
+    private function shouldReplaceLibrary(string $stored, string $incoming): bool
+    {
+        if ($incoming === '' || strcasecmp($stored, $incoming) === 0) {
+            return false;
+        }
+
+        if ($stored === '') {
+            return true;
+        }
+
+        return in_array(mb_strtolower($stored), ['movies', 'tv shows', 'music', 'videos', 'live tv'], true);
+    }
+
+    private function endedAtFromStart(string $startedAt, int $watchedSec): ?string
+    {
+        if ($startedAt === '') {
+            return null;
+        }
+
+        try {
+            return (new \DateTimeImmutable($startedAt))
+                ->modify('+' . max(0, $watchedSec) . ' seconds')
+                ->format('Y-m-d H:i:s');
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<string, list<int>>
+     */
+    private function livePlaysNearImport(array $rows): array
+    {
+        $times = [];
+        foreach ($rows as $row) {
+            $startedAt = (string) ($row['started_at'] ?? '');
+            if ($startedAt === '') {
+                continue;
+            }
+            try {
+                $times[] = (new \DateTimeImmutable($startedAt))->getTimestamp();
+            } catch (\Exception) {
+                continue;
+            }
+        }
+
+        if ($times === []) {
+            return [];
+        }
+
+        $min = (new \DateTimeImmutable('@' . (min($times) - self::LIVE_OVERLAP_SECONDS)))
+            ->setTimezone(new \DateTimeZone(date_default_timezone_get()))
+            ->format('Y-m-d H:i:s');
+        $max = (new \DateTimeImmutable('@' . (max($times) + self::LIVE_OVERLAP_SECONDS)))
+            ->setTimezone(new \DateTimeZone(date_default_timezone_get()))
+            ->format('Y-m-d H:i:s');
+
+        $liveRows = $this->db->select('user_id, item_id, started_at')
+            ->from('play_history')
+            ->where('started_at >= %s', $min)
+            ->where('started_at <= %s', $max)
+            ->where('session_key NOT LIKE %s', PlaybackReportingParser::SESSION_PREFIX . '%')
+            ->fetchAll();
+
+        $plays = [];
+        foreach ($liveRows as $live) {
+            try {
+                $startedTs = (new \DateTimeImmutable((string) $live['started_at']))->getTimestamp();
+            } catch (\Exception) {
+                continue;
+            }
+
+            $key = $this->livePlayKey(
+                (string) ($live['user_id'] ?? ''),
+                (string) ($live['item_id'] ?? ''),
+            );
+            if ($key === '') {
+                continue;
+            }
+
+            $plays[$key][] = $startedTs;
+        }
+
+        return $plays;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param array<string, list<int>> $livePlays
+     */
+    private function overlapsLivePlay(array $row, array $livePlays): bool
+    {
+        $key = $this->livePlayKey((string) ($row['user_id'] ?? ''), (string) ($row['item_id'] ?? ''));
+        if ($key === '' || !isset($livePlays[$key])) {
+            return false;
+        }
+
+        try {
+            $startedTs = (new \DateTimeImmutable((string) ($row['started_at'] ?? '')))->getTimestamp();
+        } catch (\Exception) {
+            return false;
+        }
+
+        foreach ($livePlays[$key] as $liveTs) {
+            if (abs($liveTs - $startedTs) <= self::LIVE_OVERLAP_SECONDS) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function livePlayKey(string $userId, string $itemId): string
+    {
+        $userKey = $this->normalizedUserKey($userId);
+        $itemKey = $this->normalizedUserKey($itemId);
+        if ($userKey === '' || $itemKey === '') {
+            return '';
+        }
+
+        return $userKey . "\0" . $itemKey;
+    }
+
+    private function normalizedUserKey(string $userId): string
+    {
+        return strtolower(str_replace('-', '', trim($userId)));
+    }
+
     /**
      * @return array<int, string>
      */
@@ -298,6 +575,21 @@ final class PlayHistoryRepository
             ->where('user_name IS NOT NULL')
             ->orderBy('user_name')
             ->fetchPairs(null, 'user_name');
+
+        return array_values(array_map('strval', $pairs));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function libraries(): array
+    {
+        $pairs = $this->db->select('DISTINCT library')
+            ->from('play_history')
+            ->where('library IS NOT NULL')
+            ->where('library <> %s', '')
+            ->orderBy('library')
+            ->fetchPairs(null, 'library');
 
         return array_values(array_map('strval', $pairs));
     }
