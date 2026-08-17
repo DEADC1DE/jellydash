@@ -8,12 +8,15 @@ final class ReleaseHighlightsTest extends TestCase
 {
     public function testVersionedHighlightsAreStructuredAndSafe(): void
     {
-        $path = ROOT_DIR . '/public/assets/release-highlights/1.2.0.json';
+        $version = trim((string) file_get_contents(ROOT_DIR . '/VERSION'));
+        $this->assertMatchesRegularExpression('/^\d+\.\d+\.\d+$/', $version);
+
+        $path = ROOT_DIR . '/public/assets/release-highlights/' . $version . '.json';
 
         $this->assertFileExists($path);
         $payload = json_decode((string) file_get_contents($path), true, flags: JSON_THROW_ON_ERROR);
         $this->assertIsArray($payload);
-        $this->assertSame('1.2.0', $payload['version'] ?? null);
+        $this->assertSame($version, $payload['version'] ?? null);
         $this->assertTrue($payload['auto_show'] ?? false);
         $this->assertIsString($payload['title'] ?? null);
         $this->assertNotSame('', trim((string) ($payload['title'] ?? '')));

@@ -1,0 +1,22 @@
+{
+  "version": "1.3.0",
+  "auto_show": true,
+  "title": "A much better History",
+  "summary": "Jellydash can now import Playback Reporting data, browse beyond the first 100 plays, and show Jellyfin profile pictures.",
+  "highlights": [
+    "Import existing plays from a Playback Reporting TSV backup, SQLite database, or the installed plugin API.",
+    "Browse older plays with pagination instead of stopping at the first 100.",
+    "See Jellyfin profile pictures in Now Playing, History, and Statistics, with initials when no image is available.",
+    "Find the importer anytime from History or Settings. It never opens another popup on its own."
+  ],
+  "links": [
+    {
+      "label": "Import guide",
+      "url": "https://github.com/themartz90/jellydash/blob/main/README.md#importing-playback-reporting-history"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.3.0"
+    }
+  ]
+}
