@@ -106,7 +106,10 @@ final class PlayHistoryRepositoryTest extends TestCase
     public function testHistoryRowsApplyFiltersAndExposeUsers(): void
     {
         $now = new \DateTimeImmutable('2026-06-19 12:00:00');
-        $this->repository->logActiveStreams([$this->stream(900, 3600)], $now);
+        $episode = $this->stream(900, 3600);
+        $episode['seriesName'] = 'PHPUnit Expanse Fixture';
+        $episode['library'] = 'PHPUnit TV Shows';
+        $this->repository->logActiveStreams([$episode], $now);
 
         $this->dibi->insert('play_history', [
             'session_key' => 'phpunit-movie',
@@ -115,7 +118,7 @@ final class PlayHistoryRepositoryTest extends TestCase
             'item_id' => 'phpunit-movie-item',
             'item_type' => 'Movie',
             'item_name' => 'Arrival',
-            'library' => 'Movies',
+            'library' => 'PHPUnit Movies',
             'play_method' => 'DirectPlay',
             'client' => 'Web',
             'device' => 'MacBook',
@@ -125,18 +128,18 @@ final class PlayHistoryRepositoryTest extends TestCase
             'updated_at' => '2026-06-19 11:20:00',
         ])->execute();
 
-        $movieRows = $this->repository->historyRows(new HistoryFilters(library: 'Movies', range: 'all'), $now);
-        $searchRows = $this->repository->historyRows(new HistoryFilters(search: 'expanse', range: 'all'), $now);
+        $movieRows = $this->repository->historyRows(new HistoryFilters(library: 'PHPUnit Movies', range: 'all'), $now);
+        $searchRows = $this->repository->historyRows(new HistoryFilters(search: 'PHPUnit Expanse Fixture', range: 'all'), $now);
 
         $this->assertCount(1, $movieRows);
         $this->assertSame('Arrival', $movieRows[0]['item_name']);
         $this->assertCount(1, $searchRows);
-        $this->assertSame('The Expanse', $searchRows[0]['series_name']);
+        $this->assertSame('PHPUnit Expanse Fixture', $searchRows[0]['series_name']);
         $this->assertSame(1, $this->repository->historyTotal(new HistoryFilters(user: 'PHPUnit Viewer', range: 'all'), $now));
         $this->assertContains('Jon Bell', $this->repository->users());
         $this->assertContains('PHPUnit Viewer', $this->repository->users());
-        $this->assertContains('Movies', $this->repository->libraries());
-        $this->assertContains('TV Shows', $this->repository->libraries());
+        $this->assertContains('PHPUnit Movies', $this->repository->libraries());
+        $this->assertContains('PHPUnit TV Shows', $this->repository->libraries());
     }
 
     public function testHistoryRowsHonorLimitAndOffset(): void
