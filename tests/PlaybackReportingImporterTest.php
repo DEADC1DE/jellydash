@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Mk\Framework\Container;
+use Mk\Framework\Jellyfin\JellyfinClient;
 use Mk\Framework\Jellyfin\PlaybackReportingClient;
 use Mk\Framework\Jellyfin\PlaybackReportingImporter;
 use Mk\Framework\Jellyfin\PlaybackReportingParser;
@@ -208,7 +209,11 @@ final class PlaybackReportingImporterTest extends TestCase
             file_put_contents($path, implode("\n", $lines) . "\n");
 
             $processed = [];
-            $result = (new PlaybackReportingImporter(null, $repository))->importFile(
+            $result = (new PlaybackReportingImporter(
+                null,
+                $repository,
+                new JellyfinClient('', '', false),
+            ))->importFile(
                 $path,
                 true,
                 'tsv',
@@ -228,7 +233,7 @@ final class PlaybackReportingImporterTest extends TestCase
         }
     }
 
-    public function testImportFromPluginWritesEachPageBeforeReadingTheNext(): void
+    public function testImportFromPluginProcessesEachPageBeforeReadingTheNext(): void
     {
         try {
             $database = Container::db();
@@ -238,38 +243,47 @@ final class PlaybackReportingImporterTest extends TestCase
             $this->markTestSkipped('Database unavailable: ' . $e->getMessage());
         }
 
+        $itemHex = bin2hex(random_bytes(16));
         $rows = [];
         for ($i = 0; $i < PlaybackReportingClient::CHUNK_SIZE + 1; $i++) {
             $started = (new DateTimeImmutable('2024-06-01 00:00:00'))
                 ->modify('+' . $i . ' seconds')
                 ->format('Y-m-d H:i:s') . '.0000000';
-            $rows[] = $this->parsedLine($started, 'dddddddddddddddddddddddddddddddd', 60)[0];
+            $rows[] = $this->parsedLine($started, $itemHex, 60)[0];
         }
 
         $itemId = (string) $rows[0]['item_id'];
         $plugin = new FakePlaybackReportingPlugin($rows);
-        $countsAfterFirstPage = [];
-        $plugin->beforePage = static function (int $offset) use ($dibi, $itemId, &$countsAfterFirstPage): void {
+        $latestProcessed = 0;
+        $processedBeforeNextPage = [];
+        $plugin->beforePage = static function (int $offset) use (&$latestProcessed, &$processedBeforeNextPage): void {
             if ($offset === PlaybackReportingClient::CHUNK_SIZE) {
-                $countsAfterFirstPage[] = (int) $dibi->select('COUNT(*)')
-                    ->from('play_history')
-                    ->where('item_id = %s', $itemId)
-                    ->fetchSingle();
+                $processedBeforeNextPage[] = $latestProcessed;
             }
         };
 
-        try {
-            $result = (new PlaybackReportingImporter(null, $repository, null, $plugin))->importFromPlugin();
+        $result = (new PlaybackReportingImporter(
+            null,
+            $repository,
+            new JellyfinClient('', '', false),
+            $plugin,
+        ))->importFromPlugin(
+            true,
+            static function (array $payload) use (&$latestProcessed): void {
+                if (($payload['phase'] ?? '') === 'importing') {
+                    $latestProcessed = (int) $payload['processed'];
+                }
+            },
+        );
 
-            $this->assertSame([PlaybackReportingClient::CHUNK_SIZE, 1, 0], $plugin->fetched);
-            $this->assertSame([PlaybackReportingClient::CHUNK_SIZE], $countsAfterFirstPage);
-            $this->assertSame(PlaybackReportingClient::CHUNK_SIZE + 1, $result['parsed']);
-            $this->assertSame(PlaybackReportingClient::CHUNK_SIZE + 1, $result['inserted']);
-        } finally {
-            $dibi->delete('play_history')
-                ->where('item_id = %s', $itemId)
-                ->execute();
-        }
+        $this->assertSame([PlaybackReportingClient::CHUNK_SIZE, 1, 0], $plugin->fetched);
+        $this->assertSame([PlaybackReportingClient::CHUNK_SIZE], $processedBeforeNextPage);
+        $this->assertSame(PlaybackReportingClient::CHUNK_SIZE + 1, $result['parsed']);
+        $this->assertSame(PlaybackReportingClient::CHUNK_SIZE + 1, $result['inserted']);
+        $this->assertSame(0, (int) $dibi->select('COUNT(*)')
+            ->from('play_history')
+            ->where('item_id = %s', $itemId)
+            ->fetchSingle());
     }
 
     /**
