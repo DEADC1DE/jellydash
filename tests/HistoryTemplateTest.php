@@ -24,11 +24,18 @@ final class HistoryTemplateTest extends TestCase
             $template
         );
         $this->assertStringContainsString('history/_pager.twig', $template);
-        $this->assertStringContainsString('data-import-history-banner', $template);
-        $this->assertStringContainsString('data-history-live', $template);
-        $this->assertStringContainsString('history-import.js?v=20260815-review', $template);
+        $this->assertStringContainsString('href="/settings#import-history"', $template);
+        $this->assertStringContainsString('Import history', $template);
+        $this->assertStringNotContainsString('data-import-history-banner', $template);
+        $this->assertStringNotContainsString('history-import.js', $template);
         $this->assertStringContainsString('{% for library in libraries %}', $template);
         $this->assertStringNotContainsString('option value="Movies"', $template);
+
+        $empty = file_get_contents(TEMPLATES_DIR . '/history/_empty.twig');
+        $this->assertIsString($empty);
+        $this->assertStringContainsString('{% if summary.total == 0 %}', $empty);
+        $this->assertStringContainsString('Import existing history', $empty);
+        $this->assertStringContainsString('href="/settings#import-history"', $empty);
     }
 
     public function testHistoryRowsUseSharedAvatarPartial(): void

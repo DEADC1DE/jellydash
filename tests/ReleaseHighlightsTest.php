@@ -43,13 +43,14 @@ final class ReleaseHighlightsTest extends TestCase
         }
     }
 
-    public function testReleaseScriptSignalsWhenStartupDialogIsSettled(): void
+    public function testReleaseAndImporterScriptsAreWired(): void
     {
         $js = (string) file_get_contents(ROOT_DIR . '/public/assets/js/release-highlights.js');
         $importJs = (string) file_get_contents(ROOT_DIR . '/public/assets/js/history-import.js');
 
-        $this->assertStringContainsString('jellydash:release-dialog-settled', $js);
-        $this->assertStringContainsString('jellydash:release-dialog-settled', $importJs);
+        $this->assertStringContainsString('/assets/release-highlights/', $js);
+        $this->assertStringContainsString('dialog.showModal()', $js);
+        $this->assertStringNotContainsString('jellydash:release-dialog-settled', $js);
         $this->assertStringContainsString('/api/playback-reporting.php', $importJs);
         $this->assertStringContainsString('data-import-alt', $importJs);
         $this->assertStringContainsString('payload.broken', $importJs);
@@ -58,10 +59,11 @@ final class ReleaseHighlightsTest extends TestCase
         $this->assertStringContainsString('commit', $importJs);
         $this->assertStringContainsString('application/x-ndjson', $importJs);
         $this->assertStringContainsString('data-import-history-progress', $importJs);
-        $this->assertStringContainsString('data-history-live', $importJs);
         $this->assertStringContainsString('Import ', $importJs);
         $this->assertStringContainsString('Checking the import', $importJs);
         $this->assertStringContainsString('Importing history', $importJs);
+        $this->assertStringNotContainsString('history_empty', $importJs);
+        $this->assertStringNotContainsString('playback-reporting-import.seen', $importJs);
 
         $api = (string) file_get_contents(ROOT_DIR . '/public/api/playback-reporting.php');
         $this->assertStringContainsString('Csrf::validateHeader()', $api);

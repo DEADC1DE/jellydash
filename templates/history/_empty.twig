@@ -1,4 +1,10 @@
 <div class="empty-state">
-    <h2>No plays match your filters</h2>
-    <p>Try clearing the search or choosing all users.</p>
+    {% if summary.total == 0 %}
+        <h2>No plays yet</h2>
+        <p>Jellydash records new plays automatically. If you already used Playback Reporting, you can bring that history with you.</p>
+        <a class="empty-state-action" href="/settings#import-history">Import existing history</a>
+    {% else %}
+        <h2>No plays match your filters</h2>
+        <p>Try clearing the search or choosing all users.</p>
+    {% endif %}
 </div>
