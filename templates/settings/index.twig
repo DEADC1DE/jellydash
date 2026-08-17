@@ -94,7 +94,7 @@
         </div>
     </form>
 
-    <section class="settings-card settings-import">
+    <section class="settings-card settings-import" id="import-history">
         <header>
             <strong>Import play history</strong>
             <span>Drop a Playback Reporting TSV backup or <code>playback_reporting.db</code>. Jellydash counts the plays, then asks you to confirm.</span>
@@ -124,5 +124,5 @@
 
 {% block page_scripts %}
     {% include "_import_history_dialog.twig" %}
-    <script src="/assets/js/history-import.js?v=20260815-review"></script>
+    <script src="/assets/js/history-import.js?v=20260817-discovery"></script>
 {% endblock %}

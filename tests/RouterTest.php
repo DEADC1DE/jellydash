@@ -61,8 +61,9 @@ final class RouterTest extends TestCase
 
         $this->assertStringContainsString('History', $output);
         $this->assertStringContainsString('filter-bar', $output);
-        $this->assertStringContainsString('data-import-history-dialog', $output);
-        $this->assertStringContainsString('/assets/js/history-import.js?v=20260815-review', $output);
+        $this->assertStringContainsString('href="/settings#import-history"', $output);
+        $this->assertStringNotContainsString('data-import-history-dialog', $output);
+        $this->assertStringNotContainsString('/assets/js/history-import.js', $output);
         $this->assertSame(200, http_response_code());
     }
 
@@ -117,8 +118,9 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('data-release-changes', $output);
         $this->assertStringContainsString('data-release-dialog', $output);
         $this->assertStringContainsString('data-import-history-dialog', $output);
-        $this->assertStringContainsString('/assets/js/release-highlights.js?v=20260813-import', $output);
-        $this->assertStringContainsString('/assets/js/history-import.js?v=20260815-review', $output);
+        $this->assertStringContainsString('id="import-history"', $output);
+        $this->assertStringContainsString('/assets/js/release-highlights.js?v=20260818-discovery', $output);
+        $this->assertStringContainsString('/assets/js/history-import.js?v=20260817-discovery', $output);
         $this->assertSame(200, http_response_code());
     }
 

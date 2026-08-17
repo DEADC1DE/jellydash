@@ -14,11 +14,13 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString('action="/api/playback-reporting.php"', $template);
         $this->assertStringContainsString('name="commit"', $template);
         $this->assertStringContainsString('data-import-dropzone', $template);
+        $this->assertStringContainsString('id="import-history"', $template);
         $this->assertStringContainsString('name="playback_reporting"', $template);
         $this->assertStringContainsString('data-import-plugin', $template);
         $this->assertStringContainsString('data-import-alt', $template);
         $this->assertStringContainsString('asks you to confirm', $template);
         $this->assertStringContainsString('data-import-plugin-broken-note', $template);
+        $this->assertStringContainsString('history-import.js?v=20260817-discovery', $template);
         $this->assertStringContainsString('https://github.com/jellyfin/jellyfin-plugin-playbackreporting/pull/131', $template);
         $this->assertStringContainsString('value="plugin"', $template);
         $this->assertStringNotContainsString('Import file', $template);

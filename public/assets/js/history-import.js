@@ -1,26 +1,8 @@
 (function () {
     'use strict';
 
-    var STORAGE_KEY = 'jellydash.playback-reporting-import.seen';
     var csrfMeta = document.querySelector('meta[name="csrf-token"]');
     var CSRF_TOKEN = csrfMeta && csrfMeta.content ? csrfMeta.content : '';
-    var lastHistoryRefresh = 0;
-
-    function wasSeen() {
-        try {
-            return window.localStorage.getItem(STORAGE_KEY) === '1';
-        } catch (error) {
-            return true;
-        }
-    }
-
-    function rememberSeen() {
-        try {
-            window.localStorage.setItem(STORAGE_KEY, '1');
-        } catch (error) {
-            // Storage can be blocked.
-        }
-    }
 
     function probe(forSettings) {
         var url = '/api/playback-reporting.php' + (forSettings ? '?probe=1' : '');
@@ -158,10 +140,6 @@
         document.querySelectorAll('[data-import-history-progress]').forEach(function (node) {
             node.hidden = false;
         });
-        var banner = document.querySelector('[data-import-history-banner]');
-        if (banner) {
-            banner.hidden = false;
-        }
         document.querySelectorAll('[data-import-history-progress-bar]').forEach(function (bar) {
             bar.style.width = pct + '%';
         });
@@ -169,64 +147,12 @@
             track.setAttribute('aria-valuenow', String(pct));
         });
         setText(document.querySelectorAll('[data-import-history-progress-label]'), label);
-
-        if (phase === 'importing' || phase === 'done') {
-            refreshHistory(phase === 'done');
-        }
     }
 
     function hideProgress() {
         document.querySelectorAll('[data-import-history-progress]').forEach(function (node) {
-            if (!node.closest('[data-import-history-banner]')) {
-                node.hidden = true;
-            }
+            node.hidden = true;
         });
-        var banner = document.querySelector('[data-import-history-banner]');
-        if (banner) {
-            banner.hidden = true;
-        }
-    }
-
-    function refreshHistory(force) {
-        if (!document.querySelector('[data-history-live]')) {
-            return;
-        }
-        var now = Date.now();
-        if (!force && now - lastHistoryRefresh < 1500) {
-            return;
-        }
-        lastHistoryRefresh = now;
-
-        fetch(window.location.href, {
-            headers: { Accept: 'text/html' },
-            credentials: 'same-origin',
-            cache: 'no-store',
-        }).then(function (response) {
-            if (!response.ok) {
-                return null;
-            }
-            return response.text();
-        }).then(function (html) {
-            if (!html) {
-                return;
-            }
-            var doc = new DOMParser().parseFromString(html, 'text/html');
-            var nextLive = doc.querySelector('[data-history-live]');
-            var live = document.querySelector('[data-history-live]');
-            if (nextLive && live) {
-                live.replaceWith(nextLive);
-            }
-            var nextSummary = doc.querySelector('[data-history-summary]');
-            var summary = document.querySelector('[data-history-summary]');
-            if (nextSummary && summary) {
-                summary.textContent = nextSummary.textContent;
-            }
-            var nextShown = doc.querySelector('[data-history-shown]');
-            var shown = document.querySelector('[data-history-shown]');
-            if (nextShown && shown) {
-                shown.innerHTML = nextShown.innerHTML;
-            }
-        }).catch(function () {});
     }
 
     function finishImport(payload) {
@@ -240,13 +166,9 @@
             }).toString();
             return;
         }
-        if (document.querySelector('[data-history-live]')) {
-            window.location.reload();
-        }
     }
 
     function runImport(body, dialog, gen) {
-        rememberSeen();
         dialog.setState('importing', { processed: 0, total: 0 });
         applyProgress({ phase: 'preparing', processed: 0, total: 0, inserted: 0, skipped: 0 });
         return commit(body, function (payload) {
@@ -414,7 +336,6 @@
         var dismissBtn = dialog.querySelector('.release-dialog-dismiss');
         var token = 0;
         var pending = null;
-        var allowDialogSubmit = false;
         var importing = false;
 
         function isCurrent(generation) {
@@ -531,7 +452,6 @@
             if (importing) {
                 return;
             }
-            rememberSeen();
             pending = null;
             token += 1;
             hideProgress();
@@ -562,22 +482,12 @@
                 event.preventDefault();
                 return;
             }
-            rememberSeen();
             pending = null;
             token += 1;
             hideProgress();
         });
         if (form) {
             form.addEventListener('submit', function (event) {
-                if (allowDialogSubmit) {
-                    allowDialogSubmit = false;
-                    rememberSeen();
-                    if (confirmBtn) {
-                        confirmBtn.disabled = true;
-                        confirmBtn.textContent = 'Importing…';
-                    }
-                    return;
-                }
                 event.preventDefault();
                 if (!pending || importing) {
                     return;
@@ -602,90 +512,6 @@
         return dialogApi;
     }
 
-    function wireModal() {
-        var dialog = getDialog();
-        if (!dialog || wasSeen()) {
-            return;
-        }
-
-        var shown = false;
-        var started = false;
-
-        function showWhenIdle() {
-            if (shown || started || wasSeen()) {
-                return;
-            }
-            var release = document.querySelector('[data-release-dialog]');
-            if (release && release.open) {
-                release.addEventListener('close', showWhenIdle, { once: true });
-                return;
-            }
-
-            started = true;
-            probe(false).then(function (payload) {
-                if (shown || wasSeen()) {
-                    return;
-                }
-                if (!payload || payload.broken || !payload.history_empty) {
-                    return;
-                }
-                if (!payload.importable && !payload.available) {
-                    return;
-                }
-                if (release && release.open) {
-                    started = false;
-                    release.addEventListener('close', showWhenIdle, { once: true });
-                    return;
-                }
-                if (!CSRF_TOKEN) {
-                    return;
-                }
-
-                shown = true;
-                var body = new FormData();
-                body.append('import_source', 'plugin');
-                var gen = dialog.openConfirm({
-                    source: 'plugin',
-                    kind: 'plugin',
-                    onConfirm: function () {
-                        var importBody = new FormData();
-                        importBody.append('import_source', 'plugin');
-                        runImport(importBody, dialog, gen);
-                    },
-                });
-                dialog.setState('busy');
-                preview(body).then(function (result) {
-                    if (!dialog.isCurrent(gen) || wasSeen()) {
-                        return;
-                    }
-                    var count = result && typeof result.parsed === 'number' ? result.parsed : 0;
-                    if (count <= 0) {
-                        rememberSeen();
-                        shown = false;
-                        if (dialog.element.open) {
-                            dialog.element.close();
-                        }
-                        return;
-                    }
-                    dialog.setState('confirm', {
-                        count: count,
-                        kind: 'plugin',
-                        source: 'plugin',
-                    });
-                }).catch(function () {
-                    shown = false;
-                    if (dialog.element.open) {
-                        dialog.element.close();
-                    }
-                });
-            }).catch(function () {});
-        }
-
-        document.addEventListener('jellydash:release-dialog-settled', showWhenIdle, { once: true });
-        window.setTimeout(showWhenIdle, 6000);
-    }
-
     getDialog();
     wireDropzone();
-    wireModal();
 }());

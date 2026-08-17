@@ -2,7 +2,17 @@
 
 {% block dashboard_header %}
     <div class="header-copy">
-        <h1>History</h1>
+        <div class="history-title-row">
+            <h1>History</h1>
+            <a class="history-import-link" href="/settings#import-history">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 3v12"></path>
+                    <path d="m7 10 5 5 5-5"></path>
+                    <path d="M5 20h14"></path>
+                </svg>
+                <span>Import history</span>
+            </a>
+        </div>
         <p data-history-summary>{% if summary.shown > 0 %}Showing {{ summary.from }}-{{ summary.to }} of {{ summary.filtered_total }} plays{% else %}Showing 0 of {{ summary.filtered_total }} plays{% endif %}</p>
     </div>
     <form class="filter-bar" method="get" action="/history">
@@ -32,26 +42,15 @@
 {% endblock %}
 
 {% block dashboard_content %}
-    <div class="history-import-banner" data-import-history-banner hidden>
-        <strong>Importing play history</strong>
-        <div class="import-progress">
-            <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-import-history-progress-track>
-                <span data-import-history-progress-bar style="width: 0%"></span>
-            </div>
-            <p class="import-progress-label" data-import-history-progress-label>Preparing…</p>
-        </div>
-    </div>
-    <div data-history-live>
-        {% if groups is empty %}
-            {% include "history/_empty.twig" %}
-        {% else %}
-            {% include "history/_pager.twig" %}
-            {% for group in groups %}
-                {% include "history/_day_group.twig" with { group: group } %}
-            {% endfor %}
-            {% include "history/_pager.twig" %}
-        {% endif %}
-    </div>
+    {% if groups is empty %}
+        {% include "history/_empty.twig" %}
+    {% else %}
+        {% include "history/_pager.twig" %}
+        {% for group in groups %}
+            {% include "history/_day_group.twig" with { group: group } %}
+        {% endfor %}
+        {% include "history/_pager.twig" %}
+    {% endif %}
 {% endblock %}
 
 {% block dashboard_footer %}
@@ -71,9 +70,4 @@
         <span><i class="dot-amber"></i>Transcoded</span>
         <strong>{{ summary.transcoded_pct }}</strong>
     </div>
-{% endblock %}
-
-{% block page_scripts %}
-    {% include "_import_history_dialog.twig" %}
-    <script src="/assets/js/history-import.js?v=20260815-review"></script>
 {% endblock %}
