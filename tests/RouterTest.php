@@ -9,9 +9,35 @@ use PHPUnit\Framework\TestCase;
  */
 final class RouterTest extends TestCase
 {
+    private string|false $previousAppDebug;
+
+    private bool $hadAppDebugEnv;
+
+    private ?string $previousAppDebugEnv;
+
     protected function setUp(): void
     {
+        $this->previousAppDebug = getenv('APP_DEBUG');
+        $this->hadAppDebugEnv = array_key_exists('APP_DEBUG', $_ENV);
+        $this->previousAppDebugEnv = $this->hadAppDebugEnv ? (string) $_ENV['APP_DEBUG'] : null;
+        putenv('APP_DEBUG=true');
+        $_ENV['APP_DEBUG'] = 'true';
         http_response_code(200);
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->previousAppDebug === false) {
+            putenv('APP_DEBUG');
+        } else {
+            putenv('APP_DEBUG=' . $this->previousAppDebug);
+        }
+
+        if ($this->hadAppDebugEnv) {
+            $_ENV['APP_DEBUG'] = $this->previousAppDebugEnv;
+        } else {
+            unset($_ENV['APP_DEBUG']);
+        }
     }
 
     public function testNowPlayingRouteRendersDashboardShell(): void
