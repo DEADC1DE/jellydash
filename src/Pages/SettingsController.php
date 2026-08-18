@@ -69,6 +69,7 @@ final class SettingsController extends Controller
             'saved' => isset($_GET['saved']),
             'server_label_value' => AppSettings::get('server_label', 'Jellyfin dashboard'),
             'show_server_stats' => AppSettings::bool('show_server_stats', true),
+            'show_recently_added' => AppSettings::bool('show_recently_added', true),
             'libraries' => $libraries,
             'excluded' => $excluded,
             'extra_excluded' => implode(', ', $extraExcluded),

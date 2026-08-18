@@ -18,18 +18,29 @@
         <section class="settings-card">
             <header>
                 <strong>General</strong>
-                <span>Branding shown in the sidebar</span>
+                <span>Branding and dashboard display</span>
             </header>
             <label class="settings-field">
                 <span>Server label</span>
                 <input type="text" name="server_label" maxlength="64" value="{{ server_label_value }}" placeholder="e.g. media.example.com">
                 <small>Shown under the Jellydash brand. Leave empty to hide.</small>
             </label>
-            <label class="settings-check settings-check-toggle">
-                <input type="checkbox" name="show_server_stats" value="1" {{ show_server_stats ? 'checked' : '' }}>
-                <span>Show server statistics</span>
-            </label>
-            <small class="settings-note">Displays CPU and RAM usage in the sidebar.</small>
+            <div class="settings-toggle-grid">
+                <div class="settings-toggle-option">
+                    <label class="settings-check settings-check-toggle">
+                        <input type="checkbox" name="show_server_stats" value="1" {{ show_server_stats ? 'checked' : '' }}>
+                        <span>Show server statistics</span>
+                    </label>
+                    <small class="settings-note">Displays CPU and RAM usage in the sidebar.</small>
+                </div>
+                <div class="settings-toggle-option">
+                    <label class="settings-check settings-check-toggle">
+                        <input type="checkbox" name="show_recently_added" value="1" {{ show_recently_added ? 'checked' : '' }}>
+                        <span>Show recently added media</span>
+                    </label>
+                    <small class="settings-note">Displays new movies and shows on the Now Playing page.</small>
+                </div>
+            </div>
         </section>
 
         <section class="settings-card">
