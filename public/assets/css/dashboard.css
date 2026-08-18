@@ -1190,6 +1190,52 @@ svg {
     overflow-y: auto;
 }
 
+.dashboard-content-now-playing {
+    display: flex;
+    flex-direction: column;
+}
+
+.now-playing-page,
+.now-playing-live {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Keep overflowing stream rows and the shelf inside the page box so the
+   dashboard content padding remains visible above the stats footer. */
+.now-playing-page {
+    min-height: min-content;
+}
+
+.now-playing-page > .recently-added-panel[hidden] {
+    display: none;
+}
+
+.now-playing-live > .empty-state,
+.now-playing-live > .loading-state {
+    flex: 1;
+}
+
+.now-playing-page.has-recently-added .now-playing-live {
+    flex: 1 1 auto;
+}
+
+/* Let idle and one-row layouts use the available space, but never compress a
+   wrapped stream grid underneath the Recently Added shelf. */
+.now-playing-live.has-streams {
+    min-height: min-content;
+}
+
+.now-playing-page.has-recently-added .now-playing-live > .empty-state {
+    min-height: 210px;
+}
+
+.now-playing-page.has-recently-added .now-playing-live > .loading-state {
+    min-height: 260px;
+}
+
 .empty-state {
     display: flex;
     min-height: 62vh;
@@ -1753,6 +1799,232 @@ svg {
        no fixed column count and no dead space on wide windows. */
     grid-template-columns: repeat(auto-fill, minmax(min(460px, 100%), 1fr));
     gap: 20px;
+}
+
+/* ── Recently Added ─────────────────────────────────────────────────────── */
+
+.recently-added-panel {
+    position: relative;
+    flex: 0 0 auto;
+    margin-top: 18px;
+    padding: 14px 15px 12px;
+    overflow: hidden;
+    opacity: 0;
+    border: 1px solid rgba(137, 117, 255, .22);
+    border-radius: 17px;
+    background:
+        radial-gradient(85% 170% at 2% 112%, rgba(52, 216, 166, .13), transparent 62%),
+        radial-gradient(72% 150% at 100% -18%, rgba(59, 158, 255, .16), transparent 64%),
+        linear-gradient(118deg, rgba(124, 92, 255, .17), rgba(16, 15, 24, .97) 43%, rgba(14, 18, 29, .96));
+    box-shadow: 0 24px 58px -34px rgba(42, 122, 255, .38);
+    transform: translateY(7px);
+    transition: opacity .2s ease, transform .2s ease;
+}
+
+.recently-added-panel::before {
+    position: absolute;
+    top: 0;
+    right: 8%;
+    left: 8%;
+    height: 1px;
+    content: "";
+    background: linear-gradient(90deg, transparent, rgba(124, 92, 255, .8), rgba(59, 158, 255, .68), rgba(52, 216, 166, .65), transparent);
+    box-shadow: 0 0 22px rgba(98, 133, 255, .38);
+}
+
+.recently-added-panel.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.recently-added-header {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.recently-added-mark {
+    display: grid;
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+    padding: 7px;
+    place-items: center;
+    color: #c9bdff;
+    border: 1px solid rgba(163, 143, 255, .28);
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(124, 92, 255, .27), rgba(59, 158, 255, .1));
+    box-shadow: 0 10px 24px -16px rgba(124, 92, 255, .9);
+}
+
+.recently-added-header > div {
+    min-width: 0;
+}
+
+.recently-added-header h2 {
+    margin: 0;
+    color: #f6f4fc;
+    font-size: 15.5px;
+    font-weight: 850;
+    letter-spacing: -.2px;
+}
+
+.recently-added-header p {
+    margin: 2px 0 0;
+    color: rgba(255, 255, 255, .48);
+    font-size: 10px;
+}
+
+.recently-added-window {
+    flex: 0 0 auto;
+    margin-left: auto;
+    padding: 5px 8px;
+    color: rgba(218, 231, 255, .68);
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: .35px;
+    text-transform: uppercase;
+    border: 1px solid rgba(106, 165, 255, .2);
+    border-radius: 999px;
+    background: rgba(59, 158, 255, .08);
+}
+
+.recently-added-row {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 108px;
+    gap: 12px;
+    padding: 1px 1px 4px;
+    overflow-x: auto;
+    scrollbar-color: rgba(137, 117, 255, .34) rgba(255, 255, 255, .035);
+    scrollbar-width: thin;
+}
+
+.recently-added-row:focus-visible {
+    outline: 2px solid rgba(163, 143, 255, .72);
+    outline-offset: 4px;
+}
+
+.recent-media-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+}
+
+.recent-media-poster {
+    position: relative;
+    aspect-ratio: 2 / 3;
+    margin-bottom: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 11px;
+    background: linear-gradient(150deg, #30234d, #0c0b13 76%);
+    box-shadow: 0 17px 32px -22px rgba(0, 0, 0, .95);
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.recent-media-card:hover .recent-media-poster {
+    border-color: rgba(160, 143, 255, .42);
+    box-shadow: 0 20px 35px -21px rgba(42, 37, 76, .95);
+}
+
+.recent-media-poster.is-tone-2 {
+    background: linear-gradient(150deg, #193f55, #090e17 76%);
+}
+
+.recent-media-poster.is-tone-3 {
+    background: linear-gradient(150deg, #185044, #081510 76%);
+}
+
+.recent-media-poster.is-tone-4 {
+    background: linear-gradient(150deg, #553e20, #140d08 76%);
+}
+
+.recent-media-poster.is-tone-5 {
+    background: linear-gradient(150deg, #4e244a, #130a14 76%);
+}
+
+.recent-media-poster img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.recent-media-library {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    max-width: calc(100% - 12px);
+    padding: 3px 6px;
+    overflow: hidden;
+    color: rgba(255, 255, 255, .86);
+    font-family: var(--font-mono);
+    font-size: 7.5px;
+    font-weight: 750;
+    letter-spacing: .2px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 6px;
+    background: rgba(8, 7, 12, .68);
+    backdrop-filter: blur(7px);
+}
+
+.recent-media-card > strong,
+.recent-media-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.recent-media-card > strong {
+    color: #f3f0fb;
+    font-size: 11.5px;
+    font-weight: 750;
+}
+
+.recent-media-meta {
+    margin-top: 3px;
+    color: rgba(255, 255, 255, .48);
+    font-size: 9.5px;
+}
+
+.recent-media-date {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    max-width: calc(100% - 12px);
+    padding: 3px 6px;
+    overflow: hidden;
+    color: rgba(233, 242, 255, .82);
+    font-family: var(--font-mono);
+    font-size: 8px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 6px;
+    background: rgba(8, 7, 12, .72);
+    backdrop-filter: blur(7px);
+}
+
+.recent-media-date i {
+    flex: 0 0 4px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--color-green);
+    box-shadow: 0 0 9px rgba(52, 216, 166, .48);
 }
 
 .marquee-list {
@@ -3374,8 +3646,11 @@ a.history-pager-btn:hover {
     }
 
     .app-shell {
-        display: block;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
         min-height: 100vh;
+        min-height: 100dvh;
         height: auto;
     }
 
@@ -3388,6 +3663,7 @@ a.history-pager-btn:hover {
         align-items: center;
         gap: 12px;
         height: 58px;
+        flex: 0 0 58px;
         padding: 0 16px;
         background: rgba(10, 9, 16, .92);
         border-bottom: 1px solid rgba(255, 255, 255, .06);
@@ -3496,13 +3772,27 @@ a.history-pager-btn:hover {
         padding: 22px 20px;
     }
 
-    /* The empty/loading states use a tall vh min-height tuned for the desktop
-       fixed-height layout. On mobile the page flows naturally, so that height
-       would push the footer below the fold. Size them to fill the gap between
-       the header and footer instead, keeping the footer on-screen. */
-    .empty-state,
-    .loading-state {
-        min-height: calc(100dvh - 350px);
+    /* The flex shell owns the viewport height. Short Now Playing states fill
+       the available content area, while real content grows and scrolls only
+       when it needs more room. */
+    .dashboard-content-now-playing .empty-state,
+    .dashboard-content-now-playing .loading-state {
+        min-height: 0;
+    }
+
+    .now-playing-page.has-recently-added .now-playing-live > .empty-state {
+        min-height: 175px;
+    }
+
+    .recently-added-panel {
+        margin-top: 16px;
+        padding: 13px 14px 11px;
+        border-radius: 16px;
+    }
+
+    .recently-added-row {
+        grid-auto-columns: 96px;
+        gap: 11px;
     }
 
     .dashboard-footer {
@@ -3596,6 +3886,12 @@ a.history-pager-btn:hover {
     }
 }
 
+@media (prefers-reduced-motion: reduce) {
+    .recently-added-panel {
+        transition: none;
+    }
+}
+
 @media (max-width: 600px) {
     .release-dialog {
         width: calc(100vw - 24px);
@@ -3624,16 +3920,114 @@ a.history-pager-btn:hover {
         text-align: center;
     }
 
-    /* Keep the status pill and method badge side by side on phone-width cards;
-       just shrink the method badge (Direct Play / Transcode) so it fits on the
-       line, with the quality chip still tucked underneath it. */
+    .recently-added-row {
+        grid-auto-columns: 155px;
+        gap: 8px;
+    }
+
+    .recent-media-card {
+        display: grid;
+        grid-template-rows: auto auto;
+        grid-template-columns: 54px minmax(0, 1fr);
+        column-gap: 8px;
+        min-height: 108px;
+        padding: 5px;
+        align-content: center;
+        border: 1px solid rgba(255, 255, 255, .06);
+        border-radius: 12px;
+        background: rgba(7, 8, 14, .22);
+    }
+
+    .recent-media-poster {
+        grid-row: 1 / 3;
+        grid-column: 1;
+        width: 54px;
+        margin-bottom: 0;
+        border-radius: 9px;
+    }
+
+    .recent-media-card > strong,
+    .recent-media-meta {
+        grid-column: 2;
+    }
+
+    .recent-media-card > strong {
+        display: -webkit-box;
+        align-self: end;
+        overflow: hidden;
+        font-size: 12px;
+        line-height: 1.2;
+        white-space: normal;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+    }
+
+    .recent-media-meta {
+        display: -webkit-box;
+        align-self: start;
+        margin-top: 5px;
+        overflow: hidden;
+        font-size: 10px;
+        line-height: 1.25;
+        white-space: normal;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .recent-media-date {
+        bottom: 4px;
+        left: 4px;
+        gap: 3px;
+        max-width: calc(100% - 8px);
+        padding: 2px 3px;
+        font-size: 7.5px;
+    }
+
+    .recent-media-date > span {
+        display: none;
+    }
+
+    .recent-media-date::after {
+        content: attr(data-short-date);
+    }
+
+    .recent-media-library {
+        top: 4px;
+        left: 4px;
+        max-width: calc(100% - 8px);
+        padding: 3px 4px;
+        font-size: 7px;
+    }
+
+    /* Keep the two status badges together on the first row. The playback
+       details get their own full-width row so long codec descriptions cannot
+       push the method badge below the status badge. */
+    .stream-card-top {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px 10px;
+        width: 100%;
+    }
+
+    .stream-card-top .playback-stack {
+        display: contents;
+    }
+
     .stream-card-top .now-pill,
     .stream-card-top .method-badge {
+        grid-row: 1;
         min-height: 30px;
     }
 
+    .stream-card-top .now-pill {
+        grid-column: 1;
+        justify-self: start;
+    }
+
     .stream-card-top .method-badge {
+        grid-column: 2;
         gap: 6px;
+        justify-self: end;
         padding: 5px 10px;
     }
 
@@ -3646,5 +4040,14 @@ a.history-pager-btn:hover {
     .stream-card-top .method-badge span {
         font-size: 9.5px;
         letter-spacing: .5px;
+    }
+
+    .stream-card-top .quality-chip {
+        grid-row: 2;
+        grid-column: 1 / -1;
+        width: fit-content;
+        max-width: 100%;
+        min-width: 0;
+        justify-self: end;
     }
 }

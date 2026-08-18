@@ -14,6 +14,7 @@ final class NowPlayingController extends Controller
             'layout' => $this->layout([
                 'title' => 'Now Playing',
                 'page' => 'now-playing',
+                'content_class' => 'dashboard-content-now-playing',
             ]),
             'is_loading' => true,
             'streams' => [],

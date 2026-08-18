@@ -8,18 +8,44 @@
 {% endblock %}
 
 {% block dashboard_content %}
-    <div data-now-playing-root>
-        {% if is_loading|default(false) %}
-            {% include "now_playing/_loading.twig" %}
-        {% elseif streams is empty %}
-            {% include "now_playing/_empty.twig" %}
-        {% else %}
-            <div class="stream-grid">
-                {% for stream in streams %}
-                    {% include "now_playing/_stream_card.twig" with { stream: stream } %}
-                {% endfor %}
-            </div>
-        {% endif %}
+    <div class="now-playing-page" data-now-playing-page>
+        <div class="now-playing-live{{ streams is not empty ? ' has-streams' : '' }}" data-now-playing-root>
+            {% if is_loading|default(false) %}
+                {% include "now_playing/_loading.twig" %}
+            {% elseif streams is empty %}
+                {% include "now_playing/_empty.twig" %}
+            {% else %}
+                <div class="stream-grid">
+                    {% for stream in streams %}
+                        {% include "now_playing/_stream_card.twig" with { stream: stream } %}
+                    {% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <section class="recently-added-panel" data-recently-added aria-labelledby="recently-added-title" hidden>
+            <header class="recently-added-header">
+                <span class="recently-added-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" role="img" focusable="false">
+                        <path d="M12 3v4"></path>
+                        <path d="M12 17v4"></path>
+                        <path d="M3 12h4"></path>
+                        <path d="M17 12h4"></path>
+                        <path d="m6.4 6.4 2.2 2.2"></path>
+                        <path d="m15.4 15.4 2.2 2.2"></path>
+                        <path d="m17.6 6.4-2.2 2.2"></path>
+                        <path d="m8.6 15.4-2.2 2.2"></path>
+                        <circle cx="12" cy="12" r="2.7"></circle>
+                    </svg>
+                </span>
+                <div>
+                    <h2 id="recently-added-title">Recently Added</h2>
+                    <p>Fresh from Jellyfin</p>
+                </div>
+                <span class="recently-added-window" data-recently-added-window>Last 14 days</span>
+            </header>
+            <div class="recently-added-row" data-recently-added-row tabindex="0" aria-label="Recently added media"></div>
+        </section>
     </div>
 {% endblock %}
 
@@ -62,4 +88,5 @@
 
 {% block page_scripts %}
     <script src="/assets/js/now-playing.js?v=20260818-correctness"></script>
+    <script src="/assets/js/recently-added.js?v=20260818-compact-recently-added"></script>
 {% endblock %}

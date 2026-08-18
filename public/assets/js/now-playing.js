@@ -127,6 +127,7 @@
 
     function renderStreams(payload) {
         const streams = Array.isArray(payload.streams) ? payload.streams : [];
+        root.classList.toggle('has-streams', streams.length > 0);
 
         if (streams.length === 0) {
             root.innerHTML = emptyState();
