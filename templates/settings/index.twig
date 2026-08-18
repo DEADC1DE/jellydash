@@ -12,7 +12,7 @@
         <div class="settings-saved" role="status">Settings saved.</div>
     {% endif %}
 
-    <form class="settings-form" action="?req=settings" method="post">
+    <form class="settings-form" id="settings-form" action="?req=settings" method="post" data-settings-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <section class="settings-card">
@@ -105,6 +105,11 @@
         </div>
     </form>
 
+    <div class="settings-dirty-bar" data-settings-dirty-bar hidden>
+        <span aria-live="polite"><i aria-hidden="true"></i>Unsaved changes</span>
+        <button type="submit" class="settings-save-btn" form="settings-form">Save changes</button>
+    </div>
+
     <section class="settings-card settings-import" id="import-history">
         <header>
             <strong>Import play history</strong>
@@ -135,5 +140,6 @@
 
 {% block page_scripts %}
     {% include "_import_history_dialog.twig" %}
+    <script src="/assets/js/settings-dirty.js?v=20260818"></script>
     <script src="/assets/js/history-import.js?v=20260817-discovery"></script>
 {% endblock %}
