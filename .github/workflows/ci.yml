@@ -112,7 +112,9 @@ jobs:
             --publish 18080:80 \
             --env APP_ENV=production \
             --env APP_DEBUG=false \
-            --env POLLER_ENABLED=false \
+            --env AUTH_ENABLED=true \
+            --env AUTH_ADMIN_USER=ci-owner \
+            --env AUTH_ADMIN_PASSWORD=ci-password-123 \
             --env DB_DRIVER=sqlite3 \
             --env DB_NAME=/var/www/html/var/data/jellydash.sqlite \
             --env JELLYFIN_URL=http://127.0.0.1:9 \
@@ -136,5 +138,19 @@ jobs:
           fi
 
           docker exec jellydash-sqlite-ci test -f /var/www/html/var/data/jellydash.sqlite
+          test "$(docker exec jellydash-sqlite-ci stat -c '%U:%G' /var/www/html/var/data/jellydash.sqlite)" = "www-data:www-data"
+
+          cookie_jar="$RUNNER_TEMP/jellydash-cookie.txt"
+          login_page="$(curl --fail --silent --cookie-jar "$cookie_jar" http://127.0.0.1:18080/login)"
+          csrf_token="$(printf '%s' "$login_page" | sed -n 's/.*name="csrf_token" value="\([^"]*\)".*/\1/p' | head -n 1)"
+          test -n "$csrf_token"
+          curl --fail --silent --output /dev/null \
+            --cookie "$cookie_jar" \
+            --cookie-jar "$cookie_jar" \
+            --data-urlencode "csrf_token=$csrf_token" \
+            --data-urlencode "username=ci-owner" \
+            --data-urlencode "pwd=wrong-password" \
+            'http://127.0.0.1:18080/login?auth=login'
+          docker exec jellydash-sqlite-ci php -r '$db = new SQLite3("/var/www/html/var/data/jellydash.sqlite"); exit((int) $db->querySingle("SELECT COUNT(*) FROM login_attempts") === 1 ? 0 : 1);'
           docker exec jellydash-sqlite-ci php -r '$db = new SQLite3("/var/www/html/var/data/jellydash.sqlite"); exit($db->querySingle("PRAGMA integrity_check") === "ok" ? 0 : 1);'
           test -f "$RUNNER_TEMP/jellydash-sqlite/jellydash.sqlite"

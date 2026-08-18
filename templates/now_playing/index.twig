@@ -3,7 +3,7 @@
 {% block dashboard_header %}
     <div class="header-copy">
         <h1>Now Playing</h1>
-        <p><span class="live-dot {{ streams|length > 0 ? 'is-live' : 'is-idle' }}" data-live-dot></span><span data-live-label>{{ is_loading|default(false) ? 'Loading sessions...' : (streams|length > 0 ? streams|length ~ ' streams - ' ~ stats.active_users ~ ' users' : 'No active sessions') }}</span></p>
+        <p><span class="live-dot {{ streams|length > 0 ? 'is-live' : 'is-idle' }}" data-live-dot></span><span data-live-label>{{ is_loading|default(false) ? 'Loading sessions...' : (streams|length > 0 ? streams|length ~ ' ' ~ (streams|length == 1 ? 'stream' : 'streams') ~ ' - ' ~ stats.active_users ~ ' ' ~ (stats.active_users == 1 ? 'user' : 'users') : 'No active sessions') }}</span></p>
     </div>
 {% endblock %}
 
@@ -32,7 +32,7 @@
         <span><i class="dot-green"></i>Active streams</span>
         <strong data-stat-block="active_streams">
             {% if stats.active_streams > 0 %}
-                <span>{{ stats.active_streams }}</span> <small>{{ stats.active_streams == 1 ? 'user' : 'users' }}</small>
+                <span>{{ stats.active_streams }}</span> <small>{{ stats.active_streams == 1 ? 'stream' : 'streams' }}</small>
             {% else %}
                 <span class="stat-placeholder">Idle</span>
             {% endif %}
@@ -61,5 +61,5 @@
 {% endblock %}
 
 {% block page_scripts %}
-    <script src="/assets/js/now-playing.js?v=20260814-avatars"></script>
+    <script src="/assets/js/now-playing.js?v=20260818-correctness"></script>
 {% endblock %}

@@ -30,10 +30,14 @@ final class LoginThrottle
         $dibi = Container::db()->getDibi();
         $id = self::identifier($username, $ip);
         $row = self::row($username, $ip);
+        $now = \Carbon\Carbon::now();
+        $expired = $row !== null
+            && $row['locked_until'] !== null
+            && new \Carbon\Carbon($row['locked_until']) <= $now;
 
-        $attempts = ($row['attempts'] ?? 0) + 1;
+        $attempts = ($expired ? 0 : (int) ($row['attempts'] ?? 0)) + 1;
         $lockedUntil = $attempts >= self::MAX_ATTEMPTS
-            ? \Carbon\Carbon::now()->addSeconds(self::LOCKOUT_SECONDS)
+            ? $now->copy()->addSeconds(self::LOCKOUT_SECONDS)
             : null;
 
         if ($row === null) {
@@ -41,13 +45,13 @@ final class LoginThrottle
                 'identifier' => $id,
                 'attempts' => $attempts,
                 'locked_until' => $lockedUntil,
-                'updated_at' => \Carbon\Carbon::now(),
+                'updated_at' => $now,
             ])->execute();
         } else {
             $dibi->update('login_attempts', [
                 'attempts' => $attempts,
                 'locked_until' => $lockedUntil,
-                'updated_at' => \Carbon\Carbon::now(),
+                'updated_at' => $now,
             ])->where('identifier = %s', $id)->execute();
         }
     }

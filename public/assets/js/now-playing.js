@@ -2,6 +2,7 @@
     const root = document.querySelector('[data-now-playing-root]');
     const label = document.querySelector('[data-live-label]');
     const dot = document.querySelector('[data-live-dot]');
+    let hasLoaded = false;
 
     if (!root || !label || !dot) {
         return;
@@ -107,6 +108,23 @@
         `;
     }
 
+    function errorState() {
+        return `
+            <div class="empty-state">
+                <div class="empty-orbit" aria-hidden="true">
+                    <span></span>
+                    <svg viewBox="0 0 24 24" role="img" focusable="false">
+                        <path d="M12 7v6"></path>
+                        <path d="M12 17h.01"></path>
+                    </svg>
+                </div>
+                <h2>Could not load sessions</h2>
+                <p>Jellyfin did not answer this request. Jellydash will keep trying automatically.</p>
+                <small><span class="status-dot"></span>waiting for Jellyfin...</small>
+            </div>
+        `;
+    }
+
     function renderStreams(payload) {
         const streams = Array.isArray(payload.streams) ? payload.streams : [];
 
@@ -136,7 +154,8 @@
         const activeUsers = Number(stats.active_users || 0);
 
         label.textContent = activeStreams > 0
-            ? activeStreams + ' streams - ' + activeUsers + ' users'
+            ? activeStreams + ' ' + (activeStreams === 1 ? 'stream' : 'streams')
+                + ' - ' + activeUsers + ' ' + (activeUsers === 1 ? 'user' : 'users')
             : 'No active sessions';
         dot.classList.toggle('is-live', activeStreams > 0);
         dot.classList.toggle('is-idle', activeStreams === 0);
@@ -150,7 +169,7 @@
 
         if (activeStreams > 0) {
             if (activeBlock) {
-                activeBlock.innerHTML = `<span>${activeStreams}</span> <small>${activeStreams === 1 ? 'user' : 'users'}</small>`;
+                activeBlock.innerHTML = `<span>${activeStreams}</span> <small>${activeStreams === 1 ? 'stream' : 'streams'}</small>`;
             }
             if (bandwidthBlock) {
                 bandwidthBlock.innerHTML = `<span>${escapeHtml(stats.bandwidth_mbps || '0.0')}</span> <small>Mbps</small>`;
@@ -172,6 +191,25 @@
         }
     }
 
+    function renderError() {
+        if (hasLoaded) {
+            return;
+        }
+
+        root.innerHTML = errorState();
+        label.textContent = 'Could not load sessions';
+        dot.classList.remove('is-live');
+        dot.classList.add('is-idle');
+        setText('[data-nav-count]', '-');
+
+        ['active_streams', 'bandwidth', 'transcoding'].forEach((name) => {
+            const block = document.querySelector(`[data-stat-block="${name}"]`);
+            if (block) {
+                block.innerHTML = '<span class="stat-placeholder">Unavailable</span>';
+            }
+        });
+    }
+
     async function refreshNowPlaying() {
         const response = await fetch('/api/now-playing.php', {
             headers: { Accept: 'application/json' },
@@ -185,12 +223,13 @@
         const payload = await response.json();
         updateStats(payload);
         renderStreams(payload);
+        hasLoaded = true;
 
         window.dispatchEvent(new CustomEvent('jellydash:now-playing', { detail: payload }));
     }
 
-    refreshNowPlaying().catch(() => {});
+    refreshNowPlaying().catch(renderError);
     window.setInterval(() => {
-        refreshNowPlaying().catch(() => {});
+        refreshNowPlaying().catch(renderError);
     }, 5000);
 }());

@@ -176,6 +176,42 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame('Middle', $pageTwo[0]['item_name']);
     }
 
+    public function testHistoryAggregateCoversTheFullFilteredResultNotOnePage(): void
+    {
+        $user = 'PHPUnit History Aggregate';
+        $this->insertPlay([
+            'session_key' => 'phpunit-aggregate-a',
+            'user_name' => $user,
+            'watched_sec' => 600,
+            'play_method' => 'DirectPlay',
+        ]);
+        $this->insertPlay([
+            'session_key' => 'phpunit-aggregate-b',
+            'user_name' => $user,
+            'watched_sec' => 1200,
+            'play_method' => 'Transcode',
+        ]);
+
+        $filters = new HistoryFilters(user: $user, range: 'all', limit: 1);
+        $this->assertCount(1, $this->repository->historyRows($filters));
+
+        $aggregate = $this->repository->historyAggregate($filters);
+        $this->assertSame(2, $aggregate['plays']);
+        $this->assertSame(1, $aggregate['unique_users']);
+        $this->assertSame(1800, $aggregate['watch_sec']);
+        $this->assertSame(1, $aggregate['transcodes']);
+    }
+
+    public function testUniqueConflictFallbackDoesNotResetAnAlreadyClaimedNotification(): void
+    {
+        $source = file_get_contents(ROOT_DIR . '/src/Jellyfin/PlayHistoryRepository.php');
+        $this->assertIsString($source);
+        $this->assertStringContainsString(
+            "unset(\$data['session_key'], \$data['item_id'], \$data['started_at'], \$data['notified']);",
+            $source,
+        );
+    }
+
     public function testHistoryRowsBreakTimestampTiesByIdDesc(): void
     {
         $now = new \DateTimeImmutable('2026-06-19 12:00:00');

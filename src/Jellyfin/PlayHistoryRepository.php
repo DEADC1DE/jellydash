@@ -133,7 +133,10 @@ final class PlayHistoryRepository
             } catch (\Dibi\UniqueConstraintViolationException) {
                 // Another writer (the poller and an open dashboard both call this)
                 // inserted the same session+item first, so update that row instead.
-                unset($data['session_key'], $data['item_id'], $data['started_at']);
+                // The winning writer may already have claimed this row for a
+                // notification. Preserve its flag when applying our fresher
+                // playback details so the alert cannot become eligible again.
+                unset($data['session_key'], $data['item_id'], $data['started_at'], $data['notified']);
                 $this->db->update('play_history', $data)
                     ->where('session_key = %s', $sessionKey)
                     ->where('item_id = %s', $itemId)
@@ -235,6 +238,26 @@ final class PlayHistoryRepository
             ->fetchSingle();
     }
 
+    /** @return array{plays: int, unique_users: int, watch_sec: int, transcodes: int} */
+    public function historyAggregate(HistoryFilters $filters, ?\DateTimeImmutable $now = null): array
+    {
+        $row = $this->filteredSelection(
+            $filters,
+            $now,
+            "COUNT(*) AS plays,
+                COUNT(DISTINCT NULLIF(user_name, '')) AS unique_users,
+                COALESCE(SUM(watched_sec), 0) AS watch_sec,
+                COALESCE(SUM(CASE WHEN play_method = 'Transcode' THEN 1 ELSE 0 END), 0) AS transcodes",
+        )->fetch();
+
+        return [
+            'plays' => (int) ($row['plays'] ?? 0),
+            'unique_users' => (int) ($row['unique_users'] ?? 0),
+            'watch_sec' => (int) ($row['watch_sec'] ?? 0),
+            'transcodes' => (int) ($row['transcodes'] ?? 0),
+        ];
+    }
+
     public function totalRows(): int
     {
         return (int) $this->db->select('COUNT(*)')
@@ -249,12 +272,7 @@ final class PlayHistoryRepository
     {
         $now ??= new \DateTimeImmutable('now');
 
-        $since = match ($range) {
-            'week' => $now->modify('-7 days'),
-            'month' => $now->modify('-30 days'),
-            'year' => $now->modify('-12 months'),
-            default => null,
-        };
+        $since = StatisticsPeriod::currentStart($range, $now);
 
         return $this->statisticsRowsForPeriod($since, null);
     }

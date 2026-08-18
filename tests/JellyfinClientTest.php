@@ -40,6 +40,30 @@ final class JellyfinClientTest extends TestCase
         );
     }
 
+    public function testLibraryNameForPathTreatsWindowsPathsAsCaseInsensitive(): void
+    {
+        $client = new JellyfinClient('http://jellyfin.test', 'token');
+
+        $this->assertSame(
+            'Stand-Up Comedy',
+            $client->libraryNameForPath(
+                'c:\\MEDIA\\StandUp\\Special.mkv',
+                ['stand-up comedy' => ['C:\\media\\standup']],
+                ['Stand-Up Comedy'],
+            )
+        );
+        $this->assertNull($client->libraryNameForPath(
+            '/DATA/Movies/Film.mkv',
+            ['movies' => ['/data/movies']],
+            ['Movies'],
+        ));
+        $this->assertSame('Drive', $client->libraryNameForPath(
+            'c:\\Anything\\Film.mkv',
+            ['drive' => ['C:\\']],
+            ['Drive'],
+        ));
+    }
+
     public function testLibraryNameForPathReturnsNullWhenUnmatched(): void
     {
         $client = new JellyfinClient('http://jellyfin.test', 'token');

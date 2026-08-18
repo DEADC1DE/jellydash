@@ -10,10 +10,10 @@ use Mk\Framework\Config;
 final class PlaybackStatisticsService
 {
     private const RANGES = [
-        'week' => ['label' => 'Week', 'sub' => 'Last 7 days', 'days' => 7],
-        'month' => ['label' => 'Month', 'sub' => 'Last 30 days', 'days' => 30],
-        'year' => ['label' => 'Year', 'sub' => 'Last 12 months', 'days' => 365],
-        'all' => ['label' => 'All time', 'sub' => 'All recorded history', 'days' => null],
+        'week' => ['label' => 'Week', 'sub' => 'Last 7 days'],
+        'month' => ['label' => 'Month', 'sub' => 'Last 30 days'],
+        'year' => ['label' => 'Year', 'sub' => 'Last 12 months'],
+        'all' => ['label' => 'All time', 'sub' => 'All recorded history'],
     ];
 
     private const COLORS = ['#7c5cff', '#34d8a6', '#3b9eff', '#f7b955', '#ff6b9d', '#f0913a', '#6f7bff', '#c44fff'];
@@ -269,7 +269,7 @@ final class PlaybackStatisticsService
         $prefixes = [];
         foreach ($excluded as $name) {
             foreach ($locations[$name] ?? [] as $location) {
-                $location = rtrim($location, '/');
+                $location = MediaPath::normalize($location);
                 if ($location !== '') {
                     $prefixes[] = $location;
                 }
@@ -321,7 +321,7 @@ final class PlaybackStatisticsService
     private function pathInLibraries(string $path, array $prefixes): bool
     {
         foreach ($prefixes as $prefix) {
-            if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+            if (MediaPath::isWithin($path, $prefix)) {
                 return true;
             }
         }
@@ -371,15 +371,12 @@ final class PlaybackStatisticsService
      */
     private function previousRows(PlayHistoryRepository $repository, string $range, \DateTimeImmutable $now): array
     {
-        $days = self::RANGES[$range]['days'];
-        if ($days === null) {
+        $period = StatisticsPeriod::previous($range, $now);
+        if ($period === null) {
             return [];
         }
 
-        $end = $now->modify('-' . $days . ' days');
-        $start = $now->modify('-' . ($days * 2) . ' days');
-
-        return $repository->statisticsRowsForPeriod($start, $end);
+        return $repository->statisticsRowsForPeriod($period['start'], $period['end']);
     }
 
     /**
@@ -688,8 +685,9 @@ final class PlaybackStatisticsService
     private function monthTrend(array $rows, \DateTimeImmutable $now): array
     {
         $buckets = [];
+        $monthAnchor = $now->setTime(0, 0)->modify('first day of this month');
         for ($i = 11; $i >= 0; $i--) {
-            $month = $now->modify('-' . $i . ' months');
+            $month = $monthAnchor->modify('-' . $i . ' months');
             $buckets[$month->format('Y-m')] = ['label' => $month->format('M'), 'sec' => 0];
         }
 
@@ -739,10 +737,10 @@ final class PlaybackStatisticsService
     private function trendUnit(string $range): string
     {
         return match ($range) {
-            'month' => 'by day - this month',
-            'year' => 'by month - this year',
+            'month' => 'by day - last 30 days',
+            'year' => 'by month - last 12 months',
             'all' => 'by year - all time',
-            default => 'Mon-Sun - this week',
+            default => 'by day - last 7 days',
         };
     }
 

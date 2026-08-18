@@ -112,7 +112,7 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('Notification exclusions', $output);
         $this->assertStringContainsString('Selected users never trigger playback alerts.', $output);
         $this->assertStringContainsString('/assets/js/server-stats.js?v=20260809-settings', $output);
-        $this->assertStringContainsString('/assets/js/nav-count.js?v=20260809-settings', $output);
+        $this->assertStringContainsString('/assets/js/nav-count.js?v=20260818-correctness', $output);
         $this->assertStringContainsString('data-update-status', $output);
         $this->assertStringContainsString('/assets/js/update-status.js?v=20260810-update', $output);
         $this->assertStringContainsString('data-release-changes', $output);

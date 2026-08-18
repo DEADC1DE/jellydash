@@ -8,6 +8,7 @@ ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         git \
+        gosu \
         unzip \
         libcurl4-openssl-dev \
         libonig-dev \

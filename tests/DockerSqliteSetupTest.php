@@ -18,6 +18,12 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertDoesNotMatchRegularExpression('/^\s+sqlite3\s+\\\\$/m', $dockerfile);
         $this->assertStringContainsString('/var/www/html/var/data', $entrypoint);
         $this->assertStringContainsString('database:migrate-to-sqlite', $entrypoint);
+        $this->assertStringContainsString('gosu www-data php', $entrypoint);
+
+        $workflow = file_get_contents(ROOT_DIR . '/.github/workflows/ci.yml');
+        $this->assertIsString($workflow);
+        $this->assertStringNotContainsString('--env POLLER_ENABLED=false', $workflow);
+        $this->assertStringContainsString('login_attempts', $workflow);
     }
 
     public function testSQLiteComposeSetupIsSeparateAndPersistent(): void
