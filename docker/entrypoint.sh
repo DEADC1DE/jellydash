@@ -33,7 +33,7 @@ find /var/www/html/cache -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} + 2>/de
 # Optional auth: seed the initial admin when configured. Idempotent: an
 # existing user is never touched, so in-app password changes survive restarts.
 if [ -n "${AUTH_ADMIN_USER:-}" ] && [ -n "${AUTH_ADMIN_PASSWORD:-}" ]; then
-    php /var/www/html/bin/console.php user:ensure || true
+    gosu www-data php /var/www/html/bin/console.php user:ensure || true
 fi
 
 # Background workers (disable all with POLLER_ENABLED=false). Each runs detached
@@ -49,7 +49,7 @@ if [ "${POLLER_ENABLED:-true}" = "true" ]; then
     # the dashboard open.
     (
         while true; do
-            php /var/www/html/bin/console.php history:poll || true
+            gosu www-data php /var/www/html/bin/console.php history:poll || true
             sleep "${POLL_INTERVAL}"
         done
     ) &
@@ -58,7 +58,7 @@ if [ "${POLLER_ENABLED:-true}" = "true" ]; then
     # a cold scan inside a visitor's request.
     (
         while true; do
-            php /var/www/html/bin/console.php libraries:warm || true
+            gosu www-data php /var/www/html/bin/console.php libraries:warm || true
             sleep "${LIBRARIES_CACHE_TTL}"
         done
     ) &
@@ -68,7 +68,7 @@ if [ "${POLLER_ENABLED:-true}" = "true" ]; then
     # longer interval. No-op unless JELLYSEER_URL / JELLYSEER_API_TOKEN are set.
     (
         while true; do
-            php /var/www/html/bin/console.php seerr:poll || true
+            gosu www-data php /var/www/html/bin/console.php seerr:poll || true
             sleep "${SEERR_POLL_INTERVAL}"
         done
     ) &

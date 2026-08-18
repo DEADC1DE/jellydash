@@ -16,7 +16,8 @@ final class HistoryController extends Controller
     {
         $filters = $this->filters();
         $repository = new PlayHistoryRepository();
-        $totalFiltered = $repository->historyTotal($filters);
+        $aggregate = $repository->historyAggregate($filters);
+        $totalFiltered = $aggregate['plays'];
         $page = $this->currentPage($totalFiltered, $filters->limit);
         $filters = new HistoryFilters(
             search: $filters->search,
@@ -35,7 +36,7 @@ final class HistoryController extends Controller
                 'page' => 'history',
             ]),
             'groups' => $this->groups($rows),
-            'summary' => $this->summary($rows, $totalFiltered, $repository->totalRows(), $filters->offset),
+            'summary' => $this->summary($rows, $aggregate, $repository->totalRows(), $filters->offset),
             'pager' => $this->pager($page, $pages, $filters),
             'users' => $repository->users(),
             'libraries' => $repository->libraries(),
@@ -188,26 +189,13 @@ final class HistoryController extends Controller
 
     /**
      * @param array<int, \Dibi\Row> $rows
+     * @param array{plays: int, unique_users: int, watch_sec: int, transcodes: int} $aggregate
      * @return array<string, mixed>
      */
-    private function summary(array $rows, int $totalFiltered, int $totalRows, int $offset): array
+    private function summary(array $rows, array $aggregate, int $totalRows, int $offset): array
     {
-        $watchSec = 0;
-        $users = [];
-        $transcodes = 0;
-
-        foreach ($rows as $row) {
-            $watchSec += (int) $row['watched_sec'];
-            $user = (string) ($row['user_name'] ?? '');
-            if ($user !== '') {
-                $users[$user] = true;
-            }
-            if ((string) $row['play_method'] === 'Transcode') {
-                $transcodes++;
-            }
-        }
-
         $shown = count($rows);
+        $totalFiltered = $aggregate['plays'];
 
         return [
             'shown' => $shown,
@@ -215,9 +203,11 @@ final class HistoryController extends Controller
             'to' => $offset + $shown,
             'total' => $totalRows,
             'filtered_total' => $totalFiltered,
-            'unique_users' => count($users),
-            'watch_time' => $this->durationLabel($watchSec),
-            'transcoded_pct' => ($shown > 0 ? (int) round(($transcodes / $shown) * 100) : 0) . '%',
+            'unique_users' => $aggregate['unique_users'],
+            'watch_time' => $this->durationLabel($aggregate['watch_sec']),
+            'transcoded_pct' => ($totalFiltered > 0
+                ? (int) round(($aggregate['transcodes'] / $totalFiltered) * 100)
+                : 0) . '%',
         ];
     }
 

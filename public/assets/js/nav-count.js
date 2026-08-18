@@ -1,5 +1,6 @@
 (function () {
     const navCount = document.querySelector('[data-nav-count]');
+    let hasLoaded = false;
 
     if (!navCount) {
         return;
@@ -19,10 +20,20 @@
         const stats = payload.stats || {};
         navCount.textContent = String(Number(stats.active_streams || 0));
         navCount.classList.remove('is-loading');
+        hasLoaded = true;
     }
 
-    refresh().catch(() => {});
+    function clearLoadingState() {
+        if (hasLoaded) {
+            return;
+        }
+
+        navCount.textContent = '-';
+        navCount.classList.remove('is-loading');
+    }
+
+    refresh().catch(clearLoadingState);
     window.setInterval(() => {
-        refresh().catch(() => {});
+        refresh().catch(clearLoadingState);
     }, 10000);
 }());

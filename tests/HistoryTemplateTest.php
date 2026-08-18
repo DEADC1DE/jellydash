@@ -30,6 +30,8 @@ final class HistoryTemplateTest extends TestCase
         $this->assertStringNotContainsString('history-import.js', $template);
         $this->assertStringContainsString('{% for library in libraries %}', $template);
         $this->assertStringNotContainsString('option value="Movies"', $template);
+        $this->assertStringContainsString('Watch time', $template);
+        $this->assertStringNotContainsString('Watch time shown', $template);
 
         $empty = file_get_contents(TEMPLATES_DIR . '/history/_empty.twig');
         $this->assertIsString($empty);

@@ -265,7 +265,7 @@ final class JellyfinClient
      */
     public function libraryNameForPath(string $path, ?array $locations = null, ?array $names = null): ?string
     {
-        $path = rtrim(str_replace('\\', '/', trim($path)), '/');
+        $path = MediaPath::normalize($path);
         if ($path === '') {
             return null;
         }
@@ -277,11 +277,11 @@ final class JellyfinClient
         $bestLen = -1;
         foreach ($locations as $lowerName => $prefixes) {
             foreach ($prefixes as $prefix) {
-                $prefix = rtrim(str_replace('\\', '/', (string) $prefix), '/');
+                $prefix = MediaPath::normalize((string) $prefix);
                 if ($prefix === '') {
                     continue;
                 }
-                if ($path === $prefix || str_starts_with($path, $prefix . '/')) {
+                if (MediaPath::isWithin($path, $prefix)) {
                     $len = strlen($prefix);
                     if ($len > $bestLen) {
                         $bestLen = $len;

@@ -3,6 +3,7 @@
 use Mk\Framework\Authorization;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
+use Mk\Framework\LoginThrottle;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -77,6 +78,27 @@ final class AuthIntegrationTest extends TestCase
 
         // Now locked out; the correct password is rejected too.
         $this->assertFalse($auth->userLogin(self::USERNAME, self::PASSWORD));
+    }
+
+    public function testExpiredLockoutStartsWithOneFreshFailure(): void
+    {
+        $identifier = self::USERNAME . '|203.0.113.10';
+        $this->dibi->insert('login_attempts', [
+            'identifier' => $identifier,
+            'attempts' => 5,
+            'locked_until' => '2000-01-01 00:00:00',
+            'updated_at' => '2000-01-01 00:00:00',
+        ])->execute();
+
+        LoginThrottle::recordFailure(self::USERNAME, '203.0.113.10');
+
+        $row = $this->dibi->select('attempts, locked_until')
+            ->from('login_attempts')
+            ->where('identifier = %s', $identifier)
+            ->fetch();
+        $this->assertNotFalse($row);
+        $this->assertSame(1, (int) $row['attempts']);
+        $this->assertNull($row['locked_until']);
     }
 
     public function testLogoutClearsSession(): void
