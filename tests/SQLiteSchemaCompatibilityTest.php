@@ -145,6 +145,24 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         $this->assertSame([], $requests->claimUnnotified());
     }
 
+    public function testRecentlyAddedPreferenceDefaultsOnAndCanBeToggled(): void
+    {
+        $previousValue = AppSettings::get('show_recently_added');
+
+        try {
+            AppSettings::set('show_recently_added', null);
+            $this->assertTrue(AppSettings::bool('show_recently_added', true));
+
+            AppSettings::set('show_recently_added', '0');
+            $this->assertFalse(AppSettings::bool('show_recently_added', true));
+
+            AppSettings::set('show_recently_added', '1');
+            $this->assertTrue(AppSettings::bool('show_recently_added', true));
+        } finally {
+            AppSettings::set('show_recently_added', $previousValue);
+        }
+    }
+
     private function initializeAllSchemas(): void
     {
         $this->database->ensureAuthSchema();

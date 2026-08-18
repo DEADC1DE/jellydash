@@ -831,6 +831,21 @@ svg {
     margin-top: 16px;
 }
 
+.settings-toggle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.settings-toggle-option .settings-check-toggle {
+    margin-top: 0;
+}
+
+.settings-toggle-option .settings-note {
+    margin: 7px 4px 0;
+}
+
 .settings-check input {
     accent-color: var(--color-purple);
 }

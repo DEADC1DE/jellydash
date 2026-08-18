@@ -168,6 +168,24 @@ final class SchemaCompatibilityTest extends TestCase
         }
     }
 
+    public function testRecentlyAddedPreferenceDefaultsOnAndCanBeToggled(): void
+    {
+        $previousValue = AppSettings::get('show_recently_added');
+
+        try {
+            AppSettings::set('show_recently_added', null);
+            $this->assertTrue(AppSettings::bool('show_recently_added', true));
+
+            AppSettings::set('show_recently_added', '0');
+            $this->assertFalse(AppSettings::bool('show_recently_added', true));
+
+            AppSettings::set('show_recently_added', '1');
+            $this->assertTrue(AppSettings::bool('show_recently_added', true));
+        } finally {
+            AppSettings::set('show_recently_added', $previousValue);
+        }
+    }
+
     public function testConcurrentJellyseerrWorkersClaimRequestOnlyOnce(): void
     {
         new SeerrRequestRepository($this->database);

@@ -55,6 +55,23 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString('panel.hidden = false', $script);
     }
 
+    public function testRecentlyAddedCanBeDisabledWithoutLoadingItsClient(): void
+    {
+        $nowPlaying = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
+        $settings = file_get_contents(TEMPLATES_DIR . '/settings/index.twig');
+        $view = file_get_contents(ROOT_DIR . '/src/View.php');
+        $request = file_get_contents(ROOT_DIR . '/operations/@request.php');
+
+        $this->assertIsString($nowPlaying);
+        $this->assertIsString($settings);
+        $this->assertIsString($view);
+        $this->assertIsString($request);
+        $this->assertStringContainsString('{% if show_recently_added %}', $nowPlaying);
+        $this->assertStringContainsString('name="show_recently_added"', $settings);
+        $this->assertStringContainsString("AppSettings::bool('show_recently_added', true)", $view);
+        $this->assertStringContainsString("AppSettings::set('show_recently_added'", $request);
+    }
+
     public function testActiveStreamGridCannotShrinkUnderRecentlyAddedShelf(): void
     {
         $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
