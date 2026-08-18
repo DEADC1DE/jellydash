@@ -17,8 +17,8 @@
 
         <a class="nav-item {{ active_page == 'now-playing' ? 'is-active' : '' }}" href="/now-playing">
             <span class="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img" focusable="false">
-                    <path d="M8 5v14l11-7-11-7z"></path>
+                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M6 4v16a1 1 0 0 0 1.524 .852l13 -8a1 1 0 0 0 0 -1.704l-13 -8a1 1 0 0 0 -1.524 .852z"></path>
                 </svg>
             </span>
             <span>Now Playing</span>
@@ -37,8 +37,8 @@
         {% if seerr_enabled %}
         <a class="nav-item {{ active_page == 'jellyseerr' ? 'is-active' : '' }}" href="/jellyseerr">
             <span class="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img" focusable="false">
-                    <path d="M12 4.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 9.8l5-.7z"></path>
+                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M8.243 7.34l-6.38 .925l-.113 .023a1 1 0 0 0 -.44 1.684l4.622 4.499l-1.09 6.355l-.013 .11a1 1 0 0 0 1.464 .944l5.706 -3l5.693 3l.1 .046a1 1 0 0 0 1.352 -1.1l-1.091 -6.355l4.624 -4.5l.078 -.085a1 1 0 0 0 -.633 -1.62l-6.38 -.926l-2.852 -5.78a1 1 0 0 0 -1.794 0l-2.853 5.78z"></path>
                 </svg>
             </span>
             <span>Jellyseerr</span>
@@ -47,9 +47,8 @@
 
         <a class="nav-item {{ active_page == 'history' ? 'is-active' : '' }}" href="/history">
             <span class="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img" focusable="false">
-                    <path d="M12 7v5l3 2"></path>
-                    <path d="M21 12a9 9 0 1 1-3.2-6.9"></path>
+                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M17 3.34a10 10 0 1 1 -14.995 8.984l-.005 -.324l.005 -.324a10 10 0 0 1 14.995 -8.336zm-5 2.66a1 1 0 0 0 -.993 .883l-.007 .117v5l.009 .131a1 1 0 0 0 .197 .477l.087 .1l3 3l.094 .082a1 1 0 0 0 1.226 0l.094 -.083l.083 -.094a1 1 0 0 0 0 -1.226l-.083 -.094l-2.707 -2.708v-4.585l-.007 -.117a1 1 0 0 0 -.993 -.883z"></path>
                 </svg>
             </span>
             <span>History</span>
@@ -57,10 +56,9 @@
 
         <a class="nav-item {{ active_page == 'statistics' ? 'is-active' : '' }}" href="/statistics">
             <span class="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img" focusable="false">
-                    <path d="M5 20V10"></path>
-                    <path d="M12 20V4"></path>
-                    <path d="M19 20v-7"></path>
+                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M9.883 2.207a1.9 1.9 0 0 1 2.087 1.522l.025 .167l.005 .104v7a1 1 0 0 0 .883 .993l.117 .007h6.8a2 2 0 0 1 2 2a1 1 0 0 1 -.026 .226a10 10 0 1 1 -12.27 -11.933l.27 -.067l.11 -.02z"></path>
+                    <path d="M14 3.5v5.5a1 1 0 0 0 1 1h5.5a1 1 0 0 0 .943 -1.332a10 10 0 0 0 -6.11 -6.111a1 1 0 0 0 -1.333 .943z"></path>
                 </svg>
             </span>
             <span>Statistics</span>
@@ -68,9 +66,9 @@
 
         <a class="nav-item {{ active_page == 'libraries' ? 'is-active' : '' }}" href="/libraries">
             <span class="nav-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img" focusable="false">
-                    <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4H11v14H6.5A2.5 2.5 0 0 0 4 20.5v-14z"></path>
-                    <path d="M20 6.5A2.5 2.5 0 0 0 17.5 4H13v14h4.5A2.5 2.5 0 0 1 20 20.5v-14z"></path>
+                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M18.333 2a3.667 3.667 0 0 1 3.667 3.667v8.666a3.667 3.667 0 0 1 -3.667 3.667h-8.666a3.667 3.667 0 0 1 -3.667 -3.667v-8.666a3.667 3.667 0 0 1 3.667 -3.667zm-4.333 10h-3a1 1 0 0 0 0 2h3a1 1 0 0 0 0 -2m3 -3h-6a1 1 0 0 0 0 2h6a1 1 0 0 0 0 -2m-1 -3h-5a1 1 0 0 0 0 2h5a1 1 0 0 0 0 -2"></path>
+                    <path d="M3.517 6.391a1 1 0 0 1 .99 1.738c-.313 .178 -.506 .51 -.507 .868v10c0 .548 .452 1 1 1h10c.284 0 .405 -.088 .626 -.486a1 1 0 0 1 1.748 .972c-.546 .98 -1.28 1.514 -2.374 1.514h-10c-1.652 0 -3 -1.348 -3 -3v-10.002a3 3 0 0 1 1.517 -2.605"></path>
                 </svg>
             </span>
             <span>Libraries</span>
@@ -101,9 +99,9 @@
     {% if push_enabled and vapid_public_key %}
         <button class="settings-row push-row" type="button" data-push-toggle aria-pressed="false" hidden>
             <span class="settings-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img" focusable="false">
-                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                    <path d="M13.7 21a2 2 0 0 1-3.4 0"></path>
+                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M14.235 19c.865 0 1.322 1.024 .745 1.668a3.992 3.992 0 0 1 -2.98 1.332a3.992 3.992 0 0 1 -2.98 -1.332c-.552 -.616 -.158 -1.579 .634 -1.661l.11 -.006h4.471z"></path>
+                    <path d="M12 2c1.358 0 2.506 .903 2.875 2.141l.046 .171l.008 .043a8.013 8.013 0 0 1 4.024 6.069l.028 .287l.019 .289v2.931l.021 .136a3 3 0 0 0 1.143 1.847l.167 .117l.162 .099c.86 .487 .56 1.766 -.377 1.864l-.116 .006h-16c-1.028 0 -1.387 -1.364 -.493 -1.87a3 3 0 0 0 1.472 -2.063l.021 -.143l.001 -2.97a8 8 0 0 1 3.821 -6.454l.248 -.146l.01 -.043a3.003 3.003 0 0 1 2.562 -2.29l.182 -.017l.176 -.004z"></path>
                 </svg>
             </span>
             <span>
@@ -116,9 +114,8 @@
     <div class="sidebar-settings" data-update-status data-app-version="{{ app_version }}">
         <a class="settings-row {{ active_page == 'settings' ? 'is-active' : '' }}" href="/settings" aria-label="Settings">
             <span class="settings-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="img" focusable="false">
-                    <path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7z"></path>
-                    <path d="M19 12a7.3 7.3 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a7.1 7.1 0 0 0-1.8-1L14.4 3h-4.8l-.3 3.1a7.1 7.1 0 0 0-1.8 1l-2.4-1-2 3.4L5.1 11a7.3 7.3 0 0 0 0 2l-2 1.5 2 3.4 2.4-1a7.1 7.1 0 0 0 1.8 1l.3 3.1h4.8l.3-3.1a7.1 7.1 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1z"></path>
+                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false">
+                    <path d="M14.647 4.081a.724 .724 0 0 0 1.08 .448c2.439 -1.485 5.23 1.305 3.745 3.744a.724 .724 0 0 0 .447 1.08c2.775 .673 2.775 4.62 0 5.294a.724 .724 0 0 0 -.448 1.08c1.485 2.439 -1.305 5.23 -3.744 3.745a.724 .724 0 0 0 -1.08 .447c-.673 2.775 -4.62 2.775 -5.294 0a.724 .724 0 0 0 -1.08 -.448c-2.439 1.485 -5.23 -1.305 -3.745 -3.744a.724 .724 0 0 0 -.447 -1.08c-2.775 -.673 -2.775 -4.62 0 -5.294a.724 .724 0 0 0 .448 -1.08c-1.485 -2.439 1.305 -5.23 3.744 -3.745a.722 .722 0 0 0 1.08 -.447c.673 -2.775 4.62 -2.775 5.294 0zm-2.647 4.919a3 3 0 1 0 0 6a3 3 0 0 0 0 -6"></path>
                 </svg>
             </span>
             <span>
@@ -127,25 +124,20 @@
             </span>
         </a>
         <a class="update-status update-status-available" data-update-link href="https://github.com/themartz90/jellydash/releases" target="_blank" rel="noopener noreferrer" hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M12 4v11"></path>
-                <path d="m7.5 10.5 4.5 4.5 4.5-4.5"></path>
-                <path d="M5 20h14"></path>
+            <svg class="icon-filled" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M20 16a1 1 0 0 1 1 1v2a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-2a1 1 0 0 1 2 0v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1 -1v-2a1 1 0 0 1 1 -1m-8 -13a1 1 0 0 1 1 1v9.585l3.293 -3.292a1 1 0 0 1 1.414 1.414l-5 5a1 1 0 0 1 -.09 .08l.09 -.08a1 1 0 0 1 -.674 .292l-.033 .001h-.032l-.054 -.004l.086 .004a1 1 0 0 1 -.617 -.213a1 1 0 0 1 -.09 -.08l-5 -5a1 1 0 0 1 1.414 -1.414l3.293 3.292v-9.585a1 1 0 0 1 1 -1"></path>
             </svg>
             <span>Update available</span>
         </a>
         <span class="update-status update-status-current" data-update-current hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="m5 12 4.5 4.5L19 7"></path>
+            <svg class="icon-filled" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M17 3.34a10 10 0 1 1 -14.995 8.984l-.005 -.324l.005 -.324a10 10 0 0 1 14.995 -8.336zm-1.293 5.953a1 1 0 0 0 -1.32 -.083l-.094 .083l-3.293 3.292l-1.293 -1.292l-.094 -.083a1 1 0 0 0 -1.403 1.403l.083 .094l2 2l.094 .083a1 1 0 0 0 1.226 0l.094 -.083l4 -4l.083 -.094a1 1 0 0 0 -.083 -1.32z"></path>
             </svg>
             <span>You're on the latest release</span>
         </span>
         <button class="update-status update-status-changes" type="button" data-release-changes hidden>
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M6 4h9a3 3 0 0 1 3 3v13H9a3 3 0 0 1-3-3V4z"></path>
-                <path d="M9 4v13a3 3 0 0 0 3 3"></path>
-                <path d="M12 8h3"></path>
-                <path d="M12 12h3"></path>
+            <svg class="icon-filled" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M21.5 5.134a1 1 0 0 1 .493 .748l.007 .118v13a1 1 0 0 1 -1.5 .866a8 8 0 0 0 -7.5 -.266v-15.174a10 10 0 0 1 8.5 .708m-10.5 -.707l.001 15.174a8 8 0 0 0 -7.234 .117l-.327 .18l-.103 .044l-.049 .016l-.11 .026l-.061 .01l-.117 .006h-.042l-.11 -.012l-.077 -.014l-.108 -.032l-.126 -.056l-.095 -.056l-.089 -.067l-.06 -.056l-.073 -.082l-.064 -.089l-.022 -.036l-.032 -.06l-.044 -.103l-.016 -.049l-.026 -.11l-.01 -.061l-.004 -.049l-.002 -13.068a1 1 0 0 1 .5 -.866a10 10 0 0 1 8.5 -.707"></path>
             </svg>
             <span data-release-changes-label>See changes</span>
         </button>
@@ -157,9 +149,9 @@
             <button type="submit" class="settings-row logout-row">
                 <span class="settings-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" role="img" focusable="false">
-                        <path d="M9 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H9"></path>
-                        <path d="M15 8l4 4-4 4"></path>
-                        <path d="M19 12H9"></path>
+                        <path d="M10 8v-2a2 2 0 0 1 2 -2h7a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-7a2 2 0 0 1 -2 -2v-2"></path>
+                        <path d="M15 12h-12l3 -3"></path>
+                        <path d="M6 15l-3 -3"></path>
                     </svg>
                 </span>
                 <span>

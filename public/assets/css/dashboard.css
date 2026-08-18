@@ -60,6 +60,11 @@ svg {
     stroke-width: 1.8;
 }
 
+svg.icon-filled {
+    fill: currentColor;
+    stroke: none;
+}
+
 .app-shell {
     display: flex;
     width: 100vw;
@@ -980,6 +985,13 @@ svg {
     height: 100%;
     opacity: 0;
     cursor: pointer;
+}
+
+.settings-drop > svg {
+    width: 30px;
+    height: 30px;
+    margin-bottom: 4px;
+    color: var(--color-purple-soft);
 }
 
 .settings-drop strong {
