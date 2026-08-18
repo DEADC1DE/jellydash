@@ -271,6 +271,8 @@ User names are resolved via the Jellyfin `/Users` API (admin token). Media runti
 
 The Jellydash mascot is based on a [jellyfish icon](https://www.flaticon.com/free-icon/jellyfish_2977310) by Magnific from [Flaticon](https://www.flaticon.com), modified for this project.
 
+Interface icons come from [Tabler Icons](https://tabler.io/icons), used under its [MIT license](THIRD_PARTY_NOTICES.md).
+
 ## License
 
-The code is licensed under [MIT](LICENSE). The mascot original icon is covered by the Flaticon license above, not MIT.
+The code is licensed under [MIT](LICENSE). The mascot original icon is covered by the Flaticon license above, not MIT. Third-party license notices are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
