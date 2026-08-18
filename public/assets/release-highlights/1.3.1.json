@@ -1,15 +1,21 @@
 {
   "version": "1.3.1",
   "auto_show": true,
-  "title": "A smoother, safer Jellydash",
-  "summary": "This patch fixes fresh SQLite installs, makes History totals accurate across every page, and cleans up a handful of small but annoying edge cases.",
+  "title": "A much better History, plus important fixes",
+  "summary": "Jellydash can now import Playback Reporting history, browse beyond the first 100 plays, show Jellyfin profile pictures, and handle several important edge cases more reliably.",
   "highlights": [
+    "Import existing plays from a Playback Reporting TSV backup, SQLite database, or the installed plugin API.",
+    "Browse older plays with pagination, and find the importer anytime from History or Settings.",
+    "See Jellyfin profile pictures in Now Playing, History, and Statistics, with initials when no image is available.",
     "Fresh SQLite containers now create the database with the right ownership, so the web app can write to it from the first start.",
     "History watch time, unique users, and transcoding totals now cover the complete active filter instead of only the current page.",
-    "Statistics keep all 12 month buckets at month end, and Windows library exclusions handle path casing correctly.",
-    "Now Playing leaves its loading state when Jellyfin is unavailable and keeps retrying quietly in the background."
+    "Statistics keep all 12 month buckets at month end, Windows exclusions handle path casing correctly, and Now Playing recovers cleanly when Jellyfin is unavailable."
   ],
   "links": [
+    {
+      "label": "Import guide",
+      "url": "https://github.com/themartz90/jellydash/blob/main/README.md#importing-playback-reporting-history"
+    },
     {
       "label": "Full release notes",
       "url": "https://github.com/themartz90/jellydash/releases/tag/v1.3.1"
