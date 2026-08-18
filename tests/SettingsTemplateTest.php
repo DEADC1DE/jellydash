@@ -27,4 +27,22 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringNotContainsString('value="tsv"', $template);
         $this->assertStringNotContainsString('value="sqlite"', $template);
     }
+
+    public function testChangedSettingsExposeAnImmediateSaveAction(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/settings/index.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/settings-dirty.js');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString('id="settings-form"', $template);
+        $this->assertStringContainsString('data-settings-dirty-bar hidden', $template);
+        $this->assertStringContainsString('form="settings-form"', $template);
+        $this->assertStringContainsString('settings-dirty.js?v=20260818', $template);
+        $this->assertStringContainsString("form.addEventListener('change', sync)", $script);
+        $this->assertStringContainsString("window.addEventListener('beforeunload'", $script);
+        $this->assertStringContainsString('.settings-dirty-bar[hidden]', $stylesheet);
+    }
 }
