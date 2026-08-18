@@ -22,7 +22,7 @@
         <meta name="vapid-public-key" content="{{ vapid_public_key }}">
     {% endif %}
 
-    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260818-discovery">
+    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260818-compact-recently-added">
     {% for href in module_styles %}
         <link rel="stylesheet" href="{{ href }}">
     {% endfor %}
@@ -67,7 +67,7 @@
             {% block dashboard_header %}{% endblock %}
         </header>
 
-        <section class="dashboard-content">
+        <section class="dashboard-content{{ layout.content_class|default('') ? ' ' ~ layout.content_class : '' }}">
             {% block dashboard_content %}{% endblock %}
         </section>
 
