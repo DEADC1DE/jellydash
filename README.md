@@ -37,23 +37,25 @@ The project is very young and in very active development.
 
 | History | Jellyseerr requests |
 | --- | --- |
-| ![History](docs/assets/history.png) | ![Jellyseerr](docs/assets/jellyseerr.png) |
+| ![History](docs/assets/history.png) | ![Jellyseerr](docs/assets/jellyseerr.jpg) |
 
 | Trending and Most Watched | Statistics |
 | --- | --- |
 | ![Trending](docs/assets/statistics-trending.png) | ![Statistics](docs/assets/statistics-overview.png) |
 
 <p align="center">
-  <img src="docs/assets/mobile.jpg" width="300" alt="Jellydash installed as a PWA on Android">
+  <img src="docs/assets/mobile-idle.png" width="270" alt="Jellydash idle view on Android">
+  &nbsp;&nbsp;
+  <img src="docs/assets/mobile-playing.png" width="270" alt="Jellydash active stream view on Android">
 </p>
 <p align="center">
-  <sub>Installed as an app on Android</sub>
+  <sub>Installed as an app on Android, idle or actively streaming</sub>
 </p>
 
 <details>
 <summary>More screenshots</summary>
 
-![Clients](docs/assets/statistics-clients.png)
+![Devices and users](docs/assets/statistics-devices.png)
 
 </details>
 
@@ -63,7 +65,7 @@ The project is very young and in very active development.
 
 - **History.** Every play gets recorded by a background poller, so history is complete even when nobody has the dashboard open. Search it, filter by user or library, and enjoy the poster art. Existing Jellyfin Playback Reporting backups can be imported from Settings.
 
-- **Statistics.** Watch time trends, top users, clients, codecs and transcode reasons. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
+- **Statistics.** Watch time trends, top users, device activity, clients, codecs and transcode reasons. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
 
 - **Libraries.** An overview of all your libraries with item counts and type breakdowns. New libraries are picked up automatically.
 
