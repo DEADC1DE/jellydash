@@ -100,6 +100,28 @@ use Mk\Framework\View;
         exit;
     }
 
+    // STATISTICS DEFAULT ---------------------------------------------------------------------------------------------
+    if ($requests->requestIs('statistics-default') && $isPost) {
+        Csrf::check();
+
+        // Match the Settings page protection when authentication is enabled.
+        if (\Mk\Framework\Config::bool('AUTH_ENABLED', false) && !(new Authorization())->isUserLoggedIn()) {
+            http_response_code(403);
+            exit('Forbidden');
+        }
+
+        $range = Main::capturePostString('range');
+        if (!\Mk\Framework\Jellyfin\StatisticsPeriod::isValidRange($range)) {
+            http_response_code(400);
+            exit('Invalid statistics range.');
+        }
+
+        \Mk\Framework\AppSettings::set('statistics_default_range', $range);
+
+        header('Location: /statistics?range=' . rawurlencode($range));
+        exit;
+    }
+
     // LOGOUT ----------------------------------------------------------------------------------------------------------
     if ($requests->authIs("logout") && $isPost) {
         Csrf::check();

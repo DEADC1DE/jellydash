@@ -1265,6 +1265,124 @@ svg.icon-filled {
     background: #221f36;
 }
 
+.statistics-range-picker {
+    position: relative;
+    width: 356px;
+    padding: 9px;
+    overflow: hidden;
+    border: 1px solid rgba(124, 92, 255, .3);
+    border-radius: 15px;
+    background:
+        radial-gradient(circle at 12% 0%, rgba(124, 92, 255, .16), transparent 43%),
+        linear-gradient(135deg, rgba(25, 21, 43, .94), rgba(14, 17, 31, .94));
+    box-shadow: 0 12px 30px -22px rgba(59, 158, 255, .9), inset 0 1px rgba(255, 255, 255, .04);
+}
+
+.statistics-range-picker::before {
+    position: absolute;
+    top: 0;
+    right: 18px;
+    left: 18px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--color-purple), var(--color-blue), transparent);
+    content: "";
+    opacity: .85;
+}
+
+.statistics-range-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 24px;
+    padding: 0 3px 6px;
+}
+
+.statistics-range-label,
+.statistics-default-state,
+.statistics-default-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.statistics-range-label {
+    color: rgba(255, 255, 255, .7);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.statistics-range-label svg {
+    width: 14px;
+    height: 14px;
+    color: var(--color-purple-soft);
+}
+
+.statistics-default-state,
+.statistics-default-action {
+    color: rgba(195, 178, 255, .72);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.statistics-default-state svg,
+.statistics-default-action svg {
+    width: 13px;
+    height: 13px;
+}
+
+.statistics-default-state {
+    color: var(--color-green-text);
+}
+
+.statistics-default-action {
+    padding: 2px 3px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+}
+
+.statistics-default-action:hover {
+    color: var(--color-text);
+    background: rgba(124, 92, 255, .12);
+}
+
+.statistics-default-action:focus-visible,
+.statistics-range-control a:focus-visible {
+    outline: 2px solid var(--color-purple-soft);
+    outline-offset: 2px;
+}
+
+.statistics-range-control {
+    width: 100%;
+    gap: 4px;
+    padding: 3px;
+    border-color: rgba(255, 255, 255, .09);
+    background: rgba(6, 5, 12, .42);
+}
+
+.statistics-range-control a {
+    flex: 1 1 0;
+    min-height: 32px;
+    padding-inline: 9px;
+    color: rgba(255, 255, 255, .52);
+}
+
+.statistics-range-control a:hover {
+    color: rgba(255, 255, 255, .86);
+    background: rgba(255, 255, 255, .04);
+}
+
+.statistics-range-control a.is-active {
+    color: #fff;
+    background: linear-gradient(135deg, #6e4ff1, #426fce);
+    box-shadow: 0 6px 14px -8px rgba(82, 119, 239, .95), inset 0 1px rgba(255, 255, 255, .18);
+}
+
 .dashboard-content {
     flex: 1;
     min-height: 0;
@@ -4130,6 +4248,25 @@ a.history-pager-btn:hover {
         max-width: 100%;
         overflow-x: auto;
         justify-content: flex-start;
+    }
+
+    .statistics-header-actions {
+        overflow: visible;
+    }
+
+    .statistics-range-picker {
+        width: 100%;
+        padding: 7px;
+        border-radius: 14px;
+    }
+
+    .statistics-range-meta {
+        min-height: 21px;
+        padding-bottom: 4px;
+    }
+
+    .statistics-range-control a {
+        min-height: 30px;
     }
 
     .segmented-control {

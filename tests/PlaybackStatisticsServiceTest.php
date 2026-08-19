@@ -8,6 +8,15 @@ use PHPUnit\Framework\TestCase;
 
 final class PlaybackStatisticsServiceTest extends TestCase
 {
+    public function testStatisticsRangesNormalizeToAValidFallback(): void
+    {
+        $this->assertTrue(StatisticsPeriod::isValidRange('month'));
+        $this->assertFalse(StatisticsPeriod::isValidRange('decade'));
+        $this->assertSame('month', StatisticsPeriod::normalizeRange('month'));
+        $this->assertSame('year', StatisticsPeriod::normalizeRange(null, 'year'));
+        $this->assertSame('week', StatisticsPeriod::normalizeRange('decade', 'invalid'));
+    }
+
     public function testYearTrendAlwaysBuildsTwelveCalendarMonthsAtMonthEnd(): void
     {
         $service = new PlaybackStatisticsService();

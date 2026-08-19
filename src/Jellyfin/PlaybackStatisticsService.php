@@ -60,6 +60,7 @@ final class PlaybackStatisticsService
 
         return [
             'range' => $range,
+            'rangeLabel' => self::RANGES[$range]['label'],
             'ranges' => $this->ranges($range),
             'subLabel' => self::RANGES[$range]['sub'] . ' - all libraries',
             'trending' => $trending,
