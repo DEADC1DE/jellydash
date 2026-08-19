@@ -1,0 +1,24 @@
+{
+  "version": "1.4.0",
+  "auto_show": true,
+  "title": "Recently Added and device activity",
+  "summary": "Jellydash now brings new library arrivals to Now Playing, adds a lightweight device activity view to Statistics, and makes the interface more polished and easier to use.",
+  "highlights": [
+    "Browse movies, series, and episodes added during the last 14 days from the new Recently Added shelf on Now Playing.",
+    "See registered Jellyfin clients, recent device activity, active playback, client versions, and last users inside Statistics.",
+    "Open Jellyfin's device management page directly from the new Devices section.",
+    "Turn Recently Added off from Settings if you prefer a simpler Now Playing page.",
+    "Notice unsaved settings immediately with a save reminder that stays within reach.",
+    "Enjoy clearer Tabler icons throughout the interface, plus improved mobile layouts for playback cards, Recently Added, and the statistics footer."
+  ],
+  "links": [
+    {
+      "label": "Import guide",
+      "url": "https://github.com/themartz90/jellydash/blob/main/README.md#importing-playback-reporting-history"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.4.0"
+    }
+  ]
+}
