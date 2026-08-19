@@ -264,6 +264,34 @@
             </article>
         </section>
 
+        <div class="stats-devices-section" data-statistics-devices data-range="{{ stats.range }}" hidden>
+            {% include "statistics/_device_icons.twig" %}
+            <header class="stats-section-header">
+                <strong>Devices</strong>
+                <span>Registered Jellyfin clients - last activity</span>
+                <i></i>
+                <a class="stats-devices-manage" data-device-manage href="#" target="_blank" rel="noopener noreferrer" aria-label="Manage devices in Jellyfin" hidden>
+                    <span>Manage in Jellyfin</span>
+                    <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                        <path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6"></path>
+                        <path d="M11 13l9 -9"></path>
+                        <path d="M15 4h5v5"></path>
+                    </svg>
+                </a>
+            </header>
+
+            <section class="stats-card stats-devices-card" aria-label="Jellyfin device activity">
+                <div class="stats-devices-summary">
+                    <p><strong data-device-known>0</strong><span>Registered clients</span></p>
+                    <p><strong data-device-seen>0</strong><span data-device-range-copy>Seen in this period</span></p>
+                    <p><strong data-device-active>0</strong><span>Active now</span></p>
+                    <small><i></i> Live playback</small>
+                </div>
+                <div class="stats-device-grid" data-device-list></div>
+                <p class="stats-device-note" data-device-note hidden>Showing the 6 most recently active devices.</p>
+            </section>
+        </div>
+
         <header class="stats-section-header">
             <strong>Users</strong>
             <span>Watch time - plays - average per play</span>
@@ -296,4 +324,8 @@
             {% endfor %}
         </section>
     </div>
+{% endblock %}
+
+{% block page_scripts %}
+    <script src="/assets/js/statistics-devices.js?v=20260819-device-icons"></script>
 {% endblock %}
