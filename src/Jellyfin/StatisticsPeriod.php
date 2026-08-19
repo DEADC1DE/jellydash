@@ -6,6 +6,20 @@ namespace Mk\Framework\Jellyfin;
 
 final class StatisticsPeriod
 {
+    private const RANGES = ['week', 'month', 'year', 'all'];
+
+    public static function isValidRange(?string $range): bool
+    {
+        return $range !== null && in_array($range, self::RANGES, true);
+    }
+
+    public static function normalizeRange(?string $range, string $fallback = 'week'): string
+    {
+        $fallback = self::isValidRange($fallback) ? $fallback : 'week';
+
+        return self::isValidRange($range) ? (string) $range : $fallback;
+    }
+
     public static function currentStart(string $range, \DateTimeImmutable $now): ?\DateTimeImmutable
     {
         $today = $now->setTime(0, 0);
