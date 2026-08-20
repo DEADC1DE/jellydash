@@ -33,11 +33,15 @@
                     </span>
                     <div>
                         <h2 id="recently-added-title">Recently Added</h2>
-                        <p>Fresh from Jellyfin</p>
+                        <p><span class="recently-added-source">Fresh from Jellyfin</span><span class="recently-added-count" data-recently-added-count></span></p>
                     </div>
                     <span class="recently-added-window" data-recently-added-window>Last 14 days</span>
+                    <button class="recently-added-toggle" type="button" data-recently-added-toggle aria-expanded="true" aria-controls="recently-added-row" hidden>
+                        <span data-recently-added-toggle-label>Hide</span>
+                        <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true"><path d="M6 9l6 6l6 -6"></path></svg>
+                    </button>
                 </header>
-                <div class="recently-added-row" data-recently-added-row tabindex="0" aria-label="Recently added media"></div>
+                <div class="recently-added-row" id="recently-added-row" data-recently-added-row tabindex="0" aria-label="Recently added media"></div>
             </section>
         {% endif %}
     </div>
@@ -83,6 +87,6 @@
 {% block page_scripts %}
     <script src="/assets/js/now-playing.js?v=20260818-tabler-icons"></script>
     {% if show_recently_added %}
-        <script src="/assets/js/recently-added.js?v=20260818-compact-recently-added"></script>
+        <script src="/assets/js/recently-added.js?v=20260821-playback-collapse"></script>
     {% endif %}
 {% endblock %}

@@ -2018,7 +2018,7 @@ svg.icon-filled {
         linear-gradient(118deg, rgba(124, 92, 255, .17), rgba(16, 15, 24, .97) 43%, rgba(14, 18, 29, .96));
     box-shadow: 0 24px 58px -34px rgba(42, 122, 255, .38);
     transform: translateY(7px);
-    transition: opacity .2s ease, transform .2s ease;
+    transition: opacity .2s ease, transform .2s ease, padding .2s ease;
 }
 
 .recently-added-panel::before {
@@ -2044,6 +2044,7 @@ svg.icon-filled {
     align-items: center;
     gap: 10px;
     margin-bottom: 12px;
+    transition: margin-bottom .2s ease;
 }
 
 .recently-added-mark {
@@ -2078,6 +2079,10 @@ svg.icon-filled {
     font-size: 10px;
 }
 
+.recently-added-count {
+    display: none;
+}
+
 .recently-added-window {
     flex: 0 0 auto;
     margin-left: auto;
@@ -2091,6 +2096,43 @@ svg.icon-filled {
     border: 1px solid rgba(106, 165, 255, .2);
     border-radius: 999px;
     background: rgba(59, 158, 255, .08);
+}
+
+.recently-added-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+    min-height: 32px;
+    margin-left: auto;
+    padding: 4px 7px 4px 9px;
+    color: rgba(225, 219, 255, .82);
+    font-size: 9.5px;
+    font-weight: 750;
+    border: 1px solid rgba(163, 143, 255, .24);
+    border-radius: 9px;
+    background: rgba(124, 92, 255, .11);
+}
+
+.recently-added-toggle[hidden] {
+    display: none;
+}
+
+.recently-added-toggle svg {
+    width: 14px;
+    height: 14px;
+    transition: transform .2s ease;
+}
+
+.recently-added-toggle:hover {
+    color: #fff;
+    border-color: rgba(163, 143, 255, .42);
+    background: rgba(124, 92, 255, .2);
+}
+
+.recently-added-toggle:focus-visible {
+    outline: 2px solid var(--color-purple-soft);
+    outline-offset: 2px;
 }
 
 .recently-added-row {
@@ -2109,6 +2151,44 @@ svg.icon-filled {
 .recently-added-row:focus-visible {
     outline: 2px solid rgba(163, 143, 255, .72);
     outline-offset: 4px;
+}
+
+.recently-added-panel.is-collapsible .recently-added-window,
+.recently-added-panel.is-collapsible .recently-added-source {
+    display: none;
+}
+
+.recently-added-panel.is-collapsible .recently-added-count {
+    display: inline;
+}
+
+.recently-added-panel.is-collapsible:not(.is-collapsed) .recently-added-row {
+    max-height: 230px;
+    opacity: 1;
+    transition: max-height .2s ease, opacity .16s ease, padding .2s ease;
+}
+
+.recently-added-panel.is-collapsible:not(.is-collapsed) .recently-added-toggle svg {
+    transform: rotate(180deg);
+}
+
+.recently-added-panel.is-collapsible.is-collapsed {
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.recently-added-panel.is-collapsible.is-collapsed .recently-added-header {
+    margin-bottom: 0;
+}
+
+.recently-added-panel.is-collapsible.is-collapsed .recently-added-row {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
 }
 
 .recent-media-card {
@@ -4477,7 +4557,10 @@ a.history-pager-btn:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .recently-added-panel {
+    .recently-added-panel,
+    .recently-added-header,
+    .recently-added-row,
+    .recently-added-toggle svg {
         transition: none;
     }
 }
@@ -4513,6 +4596,10 @@ a.history-pager-btn:hover {
     .recently-added-row {
         grid-auto-columns: 155px;
         gap: 8px;
+    }
+
+    .recently-added-panel.is-collapsible:not(.is-collapsed) .recently-added-row {
+        max-height: 118px;
     }
 
     .recent-media-card {

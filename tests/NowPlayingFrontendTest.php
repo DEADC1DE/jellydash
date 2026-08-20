@@ -72,6 +72,26 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString("AppSettings::set('show_recently_added'", $request);
     }
 
+    public function testRecentlyAddedCollapsesDuringPlaybackAndCanBeExpanded(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/recently-added.js');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString('data-recently-added-toggle', $template);
+        $this->assertStringContainsString('aria-controls="recently-added-row"', $template);
+        $this->assertStringContainsString('const canCollapse = playbackActive;', $script);
+        $this->assertStringContainsString("window.addEventListener('jellydash:now-playing'", $script);
+        $this->assertStringContainsString("panel.classList.toggle('is-collapsible', canCollapse)", $script);
+        $this->assertStringContainsString("panel.classList.toggle('is-collapsed', collapsed)", $script);
+        $this->assertStringContainsString("row.tabIndex = collapsed ? -1 : 0", $script);
+        $this->assertStringContainsString('.recently-added-toggle[hidden]', $stylesheet);
+        $this->assertStringContainsString('.recently-added-panel.is-collapsible.is-collapsed', $stylesheet);
+    }
+
     public function testActiveStreamGridCannotShrinkUnderRecentlyAddedShelf(): void
     {
         $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
