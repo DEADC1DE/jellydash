@@ -3,10 +3,51 @@
     const panel = document.querySelector('[data-recently-added]');
     const row = document.querySelector('[data-recently-added-row]');
     const windowLabel = document.querySelector('[data-recently-added-window]');
+    const toggle = document.querySelector('[data-recently-added-toggle]');
+    const toggleLabel = document.querySelector('[data-recently-added-toggle-label]');
+    const countLabel = document.querySelector('[data-recently-added-count]');
+    const liveRoot = document.querySelector('[data-now-playing-root]');
 
-    if (!page || !panel || !row || !windowLabel) {
+    if (!page || !panel || !row || !windowLabel || !toggle || !toggleLabel || !countLabel) {
         return;
     }
+
+    let playbackActive = liveRoot?.classList.contains('has-streams') || false;
+    let userExpanded = false;
+
+    function applyCompactState() {
+        const canCollapse = playbackActive;
+        const collapsed = canCollapse && !userExpanded;
+
+        panel.classList.toggle('is-collapsible', canCollapse);
+        panel.classList.toggle('is-collapsed', collapsed);
+        toggle.hidden = !canCollapse;
+        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        toggleLabel.textContent = collapsed ? 'Show' : 'Hide';
+        row.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+        row.tabIndex = collapsed ? -1 : 0;
+    }
+
+    function setPlaybackActive(active) {
+        if (active !== playbackActive) {
+            playbackActive = active;
+            userExpanded = false;
+        }
+
+        applyCompactState();
+    }
+
+    toggle.addEventListener('click', () => {
+        userExpanded = !userExpanded;
+        applyCompactState();
+    });
+
+    window.addEventListener('jellydash:now-playing', (event) => {
+        const streams = Array.isArray(event.detail?.streams) ? event.detail.streams : [];
+        setPlaybackActive(streams.length > 0);
+    });
+
+    applyCompactState();
 
     row.addEventListener('keydown', (event) => {
         const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
@@ -81,8 +122,10 @@
 
         const days = Math.max(1, Number(payload.windowDays) || 14);
         windowLabel.textContent = `Last ${days} days`;
+        countLabel.textContent = `${items.length} fresh`;
         page.classList.add('has-recently-added');
         panel.hidden = false;
+        applyCompactState();
         window.requestAnimationFrame(() => panel.classList.add('is-visible'));
     }
 
