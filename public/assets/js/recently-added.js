@@ -50,6 +50,10 @@
     applyCompactState();
 
     row.addEventListener('keydown', (event) => {
+        if (event.target !== row) {
+            return;
+        }
+
         const behavior = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
         if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
             event.preventDefault();
@@ -81,22 +85,50 @@
         return days ? `${days[1]}d` : label;
     }
 
+    function safeJellyfinUrl(value) {
+        try {
+            const url = new URL(String(value ?? ''));
+            if (
+                !['http:', 'https:'].includes(url.protocol)
+                || url.username
+                || url.password
+                || !url.hash.startsWith('#/details?')
+            ) {
+                return '';
+            }
+
+            return url.href;
+        } catch (_) {
+            return '';
+        }
+    }
+
     function card(item) {
         const tone = Math.max(1, Math.min(5, Number(item.tone) || 1));
+        const title = String(item.title || 'Unknown title');
+        const jellyfinUrl = safeJellyfinUrl(item.jellyfinUrl);
         const poster = item.poster
             ? `<img src="${escapeHtml(item.poster)}" alt="" loading="lazy" decoding="async">`
             : '';
+        const openMarker = jellyfinUrl
+            ? `<span class="recent-media-open" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6"></path><path d="M11 13l9 -9"></path><path d="M15 4h5v5"></path></svg></span>`
+            : '';
+        const openingTag = jellyfinUrl
+            ? `<a class="recent-media-card" href="${escapeHtml(jellyfinUrl)}" target="_blank" rel="noopener noreferrer" title="Open ${escapeHtml(title)} in Jellyfin">`
+            : '<article class="recent-media-card">';
+        const closingTag = jellyfinUrl ? '</a>' : '</article>';
 
         return `
-            <article class="recent-media-card">
+            ${openingTag}
                 <div class="recent-media-poster is-tone-${tone}">
                     ${poster}
                     <span class="recent-media-library">${escapeHtml(item.library || 'Media')}</span>
+                    ${openMarker}
                     <span class="recent-media-date" title="${escapeHtml(item.dateLabel || '')}" data-short-date="${escapeHtml(shortDateLabel(item.dateLabel))}"><i></i><span>${escapeHtml(item.dateLabel || '')}</span></span>
                 </div>
-                <strong title="${escapeHtml(item.title || '')}">${escapeHtml(item.title || 'Unknown title')}</strong>
+                <strong title="${escapeHtml(title)}">${escapeHtml(title)}</strong>
                 <span class="recent-media-meta" title="${escapeHtml(item.meta || '')}">${escapeHtml(item.meta || '')}</span>
-            </article>
+            ${closingTag}
         `;
     }
 

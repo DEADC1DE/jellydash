@@ -12,6 +12,7 @@ final class RecentlyAddedService
     private const PAGE_SIZE = 100;
     private const MAX_RAW_ITEMS = 300;
     private const CACHE_TTL = 300;
+    private const CACHE_SCHEMA_VERSION = 2;
     private const ALLOWED_TYPES = ['Movie', 'Series', 'Episode'];
 
     public function __construct(
@@ -22,16 +23,18 @@ final class RecentlyAddedService
     }
 
     /**
-     * @return array{items: array<int, array<string, mixed>>, windowDays: int, generated_at: int, cached: bool, stale?: bool}
+     * @return array{items: array<int, array<string, mixed>>, windowDays: int, generated_at: int, cached: bool, schemaVersion: int, stale?: bool}
      */
     public function cachedPayload(): array
     {
         $cached = $this->readCache();
+        $cacheSchemaIsCurrent = $cached !== null
+            && (int) ($cached['schemaVersion'] ?? 0) === self::CACHE_SCHEMA_VERSION;
         if ($cached !== null) {
             $cached = $this->pruneCachedPayload($cached);
         }
 
-        if ($cached !== null && (time() - (int) ($cached['generated_at'] ?? 0)) < self::CACHE_TTL) {
+        if ($cacheSchemaIsCurrent && $cached !== null && (time() - (int) ($cached['generated_at'] ?? 0)) < self::CACHE_TTL) {
             $cached['cached'] = true;
 
             return $cached;
@@ -52,7 +55,7 @@ final class RecentlyAddedService
     }
 
     /**
-     * @return array{items: array<int, array<string, mixed>>, windowDays: int, generated_at: int, cached: bool}
+     * @return array{items: array<int, array<string, mixed>>, windowDays: int, generated_at: int, cached: bool, schemaVersion: int}
      */
     public function refreshCache(): array
     {
@@ -63,12 +66,13 @@ final class RecentlyAddedService
     }
 
     /**
-     * @return array{items: array<int, array<string, mixed>>, windowDays: int, generated_at: int, cached: bool}
+     * @return array{items: array<int, array<string, mixed>>, windowDays: int, generated_at: int, cached: bool, schemaVersion: int}
      */
     private function data(): array
     {
         $client = $this->client ?? new JellyfinClient();
         $rawItems = $this->rawItems($client);
+        $serverId = $this->serverId($client);
 
         try {
             $locations = $client->libraryLocations();
@@ -81,10 +85,11 @@ final class RecentlyAddedService
         }
 
         return [
-            'items' => $this->cards($rawItems, $locations, $names),
+            'items' => $this->cards($rawItems, $locations, $names, $serverId),
             'windowDays' => self::WINDOW_DAYS,
             'generated_at' => time(),
             'cached' => false,
+            'schemaVersion' => self::CACHE_SCHEMA_VERSION,
         ];
     }
 
@@ -139,7 +144,7 @@ final class RecentlyAddedService
      * @param array<int, string> $names
      * @return array<int, array<string, mixed>>
      */
-    private function cards(array $items, array $locations, array $names): array
+    private function cards(array $items, array $locations, array $names, ?string $serverId = null): array
     {
         $client = $this->client ?? new JellyfinClient();
         $cutoff = $this->clock()->modify('-' . self::WINDOW_DAYS . ' days');
@@ -214,6 +219,8 @@ final class RecentlyAddedService
                 $library,
                 $created,
                 $id,
+                $id,
+                $serverId,
             );
             $card['seriesKey'] = $type === 'Series' ? mb_strtolower($id) : '';
             $card['episodeCount'] = 0;
@@ -256,6 +263,8 @@ final class RecentlyAddedService
                 (string) $group['library'],
                 $group['created'],
                 (string) $group['posterId'],
+                (string) $group['seed'],
+                $serverId,
             );
         }
 
@@ -346,6 +355,8 @@ final class RecentlyAddedService
         string $library,
         \DateTimeImmutable $created,
         string $posterId,
+        string $detailsId,
+        ?string $serverId,
     ): array {
         return [
             'title' => $title,
@@ -354,9 +365,48 @@ final class RecentlyAddedService
             'dateLabel' => $this->dateLabel($created),
             'addedAt' => $created->format(\DateTimeInterface::ATOM),
             'poster' => $this->posterUrl($posterId),
+            'jellyfinUrl' => $this->detailsUrl($detailsId, $serverId),
             'tone' => (abs(crc32($seed)) % 5) + 1,
             'created' => $created,
         ];
+    }
+
+    private function serverId(JellyfinClient $client): ?string
+    {
+        try {
+            $payload = $client->getJson('/System/Info/Public', 4);
+            $serverId = is_array($payload) ? trim((string) ($payload['Id'] ?? '')) : '';
+
+            return $this->safeIdentifier($serverId) ? $serverId : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function detailsUrl(string $itemId, ?string $serverId): string
+    {
+        $baseUrl = rtrim(trim(($this->client ?? new JellyfinClient())->baseUrl()), '/');
+        $parts = parse_url($baseUrl);
+        if (
+            !$this->safeIdentifier($itemId)
+            || !$this->safeIdentifier((string) $serverId)
+            || !is_array($parts)
+            || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
+            || (string) ($parts['host'] ?? '') === ''
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])
+        ) {
+            return '';
+        }
+
+        return $baseUrl . '/web/#/details?id=' . rawurlencode($itemId) . '&serverId=' . rawurlencode((string) $serverId);
+    }
+
+    private function safeIdentifier(string $value): bool
+    {
+        return $value !== '' && preg_match('/^[A-Za-z0-9_-]+$/', $value) === 1;
     }
 
     private function dateLabel(\DateTimeImmutable $created): string
@@ -473,6 +523,7 @@ final class RecentlyAddedService
             return $created !== null && $created >= $cutoff;
         }));
         $payload['windowDays'] = self::WINDOW_DAYS;
+        $payload['schemaVersion'] = (int) ($payload['schemaVersion'] ?? 0);
 
         return $payload;
     }
