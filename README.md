@@ -33,7 +33,9 @@ The project is very young and in very active development.
 
 ## Screenshots
 
-![Now Playing](docs/assets/now-playing.png)
+| Now Playing, actively streaming | Now Playing, all quiet |
+| --- | --- |
+| ![Now Playing with two active streams](docs/assets/now-playing-active.png) | ![Now Playing with no active streams](docs/assets/now-playing-idle.png) |
 
 | History | Jellyseerr requests |
 | --- | --- |
@@ -49,7 +51,7 @@ The project is very young and in very active development.
   <img src="docs/assets/mobile-playing.png" width="270" alt="Jellydash active stream view on Android">
 </p>
 <p align="center">
-  <sub>Installed as an app on Android, idle or actively streaming</sub>
+  <sub>Installed as an app on Android, actively streaming or all quiet</sub>
 </p>
 
 <details>
