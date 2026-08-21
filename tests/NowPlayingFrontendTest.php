@@ -79,6 +79,20 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringNotContainsString('calc(100dvh - 350px)', $stylesheet);
     }
 
+    public function testMobileRecentlyAddedUsesTheSameMinimumForLoadingAndIdleStates(): void
+    {
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString(
+            ".now-playing-page.has-recently-added .now-playing-live > .empty-state,\n"
+            . "    .now-playing-page.has-recently-added .now-playing-live > .loading-state {\n"
+            . "        min-height: 175px;\n"
+            . '    }',
+            $stylesheet,
+        );
+    }
+
     public function testRecentlyAddedStaysHiddenForEmptyOrFailedRequests(): void
     {
         $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
