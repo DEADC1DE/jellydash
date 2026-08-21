@@ -19,6 +19,21 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString("navCount.textContent = '-'", $navCount);
     }
 
+    public function testNowPlayingOwnsTheNavigationCountPollingLoop(): void
+    {
+        $nowPlaying = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+        $navCount = file_get_contents(ROOT_DIR . '/public/assets/js/nav-count.js');
+        $shell = file_get_contents(TEMPLATES_DIR . '/_shell.twig');
+
+        $this->assertIsString($nowPlaying);
+        $this->assertIsString($navCount);
+        $this->assertIsString($shell);
+        $this->assertStringContainsString("setText('[data-nav-count]', activeStreams)", $nowPlaying);
+        $this->assertStringContainsString("document.querySelector('[data-now-playing-root]')", $navCount);
+        $this->assertStringContainsString('Do not start a second', $navCount);
+        $this->assertStringContainsString('nav-count.js?v=20260821-shared-sessions', $shell);
+    }
+
     public function testActiveStreamsAreLabelledAsStreams(): void
     {
         $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
