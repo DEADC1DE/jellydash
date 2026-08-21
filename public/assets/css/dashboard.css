@@ -4515,7 +4515,10 @@ a.history-pager-btn:hover {
         min-height: 0;
     }
 
-    .now-playing-page.has-recently-added .now-playing-live > .empty-state {
+    /* Keep both asynchronous states the same height. Android's installed-app
+       flex layout can retain the larger loading minimum after sessions settle. */
+    .now-playing-page.has-recently-added .now-playing-live > .empty-state,
+    .now-playing-page.has-recently-added .now-playing-live > .loading-state {
         min-height: 175px;
     }
 
