@@ -170,7 +170,7 @@ final class Modules
     }
 
     /**
-     * Globally-loaded asset URLs (cache-busted by the module folder's mtime).
+     * Globally-loaded asset URLs, cache-busted by each asset's own mtime.
      *
      * @return array{styles: array<int, string>, scripts: array<int, string>}
      */
@@ -180,11 +180,12 @@ final class Modules
         $scripts = [];
 
         foreach (self::all() as $name => $manifest) {
-            $version = (string) @filemtime(self::dir($name) . '/module.php');
             foreach ((array) ($manifest['styles'] ?? []) as $file) {
+                $version = (string) @filemtime(self::dir($name) . '/assets/' . $file);
                 $styles[] = self::assetUrl($name, (string) $file, $version);
             }
             foreach ((array) ($manifest['scripts'] ?? []) as $file) {
+                $version = (string) @filemtime(self::dir($name) . '/assets/' . $file);
                 $scripts[] = self::assetUrl($name, (string) $file, $version);
             }
         }
