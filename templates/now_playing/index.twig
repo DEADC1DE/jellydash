@@ -5,6 +5,32 @@
         <h1>Now Playing</h1>
         <p><span class="live-dot {{ streams|length > 0 ? 'is-live' : 'is-idle' }}" data-live-dot></span><span data-live-label>{{ is_loading|default(false) ? 'Loading sessions...' : (streams|length > 0 ? streams|length ~ ' ' ~ (streams|length == 1 ? 'stream' : 'streams') ~ ' - ' ~ stats.active_users ~ ' ' ~ (stats.active_users == 1 ? 'user' : 'users') : 'No active sessions') }}</span></p>
     </div>
+    <dl class="now-playing-telemetry" data-now-playing-telemetry aria-label="Playback telemetry">
+        <div class="now-playing-metric">
+            <dt><i class="dot-purple"></i>Today</dt>
+            <dd data-stat="watch_today">{{ stats.watch_today }}</dd>
+        </div>
+        <div class="now-playing-metric">
+            <dt><i class="dot-blue"></i>Bandwidth</dt>
+            <dd data-stat-block="bandwidth">
+                {% if stats.active_streams > 0 %}
+                    <span>{{ stats.bandwidth_mbps }}</span><small>Mbps</small>
+                {% else %}
+                    <span class="stat-placeholder">Idle</span>
+                {% endif %}
+            </dd>
+        </div>
+        <div class="now-playing-metric">
+            <dt><i class="dot-amber"></i>Transcoding</dt>
+            <dd data-stat-block="transcoding">
+                {% if stats.active_streams > 0 %}
+                    <span>{{ stats.transcodes }}</span><small>/ {{ stats.active_streams }}</small>
+                {% else %}
+                    <span class="stat-placeholder">None</span>
+                {% endif %}
+            </dd>
+        </div>
+    </dl>
 {% endblock %}
 
 {% block dashboard_content %}
@@ -47,45 +73,8 @@
     </div>
 {% endblock %}
 
-{% block dashboard_footer %}
-    <div class="stat-cell">
-        <span><i class="dot-purple"></i>Watch time today</span>
-        <strong data-stat="watch_today">{{ stats.watch_today }}</strong>
-    </div>
-    <div class="stat-cell">
-        <span><i class="dot-green"></i>Active streams</span>
-        <strong data-stat-block="active_streams">
-            {% if stats.active_streams > 0 %}
-                <span>{{ stats.active_streams }}</span> <small>{{ stats.active_streams == 1 ? 'stream' : 'streams' }}</small>
-            {% else %}
-                <span class="stat-placeholder">Idle</span>
-            {% endif %}
-        </strong>
-    </div>
-    <div class="stat-cell">
-        <span><i class="dot-blue"></i>Bandwidth in use</span>
-        <strong data-stat-block="bandwidth">
-            {% if stats.active_streams > 0 %}
-                <span>{{ stats.bandwidth_mbps }}</span> <small>Mbps</small>
-            {% else %}
-                <span class="stat-placeholder">Idle</span>
-            {% endif %}
-        </strong>
-    </div>
-    <div class="stat-cell">
-        <span><i class="dot-amber"></i>Transcoding</span>
-        <strong data-stat-block="transcoding">
-            {% if stats.active_streams > 0 %}
-                <span>{{ stats.transcodes }}</span> <small>of {{ stats.active_streams }} streams</small>
-            {% else %}
-                <span class="stat-placeholder">None</span>
-            {% endif %}
-        </strong>
-    </div>
-{% endblock %}
-
 {% block page_scripts %}
-    <script src="/assets/js/now-playing.js?v=20260818-tabler-icons"></script>
+    <script src="/assets/js/now-playing.js?v=20260821-header-telemetry"></script>
     {% if show_recently_added %}
         <script src="/assets/js/recently-added.js?v=20260821-playback-collapse"></script>
     {% endif %}
