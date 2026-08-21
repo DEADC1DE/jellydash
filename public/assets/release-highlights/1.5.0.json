@@ -1,0 +1,21 @@
+{
+  "version": "1.5.0",
+  "auto_show": true,
+  "title": "A smarter Now Playing",
+  "summary": "Recently Added is now more useful and stays out of the way during playback, live telemetry takes less space, and Statistics remembers the view you prefer.",
+  "highlights": [
+    "Browse recent movies, series, and episodes on Now Playing, then open any card directly in Jellyfin.",
+    "Keep Recently Added compact while something is playing, with a quick Show or Hide control whenever you need it.",
+    "See today's watch time, bandwidth, and transcoding in the compact Now Playing header instead of a large footer.",
+    "Choose Week, Month, Year, or All time from the clearer Statistics control and save your preferred default view.",
+    "See recent Jellyfin device activity, client versions, last users, and active playback inside Statistics.",
+    "Get a recognizable Jellydash mascot in Android's notification bar instead of a dark square.",
+    "Enjoy the Tabler icon refresh, improved mobile layouts, and the Settings save reminder introduced in v1.4.0."
+  ],
+  "links": [
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.5.0"
+    }
+  ]
+}
