@@ -26,8 +26,30 @@ final class NowPlayingFrontendTest extends TestCase
 
         $this->assertIsString($template);
         $this->assertIsString($script);
-        $this->assertStringContainsString("stats.active_streams == 1 ? 'stream' : 'streams'", $template);
+        $this->assertStringContainsString("streams|length == 1 ? 'stream' : 'streams'", $template);
         $this->assertStringContainsString("activeStreams === 1 ? 'stream' : 'streams'", $script);
+    }
+
+    public function testPlaybackTelemetryLivesInTheHeaderInsteadOfTheFooter(): void
+    {
+        $controller = file_get_contents(ROOT_DIR . '/src/Pages/NowPlayingController.php');
+        $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($controller);
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString("'header_class' => 'dashboard-header-now-playing'", $controller);
+        $this->assertStringContainsString("'hide_footer' => true", $controller);
+        $this->assertStringContainsString('data-now-playing-telemetry', $template);
+        $this->assertStringContainsString('data-stat-block="bandwidth"', $template);
+        $this->assertStringContainsString('data-stat-block="transcoding"', $template);
+        $this->assertStringNotContainsString('data-stat-block="active_streams"', $template);
+        $this->assertStringNotContainsString('{% block dashboard_footer %}', $template);
+        $this->assertStringNotContainsString("data-stat-block=\"active_streams\"", $script);
+        $this->assertStringContainsString('.now-playing-telemetry', $stylesheet);
     }
 
     public function testMobileIdleLayoutUsesTheAvailableFlexSpace(): void

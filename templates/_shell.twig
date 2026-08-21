@@ -22,7 +22,7 @@
         <meta name="vapid-public-key" content="{{ vapid_public_key }}">
     {% endif %}
 
-    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260821-playback-collapse">
+    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260821-header-telemetry">
     {% for href in module_styles %}
         <link rel="stylesheet" href="{{ href }}">
     {% endfor %}
@@ -64,7 +64,7 @@
     {% include "_sidebar.twig" %}
 
     <main class="dashboard-main">
-        <header class="dashboard-header">
+        <header class="dashboard-header{{ layout.header_class|default('') ? ' ' ~ layout.header_class : '' }}">
             {% block dashboard_header %}{% endblock %}
         </header>
 

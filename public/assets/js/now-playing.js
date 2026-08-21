@@ -163,26 +163,19 @@
         setText('[data-nav-count]', activeStreams);
         setText('[data-stat="watch_today"]', stats.watch_today || '0m');
 
-        const activeBlock = document.querySelector('[data-stat-block="active_streams"]');
         const bandwidthBlock = document.querySelector('[data-stat-block="bandwidth"]');
         const transcodeBlock = document.querySelector('[data-stat-block="transcoding"]');
 
         if (activeStreams > 0) {
-            if (activeBlock) {
-                activeBlock.innerHTML = `<span>${activeStreams}</span> <small>${activeStreams === 1 ? 'stream' : 'streams'}</small>`;
-            }
             if (bandwidthBlock) {
-                bandwidthBlock.innerHTML = `<span>${escapeHtml(stats.bandwidth_mbps || '0.0')}</span> <small>Mbps</small>`;
+                bandwidthBlock.innerHTML = `<span>${escapeHtml(stats.bandwidth_mbps || '0.0')}</span><small>Mbps</small>`;
             }
             if (transcodeBlock) {
-                transcodeBlock.innerHTML = `<span>${Number(stats.transcodes || 0)}</span> <small>of ${activeStreams} streams</small>`;
+                transcodeBlock.innerHTML = `<span>${Number(stats.transcodes || 0)}</span><small>/ ${activeStreams}</small>`;
             }
             return;
         }
 
-        if (activeBlock) {
-            activeBlock.innerHTML = '<span class="stat-placeholder">Idle</span>';
-        }
         if (bandwidthBlock) {
             bandwidthBlock.innerHTML = '<span class="stat-placeholder">Idle</span>';
         }
@@ -202,7 +195,7 @@
         dot.classList.add('is-idle');
         setText('[data-nav-count]', '-');
 
-        ['active_streams', 'bandwidth', 'transcoding'].forEach((name) => {
+        ['bandwidth', 'transcoding'].forEach((name) => {
             const block = document.querySelector(`[data-stat-block="${name}"]`);
             if (block) {
                 block.innerHTML = '<span class="stat-placeholder">Unavailable</span>';
