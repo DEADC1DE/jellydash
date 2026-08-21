@@ -46,4 +46,21 @@ final class IconSystemTest extends TestCase
         $this->assertStringContainsString('Copyright (c) 2020-2026 Paweł Kuna', $notice);
         $this->assertStringContainsString('MIT License', $notice);
     }
+
+    public function testPushNotificationsUseDedicatedStatusBarBadge(): void
+    {
+        $serviceWorker = file_get_contents(ROOT_DIR . '/public/sw.js');
+        $badgePath = ROOT_DIR . '/public/assets/img/notification-badge.png';
+
+        $this->assertIsString($serviceWorker);
+        $this->assertStringContainsString("badge: '/assets/img/notification-badge.png?v=1'", $serviceWorker);
+        $this->assertStringNotContainsString("badge: '/assets/img/icon-192.png'", $serviceWorker);
+        $this->assertFileExists($badgePath);
+
+        $size = getimagesize($badgePath);
+        $this->assertIsArray($size);
+        $this->assertSame(96, $size[0]);
+        $this->assertSame(96, $size[1]);
+        $this->assertSame(IMAGETYPE_PNG, $size[2]);
+    }
 }

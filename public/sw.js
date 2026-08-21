@@ -38,7 +38,8 @@ self.addEventListener('push', (event) => {
     const options = {
         body: data.body || '',
         icon: '/assets/img/icon-192.png',
-        badge: '/assets/img/icon-192.png',
+        // Android masks this small status-bar image, so it needs transparency.
+        badge: '/assets/img/notification-badge.png?v=1',
         tag: data.tag || 'jellydash',
         data: { url: data.url || '/now-playing' },
     };
