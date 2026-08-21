@@ -6,6 +6,13 @@
         return;
     }
 
+    // Now Playing already refreshes the full session payload every five
+    // seconds and updates this badge from that response. Do not start a second
+    // polling loop for the same endpoint on that page.
+    if (document.querySelector('[data-now-playing-root]')) {
+        return;
+    }
+
     async function refresh() {
         const response = await fetch('/api/now-playing.php', {
             headers: { Accept: 'application/json' },
