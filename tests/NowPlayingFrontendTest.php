@@ -114,6 +114,28 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString('.recently-added-panel.is-collapsible.is-collapsed', $stylesheet);
     }
 
+    public function testRecentlyAddedCardsOpenMatchingJellyfinDetailsSafely(): void
+    {
+        $service = file_get_contents(ROOT_DIR . '/src/Jellyfin/RecentlyAddedService.php');
+        $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/recently-added.js');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($service);
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString("'/System/Info/Public'", $service);
+        $this->assertStringContainsString("'/web/#/details?id='", $service);
+        $this->assertStringContainsString('jellyfinUrl', $service);
+        $this->assertStringContainsString('safeJellyfinUrl', $script);
+        $this->assertStringContainsString('target="_blank" rel="noopener noreferrer"', $script);
+        $this->assertStringContainsString('recent-media-open', $script);
+        $this->assertStringContainsString('if (event.target !== row)', $script);
+        $this->assertStringContainsString('20260821-jellyfin-links', $template);
+        $this->assertStringContainsString('.recent-media-card[href]:focus-visible', $stylesheet);
+    }
+
     public function testActiveStreamGridCannotShrinkUnderRecentlyAddedShelf(): void
     {
         $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');

@@ -36,6 +36,10 @@ final class RecentlyAddedServiceTest extends TestCase
         $this->assertSame('Today', $cards[0]['dateLabel']);
         $this->assertSame('Movies', $cards[0]['library']);
         $this->assertSame('Movie · 2026', $cards[0]['meta']);
+        $this->assertSame(
+            'http://jellyfin.test/web/#/details?id=new-movie&serverId=server-1',
+            $cards[0]['jellyfinUrl'],
+        );
     }
 
     public function testEpisodesFromTheSameSeasonBecomeOneSeriesCard(): void
@@ -49,6 +53,10 @@ final class RecentlyAddedServiceTest extends TestCase
         $this->assertSame('Example Show', $cards[0]['title']);
         $this->assertSame('Season 2 · 2 episodes', $cards[0]['meta']);
         $this->assertSame('/api/image.php?item=series-1&type=Primary&maxWidth=320', $cards[0]['poster']);
+        $this->assertSame(
+            'http://jellyfin.test/web/#/details?id=series-1&serverId=server-1',
+            $cards[0]['jellyfinUrl'],
+        );
     }
 
     public function testNewSeriesAbsorbsItsNewEpisodeGroups(): void
@@ -116,10 +124,22 @@ final class RecentlyAddedServiceTest extends TestCase
             'windowDays' => 30,
             'generated_at' => 1,
             'cached' => false,
+            'schemaVersion' => 2,
         ]);
 
         $this->assertSame(['Fresh'], array_column($payload['items'], 'title'));
         $this->assertSame(14, $payload['windowDays']);
+        $this->assertSame(2, $payload['schemaVersion']);
+    }
+
+    public function testInvalidJellyfinDetailsTargetsStayUnlinked(): void
+    {
+        $service = new RecentlyAddedService(new JellyfinClient('javascript:alert(1)', 'token'), $this->now);
+        $method = new ReflectionMethod($service, 'detailsUrl');
+
+        $this->assertSame('', $method->invoke($service, 'movie-1', 'server-1'));
+        $this->assertSame('', $method->invoke($service, 'movie/1', 'server-1'));
+        $this->assertSame('', $method->invoke($service, 'movie-1', null));
     }
 
     /**
@@ -141,6 +161,7 @@ final class RecentlyAddedServiceTest extends TestCase
                 'anime' => ['/media/anime'],
             ],
             ['Movies', 'TV Shows', 'Anime'],
+            'server-1',
         );
 
         return $cards;
