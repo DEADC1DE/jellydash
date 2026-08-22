@@ -121,7 +121,7 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('id="import-history"', $output);
         $this->assertStringContainsString('/assets/js/history-library-upgrade.js?v=20260822-history-upgrade-finish', $output);
         $this->assertStringContainsString('/assets/js/release-highlights.js?v=20260822-history-upgrade', $output);
-        $this->assertStringContainsString('/assets/js/history-import.js?v=20260817-discovery', $output);
+        $this->assertStringContainsString('/assets/js/history-import.js?v=20260822-native-csv', $output);
         $this->assertSame(200, http_response_code());
     }
 

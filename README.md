@@ -255,7 +255,9 @@ The password needs at least 8 characters. The admin user is created automaticall
 
 ## Exporting History
 
-Use **Export CSV** on the History page to choose a search, user, library and time period before downloading. Jellydash shows the exact number of matching plays, and the export is never limited to the page you are viewing. Its versioned format keeps the playback fields Jellydash needs for a future native round-trip import. See [docs/HISTORY_CSV.md](docs/HISTORY_CSV.md) for the v1 format.
+Use **Export CSV** on the History page to choose a search, user, library and time period before downloading. Jellydash shows the exact number of matching plays, and the export is never limited to the page you are viewing. Its versioned format keeps the playback fields Jellydash needs for a native round-trip import. See [docs/HISTORY_CSV.md](docs/HISTORY_CSV.md) for the v1 format.
+
+To restore that file, open **Settings → Import play history** and choose **Jellydash CSV**. Jellydash previews new and already-present plays before asking you to confirm. Imports are transactional, skip duplicates and never trigger playback notifications.
 
 ## Importing Playback Reporting history
 

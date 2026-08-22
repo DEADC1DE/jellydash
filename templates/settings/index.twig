@@ -113,37 +113,64 @@
     <section class="settings-card settings-import" id="import-history">
         <header>
             <strong>Import play history</strong>
-            <span>Drop a Playback Reporting TSV backup or <code>playback_reporting.db</code>. Jellydash counts the plays, then asks you to confirm.</span>
+            <span>Restore a Jellydash backup or bring your old Playback Reporting history with you. Jellydash checks the file before anything is written.</span>
         </header>
         {% if import.error %}
             <div class="settings-error" role="alert">{{ import.error }}</div>
         {% elseif import.inserted or import.skipped %}
             <div class="settings-saved" role="status">Imported {{ import.inserted }} play{{ import.inserted == 1 ? '' : 's' }}{% if import.skipped %}, skipped {{ import.skipped }} already present{% endif %}{% if import.unresolved %}, {{ import.unresolved }} without Jellyfin runtime{% endif %}.</div>
         {% endif %}
-        <form class="settings-import-form" action="/api/playback-reporting.php" method="post" enctype="multipart/form-data" data-import-drop>
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="commit" value="1">
-            <label class="settings-drop" data-import-dropzone>
-                <input type="file" name="playback_reporting" accept=".tsv,.txt,.db,.sqlite,.sqlite3,text/tab-separated-values,text/plain">
-                <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
-                    <path d="M12 2l.117 .007a1 1 0 0 1 .876 .876l.007 .117v4l.005 .15a2 2 0 0 0 1.838 1.844l.157 .006h4l.117 .007a1 1 0 0 1 .876 .876l.007 .117v9a3 3 0 0 1 -2.824 2.995l-.176 .005h-10a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-14a3 3 0 0 1 2.824 -2.995l.176 -.005zm0 9l-.09 .004l-.058 .007l-.118 .025l-.105 .035l-.113 .054l-.111 .071a1 1 0 0 0 -.112 .097l-2.5 2.5a1 1 0 0 0 0 1.414l.094 .083a1 1 0 0 0 1.32 -.083l.793 -.793v3.586a1 1 0 0 0 2 0v-3.585l.793 .792a1 1 0 0 0 1.414 -1.414l-2.5 -2.5l-.082 -.073l-.104 -.074l-.098 -.052l-.11 -.044l-.112 -.03l-.126 -.017z"></path>
-                    <path d="M19 7h-4l-.001 -4.001z"></path>
-                </svg>
-                <strong>Drop a file here</strong>
-                <span>or click to choose a TSV backup / SQLite database</span>
-            </label>
-            <div class="settings-import-alt" data-import-alt hidden>
-                <span class="settings-import-or">or</span>
-                <button type="submit" name="import_source" value="plugin" class="settings-secondary-btn" data-import-plugin>Import from Jellyfin (API)</button>
-            </div>
-        </form>
+        <div class="settings-import-sources">
+            <article class="settings-import-source is-jellydash">
+                <div class="settings-import-source-head">
+                    <span class="settings-import-source-mark" aria-hidden="true">
+                        <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M14 2a1 1 0 0 1 .707 .293l5 5a1 1 0 0 1 .293 .707v11a3 3 0 0 1 -3 3h-10a3 3 0 0 1 -3 -3v-14a3 3 0 0 1 3 -3zm-2 8a1 1 0 0 0 -1 1v3.585l-1.293 -1.292a1 1 0 0 0 -1.414 1.414l3 3a1 1 0 0 0 1.414 0l3 -3a1 1 0 0 0 -1.414 -1.414l-1.293 1.292v-3.585a1 1 0 0 0 -1 -1"></path></svg>
+                    </span>
+                    <span><strong>Jellydash CSV</strong><small>Restore or move History</small></span>
+                    <em>Native</em>
+                </div>
+                <form class="settings-import-form" action="/api/history-csv.php" method="post" enctype="multipart/form-data" data-import-drop data-import-endpoint="/api/history-csv.php" data-import-source="jellydash">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="commit" value="1">
+                    <label class="settings-drop" data-import-dropzone>
+                        <input type="file" name="jellydash_history" accept=".csv,text/csv">
+                        <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true"><path d="M12 2l.117 .007a1 1 0 0 1 .876 .876l.007 .117v4l.005 .15a2 2 0 0 0 1.838 1.844l.157 .006h4l.117 .007a1 1 0 0 1 .876 .876l.007 .117v9a3 3 0 0 1 -2.824 2.995l-.176 .005h-10a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-14a3 3 0 0 1 2.824 -2.995l.176 -.005zm0 9l-.09 .004l-.058 .007l-.118 .025l-.105 .035l-.113 .054l-.111 .071a1 1 0 0 0 -.112 .097l-2.5 2.5a1 1 0 0 0 0 1.414l.094 .083a1 1 0 0 0 1.32 -.083l.793 -.793v3.586a1 1 0 0 0 2 0v-3.585l.793 .792a1 1 0 0 0 1.414 -1.414l-2.5 -2.5l-.082 -.073l-.104 -.074l-.098 -.052l-.11 -.044l-.112 -.03l-.126 -.017z"></path><path d="M19 7h-4l-.001 -4.001z"></path></svg>
+                        <strong>Choose History CSV</strong>
+                        <span>or drop it here</span>
+                    </label>
+                </form>
+            </article>
+
+            <article class="settings-import-source is-playback-reporting">
+                <div class="settings-import-source-head">
+                    <span class="settings-import-source-mark" aria-hidden="true">
+                        <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M11 4a1 1 0 0 1 2 0v5h5a1 1 0 0 1 0 2h-5v5a1 1 0 0 1 -2 0v-5h-5a1 1 0 0 1 0 -2h5z"></path><path d="M5 2h14a3 3 0 0 1 3 3v14a3 3 0 0 1 -3 3h-14a3 3 0 0 1 -3 -3v-14a3 3 0 0 1 3 -3m0 2a1 1 0 0 0 -1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1 -1v-14a1 1 0 0 0 -1 -1z"></path></svg>
+                    </span>
+                    <span><strong>Playback Reporting</strong><small>Bring older Jellyfin history</small></span>
+                </div>
+                <form class="settings-import-form" action="/api/playback-reporting.php" method="post" enctype="multipart/form-data" data-import-drop data-import-endpoint="/api/playback-reporting.php" data-import-source="playback-reporting">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="commit" value="1">
+                    <label class="settings-drop" data-import-dropzone>
+                        <input type="file" name="playback_reporting" accept=".tsv,.txt,.db,.sqlite,.sqlite3,text/tab-separated-values,text/plain">
+                        <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true"><path d="M12 2l.117 .007a1 1 0 0 1 .876 .876l.007 .117v4l.005 .15a2 2 0 0 0 1.838 1.844l.157 .006h4l.117 .007a1 1 0 0 1 .876 .876l.007 .117v9a3 3 0 0 1 -2.824 2.995l-.176 .005h-10a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-14a3 3 0 0 1 2.824 -2.995l.176 -.005zm0 9l-.09 .004l-.058 .007l-.118 .025l-.105 .035l-.113 .054l-.111 .071a1 1 0 0 0 -.112 .097l-2.5 2.5a1 1 0 0 0 0 1.414l.094 .083a1 1 0 0 0 1.32 -.083l.793 -.793v3.586a1 1 0 0 0 2 0v-3.585l.793 .792a1 1 0 0 0 1.414 -1.414l-2.5 -2.5l-.082 -.073l-.104 -.074l-.098 -.052l-.11 -.044l-.112 -.03l-.126 -.017z"></path><path d="M19 7h-4l-.001 -4.001z"></path></svg>
+                        <strong>Choose plugin backup</strong>
+                        <span>TSV or SQLite database</span>
+                    </label>
+                    <div class="settings-import-alt" data-import-alt hidden>
+                        <span class="settings-import-or">or</span>
+                        <button type="submit" name="import_source" value="plugin" class="settings-secondary-btn" data-import-plugin>Import from Jellyfin API</button>
+                    </div>
+                </form>
+            </article>
+        </div>
         <small class="settings-note" data-import-plugin-broken-note hidden>Playback Reporting v17 crashes on Jellyfin 10.11.9+. Catalog v18 is still unpublished (<a href="https://github.com/jellyfin/jellyfin-plugin-playbackreporting/pull/131" target="_blank" rel="noopener noreferrer">PR #131</a>). Drop a TSV backup instead.</small>
-        <small class="settings-note" data-import-plugin-ok-note>Re-importing skips plays already in Jellydash. Runtime and library come from Jellyfin so completion and /libraries stats match live history. Imported plays never trigger notifications. TSV and SQLite backups must be 20 MB or smaller.</small>
+        <small class="settings-note" data-import-plugin-ok-note>Re-importing skips plays already in Jellydash. Imported plays never trigger notifications. Uploads must be 20 MB or smaller.</small>
     </section>
 {% endblock %}
 
 {% block page_scripts %}
     {% include "_import_history_dialog.twig" %}
     <script src="/assets/js/settings-dirty.js?v=20260818"></script>
-    <script src="/assets/js/history-import.js?v=20260817-discovery"></script>
+    <script src="/assets/js/history-import.js?v=20260822-native-csv"></script>
 {% endblock %}
