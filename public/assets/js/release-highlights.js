@@ -25,6 +25,9 @@
     }
 
     const storageKey = 'jellydash.release-highlights.seen.' + version;
+    const upgradeReady = window.jellydashUpgradeReady instanceof Promise
+        ? window.jellydashUpgradeReady
+        : Promise.resolve();
 
     function wasSeen() {
         try {
@@ -131,10 +134,12 @@
             }
 
             render(payload);
-            if (payload.auto_show && !wasSeen()) {
-                rememberSeen();
-                dialog.showModal();
-            }
+            upgradeReady.then(() => {
+                if (payload.auto_show && !wasSeen() && !dialog.open) {
+                    rememberSeen();
+                    dialog.showModal();
+                }
+            });
         })
         .catch(() => {});
 }());

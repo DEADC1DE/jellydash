@@ -80,8 +80,12 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $sqlite = $destination->getDibi();
         $this->assertSame(101, (int) $sqlite->select('id')->from('users')->fetchSingle());
         $this->assertSame('migration-value', (string) $sqlite->select('setting_value')->from('app_settings')->fetchSingle());
-        $this->assertSame(104, (int) $sqlite->select('id')->from('play_history')->fetchSingle());
-        $this->assertSame(1, (int) $sqlite->select('notified')->from('play_history')->fetchSingle());
+        $history = $sqlite->select('id, notified, library, library_resolved_at')->from('play_history')->fetch();
+        $this->assertNotFalse($history);
+        $this->assertSame(104, (int) $history['id']);
+        $this->assertSame(1, (int) $history['notified']);
+        $this->assertSame('Movies', (string) $history['library']);
+        $this->assertStringStartsWith('2026-08-11 12:00:00', (string) $history['library_resolved_at']);
         $this->assertSame('Migration Movie', (string) $sqlite->select('title')->from('seerr_requests')->fetchSingle());
         $this->assertSame(102, $destination->addAuthUser('after-migration', 'password-123', 'After Migration', 2));
         $sqlite->disconnect();
@@ -259,6 +263,8 @@ final class MariaDbToSqliteMigratorTest extends TestCase
             'item_id' => 'migration-item',
             'item_type' => 'Movie',
             'item_name' => 'Migration Movie',
+            'library' => 'Movies',
+            'library_resolved_at' => '2026-08-11 12:00:00',
             'play_method' => 'DirectPlay',
             'watched_sec' => 300,
             'runtime_sec' => 3600,

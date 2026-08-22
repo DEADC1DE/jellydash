@@ -29,6 +29,7 @@ final class JellyfinSessionMapperTest extends TestCase
         $this->assertSame('The Expanse', $stream['seriesName']);
         $this->assertSame('S3 E8', $stream['seasonEp']);
         $this->assertSame('TV Shows', $stream['library']);
+        $this->assertFalse($stream['libraryResolved']);
         $this->assertSame(750, $stream['watchedSec']);
         $this->assertSame(3000, $stream['runtimeSec']);
         $this->assertSame('The Expanse', $stream['title']);
@@ -71,6 +72,7 @@ final class JellyfinSessionMapperTest extends TestCase
         $this->assertFalse($stream['isTranscode']);
         $this->assertTrue($stream['isDirect']);
         $this->assertSame('Direct Play', $stream['methodLabel']);
+        $this->assertFalse($stream['libraryResolved']);
         $this->assertSame('', $stream['avatarUrl']);
         $this->assertStringContainsString('/api/image.php?item=item-2&type=Backdrop', $stream['backdrop']);
     }

@@ -106,6 +106,16 @@ try {
             break;
 
         case 'history:poll':
+            // Once a browser has introduced the one-time library repair, keep
+            // advancing it in the background so closing the page cannot lose
+            // progress. A missing task is deliberately not started here: the
+            // user should see its upgrade dialog first.
+            try {
+                (new Jellyfin\HistoryLibraryBackfillService())->continueStartedBatch();
+            } catch (\Throwable $e) {
+                Log::logException($e);
+            }
+
             // Poll Jellyfin for active sessions and record them. Run on a timer
             // (Docker poller sidecar / cron) so history logs even when nobody
             // has the dashboard open. Stays quiet unless something is playing.

@@ -78,6 +78,8 @@ final class PlayHistoryRepository
             $previousWatchedSec = ($existing && !$isNewPlay) ? (int) $existing['watched_sec'] : 0;
             $watchedSec = max($position, $previousWatchedSec);
             $isFinished = self::isPlayFinished($watchedSec, $runtimeSec);
+            $library = $this->nullableString($stream['library'] ?? null);
+            $libraryResolved = ($stream['libraryResolved'] ?? false) === true;
 
             $data = [
                 'user_id' => $this->nullableString($stream['userId'] ?? null),
@@ -86,7 +88,8 @@ final class PlayHistoryRepository
                 'series_name' => $this->nullableString($stream['seriesName'] ?? null),
                 'item_name' => $this->nullableString($stream['itemName'] ?? null),
                 'season_ep' => $this->nullableString($stream['seasonEp'] ?? null),
-                'library' => $this->nullableString($stream['library'] ?? null),
+                'library' => $library,
+                'library_resolved_at' => $libraryResolved ? $nowSql : null,
                 'play_method' => (string) ($stream['playMethod'] ?? ''),
                 'play_method_detail' => $this->nullableString($stream['methodLabel'] ?? null),
                 'client' => $this->nullableString($stream['client'] ?? null),
@@ -116,6 +119,9 @@ final class PlayHistoryRepository
                     $data['started_at'] = $nowSql;
                     $data['notified'] = 0;
                 }
+                if (!$libraryResolved) {
+                    unset($data['library'], $data['library_resolved_at']);
+                }
 
                 $this->db->update('play_history', $data)
                     ->where('id = %i', (int) $existing['id'])
@@ -137,6 +143,9 @@ final class PlayHistoryRepository
                 // notification. Preserve its flag when applying our fresher
                 // playback details so the alert cannot become eligible again.
                 unset($data['session_key'], $data['item_id'], $data['started_at'], $data['notified']);
+                if (!$libraryResolved) {
+                    unset($data['library'], $data['library_resolved_at']);
+                }
                 $this->db->update('play_history', $data)
                     ->where('session_key = %s', $sessionKey)
                     ->where('item_id = %s', $itemId)
@@ -216,6 +225,58 @@ final class PlayHistoryRepository
             ->from('play_history')
             ->where('started_at BETWEEN %s AND %s', $start, $end)
             ->fetchSingle();
+    }
+
+    /**
+     * Confirmed libraries already stored for these exact active sessions.
+     * The resolution flag matters when the real library is literally named
+     * Movies or TV Shows, which is indistinguishable from a generic label.
+     *
+     * @param array<int, array<string, mixed>> $streams
+     * @return array<int, string> Stream index => confirmed library.
+     */
+    public function resolvedLibrariesForStreams(
+        array $streams,
+        ?\DateTimeImmutable $now = null,
+    ): array {
+        $now ??= new \DateTimeImmutable('now');
+        $freshSince = $now->modify('-' . self::PLAY_GAP_SECONDS . ' seconds');
+        $resolved = [];
+
+        foreach ($streams as $index => $stream) {
+            $sessionKey = (string) ($stream['id'] ?? '');
+            $itemId = (string) ($stream['itemId'] ?? '');
+            if ($sessionKey === '' || $itemId === '' || ($stream['isLive'] ?? false) === true) {
+                continue;
+            }
+
+            $row = $this->db->select('library, library_resolved_at')
+                ->from('play_history')
+                ->where('session_key = %s', $sessionKey)
+                ->where('item_id = %s', $itemId)
+                ->fetch();
+            if (!$row) {
+                continue;
+            }
+            $library = trim((string) ($row['library'] ?? ''));
+            $resolvedAtValue = trim((string) ($row['library_resolved_at'] ?? ''));
+            if ($library === '' || $resolvedAtValue === '') {
+                continue;
+            }
+
+            try {
+                $resolvedAt = new \DateTimeImmutable($resolvedAtValue);
+            } catch (\Exception) {
+                continue;
+            }
+            if ($resolvedAt < $freshSince) {
+                continue;
+            }
+
+            $resolved[$index] = $library;
+        }
+
+        return $resolved;
     }
 
     /**
@@ -631,6 +692,7 @@ final class PlayHistoryRepository
                 `item_name` varchar(255) DEFAULT NULL,
                 `season_ep` varchar(32) DEFAULT NULL,
                 `library` varchar(64) DEFAULT NULL,
+                `library_resolved_at` datetime DEFAULT NULL,
                 `play_method` varchar(32) NOT NULL,
                 `play_method_detail` varchar(64) DEFAULT NULL,
                 `client` varchar(64) DEFAULT NULL,
@@ -668,6 +730,7 @@ final class PlayHistoryRepository
                 `item_name` TEXT DEFAULT NULL,
                 `season_ep` TEXT DEFAULT NULL,
                 `library` TEXT DEFAULT NULL,
+                `library_resolved_at` TEXT DEFAULT NULL,
                 `play_method` TEXT NOT NULL,
                 `play_method_detail` TEXT DEFAULT NULL,
                 `client` TEXT DEFAULT NULL,
@@ -696,6 +759,7 @@ final class PlayHistoryRepository
         $this->platform->createSqliteIndex('idx_user_name', 'play_history', ['user_name']);
         $this->platform->createSqliteIndex('idx_library', 'play_history', ['library']);
 
+        $this->ensureColumn('library_resolved_at', '`library_resolved_at` datetime DEFAULT NULL AFTER `library`', '`library_resolved_at` TEXT DEFAULT NULL');
         $this->ensureColumn('play_method_detail', '`play_method_detail` varchar(64) DEFAULT NULL AFTER `play_method`', '`play_method_detail` TEXT DEFAULT NULL');
         $this->ensureColumn('source_video_codec', '`source_video_codec` varchar(64) DEFAULT NULL AFTER `device`', '`source_video_codec` TEXT DEFAULT NULL');
         $this->ensureColumn('source_audio_codec', '`source_audio_codec` varchar(64) DEFAULT NULL AFTER `source_video_codec`', '`source_audio_codec` TEXT DEFAULT NULL');

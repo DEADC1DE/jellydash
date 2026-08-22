@@ -134,6 +134,7 @@ final class SchemaCompatibilityTest extends TestCase
 
         // This matches an install from before playback notifications existed.
         $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `notified`');
+        $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `library_resolved_at`');
 
         $this->resetSchemaState();
         $this->initializeAllSchemas();
@@ -142,6 +143,7 @@ final class SchemaCompatibilityTest extends TestCase
         $this->assertSame(2, (int) $this->dibi->select('attempts')->from('login_attempts')->fetchSingle());
         $this->assertSame(300, (int) $this->dibi->select('watched_sec')->from('play_history')->fetchSingle());
         $this->assertSame(1, (int) $this->dibi->select('notified')->from('play_history')->fetchSingle());
+        $this->assertNull($this->dibi->select('library_resolved_at')->from('play_history')->fetchSingle());
         $this->assertSame('ok', AppSettings::get('schema_test'));
         $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('push_subscriptions')->fetchSingle());
         $this->assertSame('Schema Movie', (string) $this->dibi->select('title')->from('seerr_requests')->fetchSingle());

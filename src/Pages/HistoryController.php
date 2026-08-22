@@ -164,6 +164,7 @@ final class HistoryController extends Controller
         $itemName = (string) ($row['item_name'] ?? 'Unknown title');
         $user = (string) ($row['user_name'] ?? 'Unknown user');
         $userId = (string) ($row['user_id'] ?? '');
+        $library = trim((string) ($row['library'] ?? ''));
 
         return [
             'time' => $startedAt->format('H:i'),
@@ -172,9 +173,8 @@ final class HistoryController extends Controller
             'avatarBg' => $this->avatarBg($userId !== '' ? $userId : $user),
             'avatarUrl' => $avatars->url($userId) ?? '',
             'title' => $itemType === 'Episode' && $seriesName !== '' ? $seriesName : $itemName,
-            'sub' => $itemType === 'Episode'
-                ? trim((string) ($row['season_ep'] ?? '') . ' - ' . $itemName, ' -')
-                : (string) ($row['library'] ?? $itemType),
+            'sub' => $this->itemDetail($itemType, (string) ($row['season_ep'] ?? ''), $itemName),
+            'library' => $library,
             'methodLabel' => $isTranscode ? 'Transcoding' : 'Direct',
             'isTranscode' => $isTranscode,
             'isDirect' => !$isTranscode,
@@ -185,6 +185,21 @@ final class HistoryController extends Controller
             'finished' => (bool) $row['is_finished'] || $completion >= 95,
             'poster' => $this->poster((string) $row['item_id'], $itemType),
         ];
+    }
+
+    private function itemDetail(string $itemType, string $seasonEp, string $itemName): string
+    {
+        if ($itemType === 'Episode') {
+            return trim($seasonEp . ' - ' . $itemName, ' -');
+        }
+
+        return match ($itemType) {
+            'Movie' => 'Movie',
+            'TvChannel' => 'Live TV',
+            'MusicVideo' => 'Music video',
+            'Audio' => 'Audio',
+            default => $itemType !== '' ? $itemType : 'Video',
+        };
     }
 
     /**

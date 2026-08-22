@@ -98,14 +98,16 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             'updated_at' => '2026-08-11 12:05:00',
         ])->execute();
         $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `notified`');
+        $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `library_resolved_at`');
 
         $this->resetSchemaState();
         $this->initializeAllSchemas();
 
-        $row = $this->dibi->select('watched_sec, notified')->from('play_history')->fetch();
+        $row = $this->dibi->select('watched_sec, notified, library_resolved_at')->from('play_history')->fetch();
         $this->assertNotFalse($row);
         $this->assertSame(300, (int) $row['watched_sec']);
         $this->assertSame(1, (int) $row['notified']);
+        $this->assertNull($row['library_resolved_at']);
     }
 
     public function testCoreWritesUseSQLiteConstraintAndAutoincrementSemantics(): void
