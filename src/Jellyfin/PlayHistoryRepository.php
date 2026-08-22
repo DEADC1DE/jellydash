@@ -293,6 +293,51 @@ final class PlayHistoryRepository
         return $selection->fetchAll();
     }
 
+    /**
+     * Stream every filtered row in the same stable order as the History page.
+     * Pagination is cursor-based so large exports do not live in PHP memory.
+     *
+     * @return \Generator<int, \Dibi\Row>
+     */
+    public function historyExportRows(HistoryFilters $filters, ?\DateTimeImmutable $now = null): \Generator
+    {
+        $cursorStartedAt = null;
+        $cursorId = 0;
+        $batchSize = 500;
+
+        do {
+            $selection = $this->filteredSelection($filters, $now)
+                ->orderBy('started_at')->desc()
+                ->orderBy('id')->desc()
+                ->limit($batchSize);
+
+            if ($cursorStartedAt !== null) {
+                $selection->where(
+                    '(started_at < %s OR (started_at = %s AND id < %i))',
+                    $cursorStartedAt,
+                    $cursorStartedAt,
+                    $cursorId,
+                );
+            }
+
+            $rows = $selection->fetchAll();
+            foreach ($rows as $row) {
+                yield $row;
+            }
+
+            $last = $rows === [] ? null : $rows[array_key_last($rows)];
+            if ($last === null) {
+                break;
+            }
+
+            $startedAt = $last['started_at'];
+            $cursorStartedAt = $startedAt instanceof \DateTimeInterface
+                ? $startedAt->format('Y-m-d H:i:s')
+                : (string) $startedAt;
+            $cursorId = (int) $last['id'];
+        } while (count($rows) === $batchSize);
+    }
+
     public function historyTotal(HistoryFilters $filters, ?\DateTimeImmutable $now = null): int
     {
         return (int) $this->filteredSelection($filters, $now, 'COUNT(*)')

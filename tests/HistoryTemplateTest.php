@@ -26,6 +26,11 @@ final class HistoryTemplateTest extends TestCase
         $this->assertStringContainsString('history/_pager.twig', $template);
         $this->assertStringContainsString('href="/settings#import-history"', $template);
         $this->assertStringContainsString('Import history', $template);
+        $this->assertStringContainsString('Export CSV', $template);
+        $this->assertStringContainsString('data-history-export-open', $template);
+        $this->assertStringContainsString('history/_export_dialog.twig', $template);
+        $this->assertStringContainsString('summary.total > 0', $template);
+        $this->assertStringContainsString('history-export.js?v=20260822-export-dialog', $template);
         $this->assertStringNotContainsString('data-import-history-banner', $template);
         $this->assertStringNotContainsString('history-import.js', $template);
         $this->assertStringContainsString('{% for library in libraries %}', $template);
@@ -38,6 +43,37 @@ final class HistoryTemplateTest extends TestCase
         $this->assertStringContainsString('{% if summary.total == 0 %}', $empty);
         $this->assertStringContainsString('Import existing history', $empty);
         $this->assertStringContainsString('href="/settings#import-history"', $empty);
+    }
+
+    public function testHistoryExportDialogOffersClearCompleteHistoryFilters(): void
+    {
+        $dialog = (string) file_get_contents(TEMPLATES_DIR . '/history/_export_dialog.twig');
+        $script = (string) file_get_contents(ROOT_DIR . '/public/assets/js/history-export.js');
+        $stylesheet = (string) file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertStringContainsString('action="/api/history-export.php"', $dialog);
+        $this->assertStringContainsString('every match, not only the page currently on screen', $dialog);
+        $this->assertStringContainsString('name="search" value="{{ filters.search }}"', $dialog);
+        $this->assertStringContainsString('name="user"', $dialog);
+        $this->assertStringContainsString('name="library"', $dialog);
+        $this->assertStringContainsString('name="range" value="7"', $dialog);
+        $this->assertStringContainsString('name="range" value="30"', $dialog);
+        $this->assertStringContainsString('name="range" value="all"', $dialog);
+        $this->assertStringContainsString('data-history-export-count', $dialog);
+        $this->assertStringContainsString('data-history-export-all', $dialog);
+        $this->assertStringContainsString('data-history-export-download disabled', $dialog);
+
+        $this->assertStringContainsString("values.set('preview', '1')", $script);
+        $this->assertStringContainsString("fetch('/api/history-export.php?'", $script);
+        $this->assertStringContainsString('new URLSearchParams(new FormData(form))', $script);
+        $this->assertStringContainsString('AbortController', $script);
+        $this->assertStringContainsString('plays are ready to export', $script);
+        $this->assertStringContainsString("form.elements.range.value = 'all'", $script);
+        $this->assertStringContainsString('window.setTimeout(closeDialog, 0)', $script);
+
+        $this->assertStringContainsString('.history-export-dialog', $stylesheet);
+        $this->assertStringContainsString('.history-export-period-options', $stylesheet);
+        $this->assertStringContainsString('.history-export-count.is-ready', $stylesheet);
     }
 
     public function testHistoryRowsUseSharedAvatarPartial(): void

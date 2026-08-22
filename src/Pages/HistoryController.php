@@ -51,17 +51,7 @@ final class HistoryController extends Controller
 
     private function filters(): HistoryFilters
     {
-        $range = Main::captureGetString('range') ?? '30';
-        if (!in_array($range, ['7', '30', 'all'], true)) {
-            $range = '30';
-        }
-
-        return new HistoryFilters(
-            search: trim((string) (Main::captureGetString('search') ?? '')),
-            user: trim((string) (Main::captureGetString('user') ?? '')),
-            library: trim((string) (Main::captureGetString('library') ?? '')),
-            range: $range,
-        );
+        return HistoryFilters::fromQuery($_GET);
     }
 
     private function currentPage(int $total, int $perPage): int
@@ -91,12 +81,7 @@ final class HistoryController extends Controller
 
     private function historyUrl(HistoryFilters $filters, int $page): string
     {
-        $query = array_filter([
-            'search' => $filters->search,
-            'user' => $filters->user,
-            'library' => $filters->library,
-            'range' => $filters->range !== '30' ? $filters->range : '',
-        ], static fn (string $value): bool => $value !== '');
+        $query = $filters->queryParameters();
 
         if ($page > 1) {
             $query['p'] = (string) $page;
