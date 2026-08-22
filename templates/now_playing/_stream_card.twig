@@ -1,4 +1,4 @@
-<article class="stream-card">
+<article class="stream-card" data-stream-id="{{ stream.id }}">
     <div class="stream-backdrop" style="background-image: {{ stream.backdrop }}"></div>
     <div class="stream-card-overlay"></div>
     <div class="stream-watermark">{{ stream.initials }}</div>
@@ -28,6 +28,24 @@
             </span>
         </div>
 
+        {% if stream.isTranscode %}
+            <div class="stream-details stream-overlay-summary" aria-label="Transcode summary">
+                {% if stream.bitrateLabel %}<strong class="stream-detail-rate">{{ stream.bitrateLabel }}</strong>{% endif %}
+                <span class="stream-overlay-output"><small>Output</small>{{ stream.outputMediaLabel }}</span>
+                <button class="stream-diagnostics-open" type="button" data-diagnostics-open aria-expanded="false" aria-controls="{{ stream.diagnosticsId }}">
+                    {{ stream.transcodeReasons|length }} {{ stream.transcodeReasons|length == 1 ? 'reason' : 'reasons' }}
+                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M7 6l-.112 .006a1 1 0 0 0-.669 1.619l3.501 4.375l-3.5 4.375a1 1 0 0 0 .78 1.625h6a1 1 0 0 0 .78-.375l4-5a1 1 0 0 0 0-1.25l-4-5a1 1 0 0 0-.78-.375h-6z"></path></svg>
+                </button>
+            </div>
+        {% elseif stream.bitrateLabel or stream.videoPath or stream.audioPath or stream.containerPath %}
+            <div class="stream-details" aria-label="Playback details">
+                {% if stream.bitrateLabel %}<strong class="stream-detail-rate">{{ stream.bitrateLabel }}</strong>{% endif %}
+                {% if stream.videoPath %}<span class="stream-detail"><small>Video</small>{{ stream.videoPath }}</span>{% endif %}
+                {% if stream.audioPath %}<span class="stream-detail"><small>Audio</small>{{ stream.audioPath }}</span>{% endif %}
+                {% if stream.containerPath %}<span class="stream-detail"><small>Out</small>{{ stream.containerPath }}</span>{% endif %}
+            </div>
+        {% endif %}
+
         <div class="progress-block">
             <div class="progress-track"><span style="width: {{ stream.progressPct }}"></span></div>
             <div class="progress-labels">
@@ -35,5 +53,35 @@
                 <span>{{ stream.remaining }}</span>
             </div>
         </div>
+
+        {% if stream.isTranscode %}
+            <section class="stream-diagnostics-overlay" id="{{ stream.diagnosticsId }}" data-diagnostics-overlay aria-hidden="true" aria-label="Transcode details for {{ stream.title }}" inert>
+                <header class="stream-diagnostics-header">
+                    <span class="stream-diagnostics-heading"><small>Video transcode</small><strong>{{ stream.title }}</strong></span>
+                    <button class="stream-diagnostics-close" type="button" data-diagnostics-close aria-label="Close transcode details">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 6l12 12M18 6l-12 12"></path></svg>
+                    </button>
+                </header>
+                <div class="stream-diagnostics-route">
+                    <span class="stream-diagnostics-endpoint"><small>Source</small><strong>{{ stream.sourceMediaLabel }}</strong></span>
+                    <span class="stream-transcode-marker" aria-hidden="true">
+                        <svg class="stream-transcode-icon icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M7 6l-.112 .006a1 1 0 0 0-.669 1.619l3.501 4.375l-3.5 4.375a1 1 0 0 0 .78 1.625h6a1 1 0 0 0 .78-.375l4-5a1 1 0 0 0 0-1.25l-4-5a1 1 0 0 0-.78-.375h-6z"></path></svg>
+                    </span>
+                    <span class="stream-diagnostics-endpoint is-output"><small>Output</small><strong>{{ stream.outputMediaLabel }}</strong></span>
+                </div>
+                {% if stream.transcodeReasons is not empty %}
+                    <div class="stream-diagnostics-reasons">
+                        <span class="stream-diagnostics-section-label">Why Jellyfin converted it</span>
+                        <div class="stream-diagnostics-reason-list">
+                            {% for reason in stream.transcodeReasons %}<span class="stream-diagnostics-reason"><i></i>{{ reason }}</span>{% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+                <footer class="stream-diagnostics-footer">
+                    {% if stream.bitrateLabel %}<span>Output bitrate <strong>{{ stream.bitrateLabel }}</strong></span>{% endif %}
+                    <span>{{ stream.user }}{% if stream.device %} · {{ stream.device }}{% endif %}</span>
+                </footer>
+            </section>
+        {% endif %}
     </div>
 </article>
