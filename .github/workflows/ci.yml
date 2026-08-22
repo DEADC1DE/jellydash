@@ -86,7 +86,7 @@ jobs:
         run: composer test
 
   docker-sqlite:
-    name: Docker / SQLite smoke test
+    name: Docker / SQLite integration
     runs-on: ubuntu-latest
     needs: [test-mariadb, test-sqlite]
 
