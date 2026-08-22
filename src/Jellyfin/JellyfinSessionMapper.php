@@ -109,6 +109,7 @@ final class JellyfinSessionMapper
             'seriesName' => $seriesName !== '' ? $seriesName : null,
             'seasonEp' => $type === 'Episode' ? $this->seasonEpisodeLabel($item) : null,
             'library' => $this->libraryLabel($type),
+            'libraryResolved' => false,
             'userId' => (string) ($session['UserId'] ?? ''),
             'client' => (string) ($session['Client'] ?? ''),
             'device' => (string) ($session['DeviceName'] ?? ''),
@@ -192,6 +193,7 @@ final class JellyfinSessionMapper
         return [
             'kindLabel' => 'Live TV',
             'library' => 'Live TV',
+            'libraryResolved' => true,
             'title' => $programName !== '' ? $programName : $channelName,
             'subtitle' => implode(' - ', $subtitleParts),
             'seasonEp' => null,

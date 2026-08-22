@@ -83,6 +83,44 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame('2099-06-19 15:00:00', $started->format('Y-m-d H:i:s'));
     }
 
+    public function testUnresolvedLiveUpdateCannotReplaceConfirmedLibrary(): void
+    {
+        $now = new \DateTimeImmutable('2099-06-19 12:00:00');
+        $resolved = $this->stream(600, 3600);
+        $resolved['library'] = 'Anime';
+        $resolved['libraryResolved'] = true;
+        $this->repository->logActiveStreams([$resolved], $now);
+
+        $generic = $this->stream(900, 3600);
+        $generic['library'] = 'TV Shows';
+        $generic['libraryResolved'] = false;
+        $this->repository->logActiveStreams([$generic], $now->modify('+5 seconds'));
+
+        $row = $this->dibi->select('library, library_resolved_at')
+            ->from('play_history')
+            ->where('session_key = %s', 'phpunit-session')
+            ->where('item_id = %s', 'phpunit-item')
+            ->fetch();
+
+        $this->assertNotNull($row);
+        $this->assertSame('Anime', (string) $row['library']);
+        $this->assertStringStartsWith('2099-06-19 12:00:00', (string) $row['library_resolved_at']);
+    }
+
+    public function testResolvedLibrariesForStreamsUsesResolutionFlagEvenForGenericName(): void
+    {
+        $now = new \DateTimeImmutable('2099-06-19 12:00:00');
+        $resolved = $this->stream(600, 3600);
+        $resolved['library'] = 'TV Shows';
+        $resolved['libraryResolved'] = true;
+        $this->repository->logActiveStreams([$resolved], $now);
+
+        $this->assertSame(
+            [0 => 'TV Shows'],
+            $this->repository->resolvedLibrariesForStreams([$this->stream(900, 3600)], $now->modify('+5 seconds'))
+        );
+    }
+
     public function testWatchTimeTodaySumsRowsForCurrentDay(): void
     {
         $now = new \DateTimeImmutable('2099-06-19 12:00:00');
@@ -535,6 +573,7 @@ final class PlayHistoryRepositoryTest extends TestCase
             'seriesName' => 'The Expanse',
             'seasonEp' => 'S3 E8',
             'library' => 'TV Shows',
+            'libraryResolved' => false,
             'userId' => 'phpunit-user',
             'user' => 'PHPUnit Viewer',
             'client' => 'Android TV',

@@ -53,7 +53,7 @@ final class ReleaseHighlightsTest extends TestCase
 
         $this->assertStringContainsString('/assets/release-highlights/', $js);
         $this->assertStringContainsString('dialog.showModal()', $js);
-        $this->assertStringNotContainsString('jellydash:release-dialog-settled', $js);
+        $this->assertStringContainsString('jellydashUpgradeReady', $js);
         $this->assertStringContainsString('/api/playback-reporting.php', $importJs);
         $this->assertStringContainsString('data-import-alt', $importJs);
         $this->assertStringContainsString('payload.broken', $importJs);

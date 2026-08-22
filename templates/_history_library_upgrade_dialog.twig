@@ -1,0 +1,33 @@
+<dialog class="release-dialog history-upgrade-dialog" data-history-library-upgrade aria-labelledby="history-library-upgrade-title" aria-describedby="history-library-upgrade-summary" tabindex="-1">
+    <section class="release-dialog-card history-upgrade-card">
+        <div class="history-upgrade-mark" aria-hidden="true">
+            <svg class="icon-filled" viewBox="0 0 24 24" focusable="false">
+                <path d="M12 2c4.418 0 8 1.79 8 4v12c0 2.21 -3.582 4 -8 4s-8 -1.79 -8 -4v-12c0 -2.21 3.582 -4 8 -4zm6 12.343c-1.463 1.006 -3.65 1.657 -6 1.657s-4.537 -.651 -6 -1.657v3.657c0 .743 2.342 2 6 2s6 -1.257 6 -2v-3.657zm0 -6c-1.463 1.006 -3.65 1.657 -6 1.657s-4.537 -.651 -6 -1.657v3.657c0 .743 2.342 2 6 2s6 -1.257 6 -2v-3.657zm-6 -4.343c-3.658 0 -6 1.257 -6 2s2.342 2 6 2s6 -1.257 6 -2s-2.342 -2 -6 -2z"></path>
+            </svg>
+        </div>
+
+        <span class="release-dialog-kicker">One-time History update</span>
+        <h2 id="history-library-upgrade-title" data-history-library-upgrade-title>Updating your History</h2>
+        <p id="history-library-upgrade-summary" class="release-dialog-summary" data-history-library-upgrade-summary aria-live="polite">Jellydash is matching older plays to their real Jellyfin libraries.</p>
+
+        <div class="history-upgrade-progress" data-history-library-upgrade-progress>
+            <div class="history-upgrade-progress-head" aria-live="polite">
+                <strong data-history-library-upgrade-count>Preparing your History…</strong>
+                <span data-history-library-upgrade-percent>0%</span>
+            </div>
+            <div class="progress-track" role="progressbar" aria-label="History update progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-history-library-upgrade-track>
+                <span data-history-library-upgrade-bar style="width: 0%"></span>
+            </div>
+            <p data-history-library-upgrade-note>Progress is saved. You can close Jellydash if you need to.</p>
+        </div>
+
+        <div class="history-upgrade-error" data-history-library-upgrade-error hidden>
+            <button class="release-dialog-import" type="button" data-history-library-upgrade-retry>Try again</button>
+            <button class="release-dialog-dismiss" type="button" data-history-library-upgrade-continue>Continue for now</button>
+        </div>
+
+        <div class="history-upgrade-complete" data-history-library-upgrade-complete hidden>
+            <button class="release-dialog-import" type="button" data-history-library-upgrade-close>Close</button>
+        </div>
+    </section>
+</dialog>

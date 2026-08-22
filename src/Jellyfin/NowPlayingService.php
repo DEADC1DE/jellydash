@@ -12,6 +12,7 @@ final class NowPlayingService
         private ?JellyfinClient $client = null,
         private ?JellyfinSessionMapper $mapper = null,
         private ?PlayHistoryRepository $history = null,
+        private ?LiveLibraryResolver $libraryResolver = null,
     ) {
     }
 
@@ -29,6 +30,7 @@ final class NowPlayingService
 
         try {
             $history = $this->history ?? new PlayHistoryRepository();
+            $streams = $this->resolveLibraries($streams, $client, $history);
             $history->logActiveStreams($streams);
             $watchToday = $history->watchTimeToday();
         } catch (\Throwable $e) {
@@ -57,9 +59,36 @@ final class NowPlayingService
         /** @var array<int, array<string, mixed>> $streams */
         $streams = $mapper->map($client->sessions())['streams'];
 
-        ($this->history ?? new PlayHistoryRepository())->logActiveStreams($streams);
+        $history = $this->history ?? new PlayHistoryRepository();
+        $streams = $this->resolveLibraries($streams, $client, $history);
+
+        $history->logActiveStreams($streams);
 
         return count($streams);
+    }
+
+    /**
+     * Resolve each new active session once, then use its confirmed History row
+     * as the lightweight cache for later five-second dashboard refreshes.
+     *
+     * @param array<int, array<string, mixed>> $streams
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveLibraries(
+        array $streams,
+        JellyfinClient $client,
+        PlayHistoryRepository $history,
+    ): array {
+        if ($streams === []) {
+            return [];
+        }
+
+        $known = $history->resolvedLibrariesForStreams($streams);
+        $resolver = $this->libraryResolver ?? new LiveLibraryResolver(
+            static fn (array $ids): array => $client->itemImportMeta($ids),
+        );
+
+        return $resolver->resolve($streams, $known);
     }
 
     /**

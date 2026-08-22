@@ -6,9 +6,12 @@
     </div>
     <div class="history-item">
         <span class="history-poster" style="background-image: {{ play.poster }}"></span>
-        <span>
+        <span class="history-item-copy">
             <strong>{{ play.title }}</strong>
-            <small>{{ play.sub }}</small>
+            <span class="history-item-meta">
+                <small>{{ play.sub }}</small>
+                {% if play.library %}<span class="history-library-pill" title="{{ play.library }}">{{ play.library }}</span>{% endif %}
+            </span>
         </span>
     </div>
     <div class="history-method">{% include "_badge.twig" with { item: play } %}</div>
