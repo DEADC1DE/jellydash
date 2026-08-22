@@ -55,6 +55,9 @@ final class ReleaseHighlightsTest extends TestCase
         $this->assertStringContainsString('dialog.showModal()', $js);
         $this->assertStringContainsString('jellydashUpgradeReady', $js);
         $this->assertStringContainsString('/api/playback-reporting.php', $importJs);
+        $this->assertStringContainsString('data-import-endpoint', $importJs);
+        $this->assertStringContainsString("sourceType === 'jellydash'", $importJs);
+        $this->assertStringContainsString('History is already up to date', $importJs);
         $this->assertStringContainsString('data-import-alt', $importJs);
         $this->assertStringContainsString('payload.broken', $importJs);
         $this->assertStringContainsString('X-CSRF-Token', $importJs);
@@ -74,6 +77,13 @@ final class ReleaseHighlightsTest extends TestCase
         $this->assertStringContainsString('previewPlugin', $api);
         $this->assertStringContainsString('streamImport', $api);
         $this->assertStringContainsString('application/x-ndjson', $api);
+
+        $csvApi = (string) file_get_contents(ROOT_DIR . '/public/api/history-csv.php');
+        $this->assertStringContainsString('Csrf::validateHeader()', $csvApi);
+        $this->assertStringContainsString('HistoryCsvUpload::path()', $csvApi);
+        $this->assertStringContainsString('previewFile', $csvApi);
+        $this->assertStringContainsString('streamImport', $csvApi);
+        $this->assertStringContainsString('application/x-ndjson', $csvApi);
 
         $dialog = (string) file_get_contents(TEMPLATES_DIR . '/_import_history_dialog.twig');
         $this->assertStringContainsString('data-import-history-confirm', $dialog);

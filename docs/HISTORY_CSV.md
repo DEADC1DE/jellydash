@@ -6,12 +6,14 @@ page, shows the exact number of matching plays and can reset to all History.
 The download is not limited to the current page.
 
 The file uses UTF-8 with a byte order mark, comma separators, RFC 4180 quoting
-and one play per row. Dates use `YYYY-MM-DD HH:MM:SS` in the Jellydash
-application timezone. The first column identifies the format version. Version 1
-uses this exact column order:
+and one play per row. Dates use `YYYY-MM-DD HH:MM:SS`. The source installation's
+IANA timezone is stored with every row so an import can preserve the original
+moment on a server using a different timezone. The first column identifies the
+format version. Version 1 uses this exact column order:
 
 ```text
 jellydash_history_version
+jellydash_timezone
 session_key
 started_at
 updated_at
@@ -43,8 +45,10 @@ runtime_sec
 is_finished
 ```
 
-`jellydash_history_version` is `1` for every exported play. Optional values are
-empty. Boolean values are `1`, `0`, or empty when Jellyfin did not report them.
+`jellydash_history_version` is `1` for every exported play and
+`jellydash_timezone` contains an IANA name such as `Europe/Prague`. Optional
+values are empty. Boolean values are `1`, `0`, or empty when Jellyfin did not
+report them.
 Transcode reasons remain JSON so a future Jellydash importer can restore the
 original list without guessing where one reason ends and another starts.
 
@@ -59,3 +63,15 @@ the native importer.
 The database row ID and notification flag are intentionally excluded. They are
 local implementation details and must not be reused when moving plays between
 Jellydash installations.
+
+## Importing
+
+Open **Settings → Import play history** and choose **Jellydash CSV**. Jellydash
+validates the complete file and previews how many plays are new or already
+present before enabling the import. The write is transactional, so a failure
+cannot leave half of a backup in History. Existing plays are skipped and every
+restored play is marked as already notified.
+
+Only the exact documented header and supported format version are accepted.
+This keeps restores predictable and lets future versions reject files they
+cannot reproduce safely.

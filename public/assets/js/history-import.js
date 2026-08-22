@@ -18,8 +18,8 @@
         });
     }
 
-    function preview(body) {
-        return fetch('/api/playback-reporting.php', {
+    function preview(body, endpoint) {
+        return fetch(endpoint, {
             method: 'POST',
             headers: {
                 Accept: 'application/json',
@@ -82,9 +82,9 @@
         return pump();
     }
 
-    function commit(body, onProgress) {
+    function commit(body, onProgress, endpoint) {
         body.append('commit', '1');
-        return fetch('/api/playback-reporting.php', {
+        return fetch(endpoint, {
             method: 'POST',
             headers: {
                 Accept: 'application/x-ndjson, application/json',
@@ -168,7 +168,7 @@
         }
     }
 
-    function runImport(body, dialog, gen) {
+    function runImport(body, dialog, gen, endpoint) {
         dialog.setState('importing', { processed: 0, total: 0 });
         applyProgress({ phase: 'preparing', processed: 0, total: 0, inserted: 0, skipped: 0 });
         return commit(body, function (payload) {
@@ -176,7 +176,7 @@
                 dialog.setState('importing', payload);
             }
             applyProgress(payload);
-        }).then(function (payload) {
+        }, endpoint).then(function (payload) {
             applyProgress(payload || { phase: 'done', processed: 0, total: 0, inserted: 0, skipped: 0 });
             if (dialog.isCurrent(gen) || (dialog.element && dialog.element.open)) {
                 dialog.setState('done', payload || {});
@@ -191,16 +191,17 @@
         });
     }
 
-    function wireDropzone() {
-        var form = document.querySelector('[data-import-drop]');
+    function wireDropzone(form) {
         if (!form) {
             return;
         }
 
         var zone = form.querySelector('[data-import-dropzone]');
-        var input = form.querySelector('input[name="playback_reporting"]');
+        var input = form.querySelector('input[type="file"]');
         var pluginBtn = form.querySelector('[data-import-plugin]');
         var alt = form.querySelector('[data-import-alt]');
+        var endpoint = form.getAttribute('data-import-endpoint') || form.action;
+        var sourceType = form.getAttribute('data-import-source') || 'playback-reporting';
         if (!zone || !input) {
             return;
         }
@@ -237,6 +238,7 @@
 
             var submitter = event.submitter;
             var fromPlugin = !!(submitter && submitter.getAttribute('name') === 'import_source' && submitter.value === 'plugin');
+            var nativeCsv = sourceType === 'jellydash';
             var dialog = getDialog();
             if (!dialog || !CSRF_TOKEN) {
                 allowSubmit = true;
@@ -248,28 +250,28 @@
             if (fromPlugin) {
                 body.append('import_source', 'plugin');
             } else if (!input.files || !input.files.length) {
-                dialog.openConfirm({ source: 'file', kind: 'tsv' });
-                dialog.setState('error', { error: 'Drop a Playback Reporting TSV backup or playback_reporting.db first.' });
+                dialog.openConfirm({ source: nativeCsv ? 'jellydash' : 'file', kind: nativeCsv ? 'jellydash' : 'tsv' });
+                dialog.setState('error', { error: nativeCsv ? 'Choose a Jellydash History CSV first.' : 'Drop a Playback Reporting TSV backup or playback_reporting.db first.' });
                 return;
             } else {
-                body.append('playback_reporting', input.files[0]);
+                body.append(input.name, input.files[0]);
             }
 
             var gen = dialog.openConfirm({
-                source: fromPlugin ? 'plugin' : 'file',
-                kind: 'tsv',
+                source: nativeCsv ? 'jellydash' : (fromPlugin ? 'plugin' : 'file'),
+                kind: nativeCsv ? 'jellydash' : 'tsv',
                 onConfirm: function () {
                     var importBody = new FormData();
                     if (fromPlugin) {
                         importBody.append('import_source', 'plugin');
                     } else if (input.files && input.files[0]) {
-                        importBody.append('playback_reporting', input.files[0]);
+                        importBody.append(input.name, input.files[0]);
                     }
-                    runImport(importBody, dialog, gen);
+                    runImport(importBody, dialog, gen, endpoint);
                 },
             });
             dialog.setState('busy');
-            preview(body).then(function (payload) {
+            preview(body, endpoint).then(function (payload) {
                 if (!dialog.isCurrent(gen)) {
                     return;
                 }
@@ -282,7 +284,9 @@
                 dialog.setState('confirm', {
                     count: count,
                     kind: kind,
-                    source: fromPlugin ? 'plugin' : 'file',
+                    source: nativeCsv ? 'jellydash' : (fromPlugin ? 'plugin' : 'file'),
+                    importable: payload && typeof payload.importable === 'number' ? payload.importable : count,
+                    skipped: payload && typeof payload.skipped === 'number' ? payload.skipped : 0,
                 });
             }).catch(function (error) {
                 if (!dialog.isCurrent(gen)) {
@@ -329,6 +333,7 @@
 
         var title = dialog.querySelector('[data-import-history-title]');
         var summary = dialog.querySelector('[data-import-history-summary]');
+        var kicker = dialog.querySelector('[data-import-history-kicker]');
         var form = dialog.querySelector('[data-import-history-form]');
         var confirmBtn = dialog.querySelector('[data-import-history-confirm]');
         var progress = dialog.querySelector('[data-import-history-progress]');
@@ -371,7 +376,7 @@
             if (state === 'importing') {
                 importing = true;
                 title.textContent = 'Importing history…';
-                summary.textContent = 'Plays are written to History as they land. You can leave this dialog open.';
+                summary.textContent = 'Jellydash is restoring the selected history. Keep this window open.';
                 confirmBtn.hidden = true;
                 confirmBtn.disabled = true;
                 setProgressVisible(true);
@@ -429,9 +434,26 @@
             var count = options.count || 0;
             var source = options.source || (pending && pending.source) || 'plugin';
             var kind = options.kind || (pending && pending.kind) || 'tsv';
-            var plays = playLabel(count);
+            var importable = typeof options.importable === 'number' ? options.importable : count;
+            var skipped = typeof options.skipped === 'number' ? options.skipped : 0;
+            var plays = playLabel(source === 'jellydash' ? importable : count);
+            if (source === 'jellydash' && importable <= 0) {
+                title.textContent = 'History is already up to date';
+                summary.textContent = 'All ' + playLabel(count) + ' in this backup are already present.';
+                confirmBtn.hidden = true;
+                confirmBtn.disabled = true;
+                setProgressVisible(false);
+                if (dismissBtn) {
+                    dismissBtn.hidden = false;
+                    dismissBtn.textContent = 'Close';
+                }
+                return;
+            }
             title.textContent = 'Import ' + plays + '?';
-            if (source === 'plugin') {
+            if (source === 'jellydash') {
+                summary.textContent = 'This Jellydash backup contains ' + playLabel(count)
+                    + (skipped ? '. ' + skipped + ' already present will be skipped.' : '. Nothing already in History will be duplicated.');
+            } else if (source === 'plugin') {
                 summary.textContent = 'Jellydash found ' + plays + ' in Playback Reporting. Imported plays never trigger notifications.';
             } else if (kind === 'sqlite') {
                 summary.textContent = 'This database contains ' + plays + '. Imported plays never trigger notifications.';
@@ -463,6 +485,9 @@
         function openConfirm(options) {
             pending = options || {};
             token += 1;
+            if (kicker) {
+                kicker.textContent = pending.source === 'jellydash' ? 'Jellydash CSV' : 'Playback Reporting';
+            }
             if (!dialog.open) {
                 dialog.showModal();
             }
@@ -498,7 +523,7 @@
                 }
                 var body = new FormData();
                 body.append('import_source', 'plugin');
-                runImport(body, dialogApi, token);
+                runImport(body, dialogApi, token, '/api/playback-reporting.php');
             });
         }
 
@@ -513,5 +538,5 @@
     }
 
     getDialog();
-    wireDropzone();
+    document.querySelectorAll('[data-import-drop]').forEach(wireDropzone);
 }());

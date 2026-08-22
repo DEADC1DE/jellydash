@@ -11,6 +11,7 @@ final class HistoryCsvExporter
     /** @var array<int, string> */
     public const COLUMNS = [
         'jellydash_history_version',
+        'jellydash_timezone',
         'session_key',
         'started_at',
         'updated_at',
@@ -70,9 +71,9 @@ final class HistoryCsvExporter
     /** @return array<int, string> */
     private function exportRow(\Dibi\Row $row): array
     {
-        $values = [self::FORMAT_VERSION];
+        $values = [self::FORMAT_VERSION, date_default_timezone_get()];
 
-        foreach (array_slice(self::COLUMNS, 1) as $column) {
+        foreach (array_slice(self::COLUMNS, 2) as $column) {
             $value = $row[$column] ?? '';
             if (in_array($column, ['started_at', 'updated_at', 'ended_at', 'library_resolved_at'], true)) {
                 $value = $this->dateValue($value);

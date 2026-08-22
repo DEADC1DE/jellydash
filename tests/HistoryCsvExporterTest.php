@@ -87,6 +87,7 @@ final class HistoryCsvExporterTest extends TestCase
         $this->assertIsArray($newestRow);
         $this->assertIsArray($olderRow);
         $this->assertSame(HistoryCsvExporter::FORMAT_VERSION, $newestRow['jellydash_history_version']);
+        $this->assertSame(date_default_timezone_get(), $newestRow['jellydash_timezone']);
         $this->assertSame('Newest, with comma', $newestRow['item_name']);
         $this->assertSame('2026-08-22 12:00:00', $newestRow['started_at']);
         $this->assertSame('PHPUnit CSV Export', $newestRow['user_name']);
