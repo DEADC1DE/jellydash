@@ -1,0 +1,64 @@
+<dialog class="release-dialog history-export-dialog" data-history-export-dialog aria-labelledby="history-export-title" aria-describedby="history-export-summary">
+    <section class="release-dialog-card history-export-card">
+        <button class="release-dialog-close" type="button" data-history-export-close aria-label="Close History export">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M18 6l-12 12"></path><path d="M6 6l12 12"></path></svg>
+        </button>
+
+        <span class="history-export-mark" aria-hidden="true">
+            <svg class="icon-filled" viewBox="0 0 24 24" focusable="false">
+                <path d="M14 2a1 1 0 0 1 .707 .293l5 5a1 1 0 0 1 .293 .707v11a3 3 0 0 1 -3 3h-10a3 3 0 0 1 -3 -3v-14a3 3 0 0 1 3 -3zm-2 8a1 1 0 0 0 -1 1v3.585l-1.293 -1.292a1 1 0 0 0 -1.414 1.414l3 3a1 1 0 0 0 1.414 0l3 -3a1 1 0 0 0 -1.414 -1.414l-1.293 1.292v-3.585a1 1 0 0 0 -1 -1"></path>
+            </svg>
+        </span>
+        <span class="release-dialog-kicker">History export</span>
+        <h2 id="history-export-title">Choose what to export</h2>
+        <p id="history-export-summary" class="release-dialog-summary">Pick the plays you want. The CSV includes every match, not only the page currently on screen.</p>
+
+        <form class="history-export-form" action="/api/history-export.php" method="get" data-history-export-form>
+            <label class="history-export-field">
+                <span>Search</span>
+                <input type="search" name="search" value="{{ filters.search }}" placeholder="Title, user, client or device" autocomplete="off">
+            </label>
+
+            <div class="history-export-fields">
+                <label class="history-export-field">
+                    <span>User</span>
+                    <select name="user">
+                        <option value="" {{ filters.user == '' ? 'selected' : '' }}>All users</option>
+                        {% for user in users %}<option value="{{ user }}" {{ filters.user == user ? 'selected' : '' }}>{{ user }}</option>{% endfor %}
+                    </select>
+                </label>
+                <label class="history-export-field">
+                    <span>Library</span>
+                    <select name="library">
+                        <option value="" {{ filters.library == '' ? 'selected' : '' }}>All libraries</option>
+                        {% for library in libraries %}<option value="{{ library }}" {{ filters.library == library ? 'selected' : '' }}>{{ library }}</option>{% endfor %}
+                    </select>
+                </label>
+            </div>
+
+            <fieldset class="history-export-period">
+                <legend>Time period</legend>
+                <div class="history-export-period-options">
+                    <label><input type="radio" name="range" value="7" {{ filters.range == '7' ? 'checked' : '' }}><span><strong>7 days</strong><small>Recent plays</small></span></label>
+                    <label><input type="radio" name="range" value="30" {{ filters.range == '30' ? 'checked' : '' }}><span><strong>30 days</strong><small>Current view</small></span></label>
+                    <label><input type="radio" name="range" value="all" {{ filters.range == 'all' ? 'checked' : '' }}><span><strong>All time</strong><small>Everything</small></span></label>
+                </div>
+            </fieldset>
+
+            <div class="history-export-count is-loading" data-history-export-count aria-live="polite">
+                <i aria-hidden="true"></i>
+                <span><strong data-history-export-count-label>Checking matching plays…</strong><small>Filters apply to the complete History.</small></span>
+            </div>
+
+            <div class="history-export-options-row">
+                <button class="history-export-all" type="button" data-history-export-all>Choose all History</button>
+                <span>CSV format v1</span>
+            </div>
+
+            <div class="release-dialog-actions history-export-actions">
+                <button class="release-dialog-import" type="submit" data-history-export-download disabled>Download CSV</button>
+                <button class="release-dialog-dismiss" type="button" data-history-export-close>Cancel</button>
+            </div>
+        </form>
+    </section>
+</dialog>
