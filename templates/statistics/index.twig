@@ -110,8 +110,8 @@
                 </div>
                 <div class="stats-trend-bars" aria-label="Watch time trend">
                     {% for bar in stats.trend %}
-                        <span>
-                            <i style="height: {{ bar.h }}"></i>
+                        <span aria-label="{{ bar.label }}: {{ bar.value }}">
+                            <i style="height: {{ bar.h }}" title="{{ bar.value }}"></i>
                             <b>{{ bar.label }}</b>
                         </span>
                     {% endfor %}
@@ -166,7 +166,7 @@
             <article class="stats-card">
                 <div class="stats-list-head">
                     <strong>Codec Usage</strong>
-                    <span>source video codecs</span>
+                    <span>source video · {{ stats.codecCoverage }}</span>
                 </div>
                 {% if stats.hasCodecData %}
                     <div class="stats-bars">
@@ -185,7 +185,7 @@
             <article class="stats-card">
                 <div class="stats-list-head">
                     <strong>Transcoding Reasons</strong>
-                    <span>logged by Jellyfin session metadata</span>
+                    <span>share of logged reasons · {{ stats.reasonCoverage }}</span>
                 </div>
                 {% if stats.hasReasonData %}
                     <div class="stats-bars">
@@ -340,7 +340,7 @@
                     <span class="history-mono">{{ user.watch }}</span>
                     <span class="history-mono">{{ user.plays }}</span>
                     <span class="history-mono">{{ user.avg }}</span>
-                    <span class="stats-track"><i style="width: {{ user.w }}"></i></span>
+                    <span class="stats-track" aria-label="{{ user.share }} of total watch time"><i style="width: {{ user.share }}"></i></span>
                 </article>
             {% else %}
                 <article class="stats-user-table-row is-empty">

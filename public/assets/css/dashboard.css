@@ -4240,7 +4240,7 @@ a.history-pager-btn:hover {
 
 .stats-trend-bars i {
     width: min(30px, 100%);
-    min-height: 4px;
+    min-height: 0;
     border-radius: 6px 6px 3px 3px;
     background: linear-gradient(180deg, #9d7bff, #3b9eff);
 }

@@ -46,15 +46,17 @@ final class PlaybackStatisticsService
         $users = $this->users($rows);
         $clients = $this->clients($rows);
         $directness = $this->directness($rows);
-        $codecs = $this->bars($this->counts($rows, 'source_video_codec'));
-        $reasons = $this->bars($this->reasonCounts($rows));
+        $codecCounts = $this->counts($rows, 'source_video_codec');
+        $reasonCounts = $this->reasonCounts($rows);
+        $codecs = $this->bars($codecCounts, 'Other codecs');
+        $reasons = $this->bars($reasonCounts, 'Other reasons');
         $watchSeconds = $this->sum($rows, 'watched_sec');
         $previousWatchSeconds = $this->sum($previousRows, 'watched_sec');
         $plays = count($rows);
         $previousPlays = count($previousRows);
-        $transcodeRate = $plays > 0 ? (int) round(($directness['transcode_count'] / $plays) * 100) : 0;
+        $transcodeRate = $directness['transcode_pct'];
         $previousDirectness = $this->directness($previousRows);
-        $previousTranscodeRate = count($previousRows) > 0 ? (int) round(($previousDirectness['transcode_count'] / count($previousRows)) * 100) : null;
+        $previousTranscodeRate = count($previousRows) > 0 ? $previousDirectness['transcode_pct'] : null;
         $trending = $this->trending($rows);
         $mostWatched = $this->mostWatched($repository, $range, $rows);
 
@@ -84,8 +86,10 @@ final class PlaybackStatisticsService
             'directnessLegend' => $directness['legend'],
             'codecs' => $codecs,
             'hasCodecData' => $codecs !== [],
+            'codecCoverage' => $this->codecCoverage(array_sum($codecCounts), $plays),
             'reasons' => $reasons,
             'hasReasonData' => $reasons !== [],
+            'reasonCoverage' => $this->reasonCoverage($this->reasonSessionCount($rows), $directness['transcode_count']),
             'clientsConic' => $clients['conic'],
             'totalSessionsVal' => $this->comma($plays),
             'clientBreakdown' => $clients['breakdown'],
@@ -412,24 +416,29 @@ final class PlaybackStatisticsService
             $users[$key] ??= [
                 'user' => $key,
                 'user_id' => trim((string) ($row['user_id'] ?? '')),
-                'min' => 0,
+                'sec' => 0,
                 'plays' => 0,
             ];
             if ($users[$key]['user_id'] === '') {
                 $users[$key]['user_id'] = trim((string) ($row['user_id'] ?? ''));
             }
-            $users[$key]['min'] += (int) floor(((int) $row['watched_sec']) / 60);
+            $users[$key]['sec'] += (int) $row['watched_sec'];
             $users[$key]['plays']++;
         }
 
-        uasort($users, static fn (array $a, array $b): int => $b['min'] <=> $a['min']);
-        $max = $this->maxInt(array_map(static fn (array $user): int => (int) $user['min'], $users));
+        uasort($users, static fn (array $a, array $b): int => $b['sec'] <=> $a['sec']);
+        $max = $this->maxInt(array_map(static fn (array $user): int => (int) $user['sec'], $users));
+        $sharePercentages = $this->wholePercentages(array_map(
+            static fn (array $user): int => (int) $user['sec'],
+            $users,
+        ));
         $index = 0;
 
-        return array_values(array_map(function (array $user) use ($max, &$index): array {
+        return array_values(array_map(function (array $user) use ($max, $sharePercentages, &$index): array {
             $color = self::COLORS[$index % count(self::COLORS)];
             $index++;
-            $avg = (int) round((int) $user['min'] / max(1, (int) $user['plays']));
+            $seconds = (int) $user['sec'];
+            $avgMinutes = (int) round(($seconds / max(1, (int) $user['plays'])) / 60);
             $avatarBg = 'linear-gradient(135deg,' . $color . ',#3b9eff)';
 
             return [
@@ -438,10 +447,11 @@ final class PlaybackStatisticsService
                 'avatarBg' => $avatarBg,
                 'avatarUrl' => $this->avatars()->url((string) $user['user_id']) ?? '',
                 'color' => $color,
-                'watch' => $this->duration(((int) $user['min']) * 60),
+                'watch' => $this->duration($seconds),
                 'plays' => $this->comma((int) $user['plays']),
-                'avg' => $this->duration($avg * 60),
-                'w' => (int) round(((int) $user['min'] / $max) * 100) . '%',
+                'avg' => $this->duration($avgMinutes * 60),
+                'w' => (int) round(($seconds / $max) * 100) . '%',
+                'share' => ($sharePercentages[(string) $user['user']] ?? 0) . '%',
             ];
         }, $users));
     }
@@ -457,9 +467,9 @@ final class PlaybackStatisticsService
         foreach ($rows as $row) {
             $name = (string) ($row['client'] ?? 'Unknown client');
             $key = $name !== '' ? $name : 'Unknown client';
-            $clients[$key] ??= ['name' => $key, 'sessions' => 0, 'transcodes' => 0, 'min' => 0];
+            $clients[$key] ??= ['name' => $key, 'sessions' => 0, 'transcodes' => 0, 'sec' => 0];
             $clients[$key]['sessions']++;
-            $clients[$key]['min'] += (int) floor(((int) $row['watched_sec']) / 60);
+            $clients[$key]['sec'] += (int) $row['watched_sec'];
             if ((string) $row['play_method'] === 'Transcode') {
                 $clients[$key]['transcodes']++;
             }
@@ -467,8 +477,11 @@ final class PlaybackStatisticsService
 
         uasort($clients, static fn (array $a, array $b): int => $b['sessions'] <=> $a['sessions']);
         $maxSessions = $this->maxInt(array_map(static fn (array $client): int => (int) $client['sessions'], $clients));
-        $maxMin = $this->maxInt(array_map(static fn (array $client): int => (int) $client['min'], $clients));
-        $totalSessions = max(1, array_sum(array_map(static fn (array $client): int => (int) $client['sessions'], $clients)));
+        $maxSeconds = $this->maxInt(array_map(static fn (array $client): int => (int) $client['sec'], $clients));
+        $sessionPercentages = $this->wholePercentages(array_map(
+            static fn (array $client): int => (int) $client['sessions'],
+            $clients,
+        ));
 
         $breakdown = [];
         $ranked = [];
@@ -477,11 +490,11 @@ final class PlaybackStatisticsService
         $conicSegments = [];
         $index = 0;
 
-        foreach ($clients as $client) {
+        foreach ($clients as $clientKey => $client) {
             $color = self::COLORS[$index % count(self::COLORS)];
             $sessions = (int) $client['sessions'];
             $transcodePct = (int) round(((int) $client['transcodes'] / $sessions) * 100);
-            $sharePct = (int) round(($sessions / $totalSessions) * 100);
+            $sharePct = $sessionPercentages[$clientKey] ?? 0;
             $conicSegments[] = ['pct' => $sharePct, 'color' => $color];
 
             $breakdown[] = ['name' => $client['name'], 'color' => $color, 'pct' => $sharePct . '%', 'sessions' => $this->comma($sessions)];
@@ -502,8 +515,8 @@ final class PlaybackStatisticsService
             $usage[] = [
                 'name' => $client['name'],
                 'color' => $color,
-                'watch' => $this->duration(((int) $client['min']) * 60),
-                'w' => (int) round(((int) $client['min'] / $maxMin) * 100) . '%',
+                'watch' => $this->duration((int) $client['sec']),
+                'w' => (int) round(((int) $client['sec'] / $maxSeconds) * 100) . '%',
             ];
             $index++;
         }
@@ -538,19 +551,27 @@ final class PlaybackStatisticsService
             }
         }
 
-        $total = max(1, $direct + $stream + $transcode);
-        $directPct = (int) round(($direct / $total) * 100);
-        $streamPct = (int) round(($stream / $total) * 100);
-        $transcodePct = max(0, 100 - $directPct - $streamPct);
+        $sessionCount = $direct + $stream + $transcode;
+        $percentages = $this->wholePercentages([
+            'direct' => $direct,
+            'stream' => $stream,
+            'transcode' => $transcode,
+        ]);
+        $directPct = $percentages['direct'];
+        $streamPct = $percentages['stream'];
+        $transcodePct = $percentages['transcode'];
 
         return [
             'direct_pct' => $directPct,
             'transcode_count' => $transcode,
-            'conic' => $this->conic([
-                ['pct' => $directPct, 'color' => '#34d8a6'],
-                ['pct' => $streamPct, 'color' => '#3b9eff'],
-                ['pct' => $transcodePct, 'color' => '#f7b955'],
-            ]),
+            'transcode_pct' => $transcodePct,
+            'conic' => $sessionCount > 0
+                ? $this->conic([
+                    ['pct' => $directPct, 'color' => '#34d8a6'],
+                    ['pct' => $streamPct, 'color' => '#3b9eff'],
+                    ['pct' => $transcodePct, 'color' => '#f7b955'],
+                ])
+                : 'conic-gradient(rgba(255,255,255,.08) 0% 100%)',
             'legend' => [
                 ['label' => 'Direct Play', 'color' => '#34d8a6', 'pct' => $directPct . '%'],
                 ['label' => 'Direct Stream', 'color' => '#3b9eff', 'pct' => $streamPct . '%'],
@@ -613,26 +634,81 @@ final class PlaybackStatisticsService
     }
 
     /**
-     * @param array<string, int> $counts
-     * @return array<int, array<string, string>>
+     * @param array<int, \Dibi\Row> $rows
      */
-    private function bars(array $counts): array
+    private function reasonSessionCount(array $rows): int
+    {
+        $sessions = 0;
+
+        foreach ($rows as $row) {
+            if ((string) ($row['play_method'] ?? '') !== 'Transcode') {
+                continue;
+            }
+
+            $decoded = json_decode((string) ($row['transcode_reasons'] ?? ''), true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+
+            foreach ($decoded as $reason) {
+                if (trim((string) $reason) !== '') {
+                    $sessions++;
+                    break;
+                }
+            }
+        }
+
+        return $sessions;
+    }
+
+    private function codecCoverage(int $covered, int $total): string
+    {
+        if ($total <= 0) {
+            return 'no session data';
+        }
+
+        return $covered . ' of ' . $total . ' ' . ($total === 1 ? 'session' : 'sessions') . ' with codec data';
+    }
+
+    private function reasonCoverage(int $covered, int $total): string
+    {
+        if ($total <= 0) {
+            return 'no transcodes';
+        }
+
+        return $covered . ' of ' . $total . ' ' . ($total === 1 ? 'transcode' : 'transcodes') . ' with reason data';
+    }
+
+    /**
+     * @param array<string, int> $counts
+     * @return array<int, array{name: string, color: string, pct: string, w: string, count: int}>
+     */
+    private function bars(array $counts, string $otherLabel = 'Other'): array
     {
         $total = array_sum($counts);
         if ($total <= 0) {
             return [];
         }
 
+        if (count($counts) > 7) {
+            $visible = array_slice($counts, 0, 6, true);
+            $other = array_sum(array_slice($counts, 6, null, true));
+            $visible[$otherLabel] = ($visible[$otherLabel] ?? 0) + $other;
+            $counts = $visible;
+        }
+
+        $percentages = $this->wholePercentages($counts);
         $max = max($counts);
         $bars = [];
         $index = 0;
 
-        foreach (array_slice($counts, 0, 7, true) as $name => $count) {
+        foreach ($counts as $name => $count) {
             $bars[] = [
                 'name' => (string) $name,
                 'color' => self::COLORS[$index % count(self::COLORS)],
-                'pct' => (int) round(($count / $total) * 100) . '%',
+                'pct' => ($percentages[$name] ?? 0) . '%',
                 'w' => (int) round(($count / $max) * 100) . '%',
+                'count' => $count,
             ];
             $index++;
         }
@@ -729,9 +805,12 @@ final class PlaybackStatisticsService
     {
         $max = $this->maxInt(array_map(static fn (array $bucket): int => $bucket['sec'], $buckets));
 
-        return array_values(array_map(static fn (array $bucket): array => [
+        return array_values(array_map(fn (array $bucket): array => [
             'label' => $bucket['label'],
-            'h' => max(4, (int) round(($bucket['sec'] / $max) * 100)) . '%',
+            'h' => $bucket['sec'] > 0
+                ? max(4, (int) round(($bucket['sec'] / $max) * 100)) . '%'
+                : '0%',
+            'value' => $this->duration($bucket['sec']),
         ], $buckets));
     }
 
@@ -751,6 +830,41 @@ final class PlaybackStatisticsService
     private function maxInt(array $values): int
     {
         return max([1, ...array_values($values)]);
+    }
+
+    /**
+     * Allocate rounded whole percentages without letting the displayed total
+     * drift below or above 100.
+     *
+     * @param array<string, int> $counts
+     * @return array<string, int>
+     */
+    private function wholePercentages(array $counts): array
+    {
+        $total = array_sum($counts);
+        if ($total <= 0) {
+            return array_fill_keys(array_keys($counts), 0);
+        }
+
+        $percentages = [];
+        $fractions = [];
+        foreach ($counts as $key => $count) {
+            $exact = (max(0, $count) / $total) * 100;
+            $percentages[$key] = (int) floor($exact);
+            $fractions[$key] = $exact - $percentages[$key];
+        }
+
+        arsort($fractions);
+        $remaining = 100 - array_sum($percentages);
+        foreach (array_keys($fractions) as $key) {
+            if ($remaining <= 0) {
+                break;
+            }
+            $percentages[$key]++;
+            $remaining--;
+        }
+
+        return $percentages;
     }
 
     /**
@@ -790,6 +904,10 @@ final class PlaybackStatisticsService
     {
         if ($range === 'all') {
             return ['text' => $label === 'plays' ? 'lifetime sessions' : 'lifetime total', 'color' => 'rgba(255,255,255,0.42)'];
+        }
+
+        if ($current <= 0 && $previous <= 0) {
+            return ['text' => 'no activity this period', 'color' => 'rgba(255,255,255,0.42)'];
         }
 
         if ($previous <= 0) {
@@ -843,17 +961,15 @@ final class PlaybackStatisticsService
     {
         $minutes = (int) floor($seconds / 60);
         if ($minutes <= 0) {
-            return '0m';
+            return $seconds > 0 ? '<1m' : '0m';
         }
 
         $hours = intdiv($minutes, 60);
         $remainingMinutes = $minutes % 60;
 
-        if ($hours >= 100) {
-            return $this->comma($hours) . 'h';
-        }
-
-        return $hours > 0 ? $hours . 'h ' . $remainingMinutes . 'm' : $remainingMinutes . 'm';
+        return $hours > 0
+            ? $this->comma($hours) . 'h ' . $remainingMinutes . 'm'
+            : $remainingMinutes . 'm';
     }
 
     private function comma(int $value): string
