@@ -51,12 +51,19 @@ final class JellyfinSessionMapperTest extends TestCase
         $this->assertSame('12:30 / 50:00', $stream['timeLabel']);
         $this->assertSame('38 min left', $stream['remaining']);
         $this->assertSame(12000000, $stream['bitrate']);
+        $this->assertSame('12 Mbps', $stream['bitrateLabel']);
         $this->assertStringContainsString('/api/image.php?item=series-1&type=Backdrop', $stream['backdrop']);
         $this->assertSame('HEVC', $stream['sourceVideoCodec']);
         $this->assertSame('AAC', $stream['targetAudioCodec']);
         $this->assertTrue($stream['isVideoDirect']);
         $this->assertFalse($stream['isAudioDirect']);
+        $this->assertSame('HEVC', $stream['videoPath']);
+        $this->assertSame('AC3 → AAC', $stream['audioPath']);
+        $this->assertSame('MKV → TS', $stream['containerPath']);
+        $this->assertSame('HEVC · AC3 · MKV', $stream['sourceMediaLabel']);
+        $this->assertSame('HEVC · AAC · TS', $stream['outputMediaLabel']);
         $this->assertContains('Audio codec not supported', $stream['transcodeReasons']);
+        $this->assertSame('stream-diagnostics-84097828fc31', $stream['diagnosticsId']);
     }
 
     public function testDirectMovieMapsTitleAndRuntimeSubtitle(): void
@@ -69,6 +76,8 @@ final class JellyfinSessionMapperTest extends TestCase
         $this->assertSame('Arrival', $stream['title']);
         $this->assertSame('2016 - Sci-Fi - 1h 56m', $stream['subtitle']);
         $this->assertSame('1080p H264 SDR', $stream['quality']);
+        $this->assertSame('18 Mbps', $stream['bitrateLabel']);
+        $this->assertSame('H.264', $stream['videoPath']);
         $this->assertFalse($stream['isTranscode']);
         $this->assertTrue($stream['isDirect']);
         $this->assertSame('Direct Play', $stream['methodLabel']);
@@ -99,6 +108,8 @@ final class JellyfinSessionMapperTest extends TestCase
                 'IsVideoDirect' => true,
                 'IsAudioDirect' => false,
                 'AudioCodec' => 'aac',
+                'Container' => 'ts',
+                'TranscodeReasons' => ['SubtitleIsImageBased'],
             ],
             'NowPlayingItem' => [
                 'Id' => 'item-1',
@@ -116,6 +127,15 @@ final class JellyfinSessionMapperTest extends TestCase
                         'Height' => 2160,
                         'Codec' => 'hevc',
                         'DisplayTitle' => '4K HEVC HDR',
+                    ],
+                    [
+                        'Type' => 'Audio',
+                        'Codec' => 'ac3',
+                    ],
+                ],
+                'MediaSources' => [
+                    [
+                        'Container' => 'mkv',
                     ],
                 ],
             ],
@@ -155,6 +175,7 @@ final class JellyfinSessionMapperTest extends TestCase
                 'MediaSources' => [
                     [
                         'Bitrate' => 18000000,
+                        'Container' => 'mkv',
                     ],
                 ],
             ],

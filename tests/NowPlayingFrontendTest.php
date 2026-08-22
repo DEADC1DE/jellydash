@@ -196,4 +196,84 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString('grid-template-columns: 54px minmax(0, 1fr);', $stylesheet);
         $this->assertStringContainsString('-webkit-line-clamp: 3;', $stylesheet);
     }
+
+    public function testRicherPlaybackDetailsRenderInitiallyAndAfterPolling(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/now_playing/_stream_card.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString('class="stream-details"', $template);
+        $this->assertStringContainsString('function streamDetails(stream)', $script);
+        $this->assertStringContainsString('${streamDetails(stream)}', $script);
+        $this->assertStringContainsString('.stream-overlay-summary', $stylesheet);
+    }
+
+    public function testTranscodesKeepTheCardCompactAndOpenFullDiagnostics(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/now_playing/_stream_card.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString('stream.isTranscode', $template);
+        $this->assertStringContainsString('data-diagnostics-open', $template);
+        $this->assertStringContainsString('data-diagnostics-overlay', $template);
+        $this->assertStringContainsString('stream.sourceMediaLabel', $template);
+        $this->assertStringContainsString('stream.outputMediaLabel', $template);
+        $this->assertStringContainsString('function transcodeDetails(stream)', $script);
+        $this->assertStringContainsString('function transcodeDiagnostics(stream)', $script);
+        $this->assertStringContainsString('.stream-diagnostics-overlay', $stylesheet);
+        $this->assertStringContainsString('grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);', $stylesheet);
+    }
+
+    public function testDiagnosticsAreAccessibleAndSurvivePollingRefreshes(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/now_playing/_stream_card.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString('aria-expanded="false"', $template);
+        $this->assertStringContainsString('aria-hidden="true"', $template);
+        $this->assertStringContainsString('data-diagnostics-overlay aria-hidden="true"', $template);
+        $this->assertStringContainsString('inert>', $template);
+        $this->assertStringContainsString('function setDiagnosticsOpen(cardElement, open, moveFocus = true)', $script);
+        $this->assertStringContainsString('overlay.inert = !open', $script);
+        $this->assertStringContainsString("event.key !== 'Escape'", $script);
+        $this->assertStringContainsString("candidate.dataset.streamId === openDiagnosticsId", $script);
+        $this->assertStringContainsString('setDiagnosticsOpen(openCard, true, false)', $script);
+        $this->assertStringContainsString('opacity: 0;', $stylesheet);
+        $this->assertStringContainsString('pointer-events: none;', $stylesheet);
+    }
+
+    public function testTranscodePathUsesTheLocalFilledTablerIcon(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/now_playing/_stream_card.twig');
+        $script = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+
+        $this->assertIsString($template);
+        $this->assertIsString($script);
+        $this->assertStringContainsString('stream-transcode-icon icon-filled', $template);
+        $this->assertStringContainsString('stream-transcode-icon icon-filled', $script);
+        $this->assertStringContainsString('M7 6l-.112 .006a1 1 0 0 0-.669 1.619', $template);
+    }
+
+    public function testDiagnosticsUseTheCardAsTheirOnlyRoundedClipOwner(): void
+    {
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($stylesheet);
+        $this->assertMatchesRegularExpression(
+            '/\.stream-diagnostics-overlay\s*\{(?:(?!border-radius|backdrop-filter|transform:).)*position:\s*absolute;(?:(?!border-radius|backdrop-filter|transform:).)*inset:\s*0;(?:(?!border-radius|backdrop-filter|transform:).)*\}/s',
+            $stylesheet,
+        );
+    }
 }

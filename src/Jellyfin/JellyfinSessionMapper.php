@@ -96,13 +96,31 @@ final class JellyfinSessionMapper
         $isTranscode = $playMethod === 'Transcode' || isset($session['TranscodingInfo']);
         $isPaused = filter_var($playState['IsPaused'] ?? false, FILTER_VALIDATE_BOOL);
         $itemId = (string) ($item['Id'] ?? '');
+        $streamId = (string) ($session['Id'] ?? $itemId);
         $video = $this->videoStream($item);
         $audio = $this->audioStream($item);
         $transcoding = $session['TranscodingInfo'] ?? [];
         $isLive = $type === 'TvChannel';
+        $bitrate = $this->bitrate($item, $session);
+        $sourceVideoCodec = $this->codecLabel((string) ($video['Codec'] ?? ''));
+        $sourceAudioCodec = $this->codecLabel((string) ($audio['Codec'] ?? ''));
+        $sourceContainer = $this->sourceContainer($item);
+        $targetVideoCodec = is_array($transcoding) ? $this->codecLabel((string) ($transcoding['VideoCodec'] ?? '')) : '';
+        $targetAudioCodec = is_array($transcoding) ? $this->codecLabel((string) ($transcoding['AudioCodec'] ?? '')) : '';
+        $targetContainer = is_array($transcoding) ? strtoupper((string) ($transcoding['Container'] ?? '')) : '';
+        $isVideoDirect = is_array($transcoding) ? filter_var($transcoding['IsVideoDirect'] ?? !$isTranscode, FILTER_VALIDATE_BOOL) : !$isTranscode;
+        $isAudioDirect = is_array($transcoding) ? filter_var($transcoding['IsAudioDirect'] ?? true, FILTER_VALIDATE_BOOL) : true;
+        $transcodeReasons = is_array($transcoding) ? $this->transcodeReasons($transcoding) : [];
+        $sourceMediaLabel = $this->mediaSummary($sourceVideoCodec, $sourceAudioCodec, $sourceContainer);
+        $outputMediaLabel = $this->mediaSummary(
+            $isVideoDirect ? $sourceVideoCodec : ($targetVideoCodec !== '' ? $targetVideoCodec : $sourceVideoCodec),
+            $isAudioDirect ? $sourceAudioCodec : ($targetAudioCodec !== '' ? $targetAudioCodec : $sourceAudioCodec),
+            $targetContainer !== '' ? $targetContainer : $sourceContainer,
+        );
 
         $stream = [
-            'id' => (string) ($session['Id'] ?? $itemId),
+            'id' => $streamId,
+            'diagnosticsId' => 'stream-diagnostics-' . substr(hash('sha256', $streamId), 0, 12),
             'itemId' => $itemId,
             'itemType' => $type,
             'itemName' => $itemName,
@@ -137,16 +155,22 @@ final class JellyfinSessionMapper
             'remaining' => $this->remainingLabel($positionTicks, $runtimeTicks),
             'avatarBg' => $this->pick(self::AVATAR_GRADIENTS, (string) ($session['UserId'] ?? $user)),
             'backdrop' => $this->backdrop($item, $type),
-            'bitrate' => $this->bitrate($item, $session),
-            'sourceVideoCodec' => $this->codecLabel((string) ($video['Codec'] ?? '')),
-            'sourceAudioCodec' => $this->codecLabel((string) ($audio['Codec'] ?? '')),
-            'sourceContainer' => $this->sourceContainer($item),
-            'targetVideoCodec' => is_array($transcoding) ? $this->codecLabel((string) ($transcoding['VideoCodec'] ?? '')) : '',
-            'targetAudioCodec' => is_array($transcoding) ? $this->codecLabel((string) ($transcoding['AudioCodec'] ?? '')) : '',
-            'targetContainer' => is_array($transcoding) ? strtoupper((string) ($transcoding['Container'] ?? '')) : '',
-            'isVideoDirect' => is_array($transcoding) ? filter_var($transcoding['IsVideoDirect'] ?? !$isTranscode, FILTER_VALIDATE_BOOL) : !$isTranscode,
-            'isAudioDirect' => is_array($transcoding) ? filter_var($transcoding['IsAudioDirect'] ?? true, FILTER_VALIDATE_BOOL) : true,
-            'transcodeReasons' => is_array($transcoding) ? $this->transcodeReasons($transcoding) : [],
+            'bitrate' => $bitrate,
+            'bitrateLabel' => $this->bitrateLabel($bitrate),
+            'sourceVideoCodec' => $sourceVideoCodec,
+            'sourceAudioCodec' => $sourceAudioCodec,
+            'sourceContainer' => $sourceContainer,
+            'targetVideoCodec' => $targetVideoCodec,
+            'targetAudioCodec' => $targetAudioCodec,
+            'targetContainer' => $targetContainer,
+            'isVideoDirect' => $isVideoDirect,
+            'isAudioDirect' => $isAudioDirect,
+            'videoPath' => $this->mediaPath($sourceVideoCodec, $targetVideoCodec, $isTranscode && !$isVideoDirect),
+            'audioPath' => $this->mediaPath($sourceAudioCodec, $targetAudioCodec, $isTranscode && !$isAudioDirect),
+            'containerPath' => $this->mediaPath($sourceContainer, $targetContainer, $isTranscode),
+            'sourceMediaLabel' => $sourceMediaLabel !== '' ? $sourceMediaLabel : 'Source unknown',
+            'outputMediaLabel' => $outputMediaLabel !== '' ? $outputMediaLabel : 'Output unknown',
+            'transcodeReasons' => $transcodeReasons,
             'isLive' => $isLive,
         ];
 
@@ -550,6 +574,39 @@ final class JellyfinSessionMapper
             '' => '',
             default => trim((string) preg_replace('/(?<!^)[A-Z]/', ' $0', $reason)),
         };
+    }
+
+    private function bitrateLabel(int $bitrate): string
+    {
+        if ($bitrate <= 0) {
+            return '';
+        }
+
+        if ($bitrate < 1000000) {
+            return (string) max(1, (int) round($bitrate / 1000)) . ' Kbps';
+        }
+
+        $megabits = $bitrate / 1000000;
+        $precision = $megabits < 10 || fmod($megabits, 1.0) !== 0.0 ? 1 : 0;
+
+        return number_format($megabits, $precision, '.', '') . ' Mbps';
+    }
+
+    private function mediaPath(string $source, string $target, bool $showTarget): string
+    {
+        if ($showTarget && $target !== '' && $target !== $source) {
+            return $source !== '' ? $source . ' → ' . $target : $target;
+        }
+
+        return $source !== '' ? $source : $target;
+    }
+
+    private function mediaSummary(string $videoCodec, string $audioCodec, string $container): string
+    {
+        return implode(' · ', array_values(array_filter(
+            [$videoCodec, $audioCodec, $container],
+            static fn (string $value): bool => $value !== '',
+        )));
     }
 
     private function progressPct(int $positionTicks, int $runtimeTicks): string

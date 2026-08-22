@@ -3,6 +3,7 @@
     const label = document.querySelector('[data-live-label]');
     const dot = document.querySelector('[data-live-dot]');
     let hasLoaded = false;
+    let openDiagnosticsId = null;
 
     if (!root || !label || !dot) {
         return;
@@ -61,9 +62,95 @@
         `;
     }
 
+    function transcodeDetails(stream) {
+        const bitrate = stream.bitrateLabel
+            ? `<strong class="stream-detail-rate">${escapeHtml(stream.bitrateLabel)}</strong>`
+            : '';
+        const output = stream.outputMediaLabel || 'Output unknown';
+        const reasonCount = Array.isArray(stream.transcodeReasons) ? stream.transcodeReasons.length : 0;
+        const reasonLabel = reasonCount === 1 ? 'reason' : 'reasons';
+
+        return `
+            <div class="stream-details stream-overlay-summary" aria-label="Transcode summary">
+                ${bitrate}
+                <span class="stream-overlay-output"><small>Output</small>${escapeHtml(output)}</span>
+                <button class="stream-diagnostics-open" type="button" data-diagnostics-open aria-expanded="false" aria-controls="${escapeAttr(stream.diagnosticsId || '')}">
+                    ${reasonCount} ${reasonLabel}
+                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M7 6l-.112 .006a1 1 0 0 0-.669 1.619l3.501 4.375l-3.5 4.375a1 1 0 0 0 .78 1.625h6a1 1 0 0 0 .78-.375l4-5a1 1 0 0 0 0-1.25l-4-5a1 1 0 0 0-.78-.375h-6z"></path></svg>
+                </button>
+            </div>
+        `;
+    }
+
+    function transcodeDiagnostics(stream) {
+        if (!stream.isTranscode) {
+            return '';
+        }
+
+        const reasons = Array.isArray(stream.transcodeReasons) ? stream.transcodeReasons : [];
+        const reasonMarkup = reasons.length > 0
+            ? `
+                <div class="stream-diagnostics-reasons">
+                    <span class="stream-diagnostics-section-label">Why Jellyfin converted it</span>
+                    <div class="stream-diagnostics-reason-list">
+                        ${reasons.map((reason) => `<span class="stream-diagnostics-reason"><i></i>${escapeHtml(reason)}</span>`).join('')}
+                    </div>
+                </div>
+            `
+            : '';
+        const bitrate = stream.bitrateLabel
+            ? `<span>Output bitrate <strong>${escapeHtml(stream.bitrateLabel)}</strong></span>`
+            : '';
+        const viewer = [stream.user, stream.device].filter(Boolean).map(escapeHtml).join(' · ');
+
+        return `
+            <section class="stream-diagnostics-overlay" id="${escapeAttr(stream.diagnosticsId || '')}" data-diagnostics-overlay aria-hidden="true" aria-label="Transcode details for ${escapeAttr(stream.title || 'this stream')}" inert>
+                <header class="stream-diagnostics-header">
+                    <span class="stream-diagnostics-heading"><small>Video transcode</small><strong>${escapeHtml(stream.title || 'Unknown title')}</strong></span>
+                    <button class="stream-diagnostics-close" type="button" data-diagnostics-close aria-label="Close transcode details">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M6 6l12 12M18 6l-12 12"></path></svg>
+                    </button>
+                </header>
+                <div class="stream-diagnostics-route">
+                    <span class="stream-diagnostics-endpoint"><small>Source</small><strong>${escapeHtml(stream.sourceMediaLabel || 'Source unknown')}</strong></span>
+                    <span class="stream-transcode-marker" aria-hidden="true">
+                        <svg class="stream-transcode-icon icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M7 6l-.112 .006a1 1 0 0 0-.669 1.619l3.501 4.375l-3.5 4.375a1 1 0 0 0 .78 1.625h6a1 1 0 0 0 .78-.375l4-5a1 1 0 0 0 0-1.25l-4-5a1 1 0 0 0-.78-.375h-6z"></path></svg>
+                    </span>
+                    <span class="stream-diagnostics-endpoint is-output"><small>Output</small><strong>${escapeHtml(stream.outputMediaLabel || 'Output unknown')}</strong></span>
+                </div>
+                ${reasonMarkup}
+                <footer class="stream-diagnostics-footer">${bitrate}<span>${viewer}</span></footer>
+            </section>
+        `;
+    }
+
+    function streamDetails(stream) {
+        if (stream.isTranscode) {
+            return transcodeDetails(stream);
+        }
+
+        const details = [];
+
+        if (stream.bitrateLabel) {
+            details.push(`<strong class="stream-detail-rate">${escapeHtml(stream.bitrateLabel)}</strong>`);
+        }
+        if (stream.videoPath) {
+            details.push(`<span class="stream-detail"><small>Video</small>${escapeHtml(stream.videoPath)}</span>`);
+        }
+        if (stream.audioPath) {
+            details.push(`<span class="stream-detail"><small>Audio</small>${escapeHtml(stream.audioPath)}</span>`);
+        }
+        if (stream.containerPath) {
+            details.push(`<span class="stream-detail"><small>Out</small>${escapeHtml(stream.containerPath)}</span>`);
+        }
+        return details.length > 0
+            ? `<div class="stream-details" aria-label="Playback details">${details.join('')}</div>`
+            : '';
+    }
+
     function card(stream) {
         return `
-            <article class="stream-card">
+            <article class="stream-card" data-stream-id="${escapeAttr(stream.id || '')}">
                 <div class="stream-backdrop" style="background-image: ${escapeAttr(stream.backdrop || '')}"></div>
                 <div class="stream-card-overlay"></div>
                 <div class="stream-watermark">${escapeHtml(stream.initials || '')}</div>
@@ -86,7 +173,9 @@
                     </div>
 
                     ${watcher(stream, false)}
+                    ${streamDetails(stream)}
                     ${progress(stream, false)}
+                    ${transcodeDiagnostics(stream)}
                 </div>
             </article>
         `;
@@ -129,6 +218,7 @@
         root.classList.toggle('has-streams', streams.length > 0);
 
         if (streams.length === 0) {
+            openDiagnosticsId = null;
             root.innerHTML = emptyState();
             return;
         }
@@ -136,6 +226,45 @@
         const cards = streams.map(card).join('');
 
         root.innerHTML = `<div class="stream-grid">${cards}</div>`;
+
+        if (openDiagnosticsId !== null) {
+            const openCard = Array.from(root.querySelectorAll('[data-stream-id]'))
+                .find((candidate) => candidate.dataset.streamId === openDiagnosticsId);
+
+            if (openCard) {
+                setDiagnosticsOpen(openCard, true, false);
+            } else {
+                openDiagnosticsId = null;
+            }
+        }
+    }
+
+    function setDiagnosticsOpen(cardElement, open, moveFocus = true) {
+        const trigger = cardElement.querySelector('[data-diagnostics-open]');
+        const overlay = cardElement.querySelector('[data-diagnostics-overlay]');
+        const close = cardElement.querySelector('[data-diagnostics-close]');
+
+        if (!trigger || !overlay || !close) {
+            return;
+        }
+
+        if (open) {
+            root.querySelectorAll('.stream-card.is-diagnostics-open').forEach((openCard) => {
+                if (openCard !== cardElement) {
+                    setDiagnosticsOpen(openCard, false, false);
+                }
+            });
+        }
+
+        cardElement.classList.toggle('is-diagnostics-open', open);
+        trigger.setAttribute('aria-expanded', String(open));
+        overlay.setAttribute('aria-hidden', String(!open));
+        overlay.inert = !open;
+        openDiagnosticsId = open ? (cardElement.dataset.streamId || null) : null;
+
+        if (moveFocus) {
+            (open ? close : trigger).focus();
+        }
     }
 
     function setText(selector, value) {
@@ -220,6 +349,34 @@
 
         window.dispatchEvent(new CustomEvent('jellydash:now-playing', { detail: payload }));
     }
+
+    root.addEventListener('click', (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const trigger = target?.closest('[data-diagnostics-open]');
+        const close = target?.closest('[data-diagnostics-close]');
+        const control = trigger || close;
+
+        if (!control) {
+            return;
+        }
+
+        const cardElement = control.closest('[data-stream-id]');
+        if (cardElement) {
+            setDiagnosticsOpen(cardElement, Boolean(trigger));
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape' || openDiagnosticsId === null) {
+            return;
+        }
+
+        const openCard = Array.from(root.querySelectorAll('[data-stream-id]'))
+            .find((candidate) => candidate.dataset.streamId === openDiagnosticsId);
+        if (openCard) {
+            setDiagnosticsOpen(openCard, false);
+        }
+    });
 
     refreshNowPlaying().catch(renderError);
     window.setInterval(() => {
