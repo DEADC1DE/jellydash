@@ -277,6 +277,12 @@ User names are resolved via the Jellyfin `/Users` API (admin token). Media runti
 - Edge hides Web Push permission prompts behind a small bell icon in the address bar ("quiet notification requests"). If enabling notifications keeps snapping back to off, allow notifications for the site there, and check that Windows itself allows notifications from Edge.
 - Trending and Most Watched can exclude libraries you pick (Settings page). Useful for libraries full of temporary stuff.
 
+## Support Jellydash
+
+Jellydash is free and always will be. If you enjoy it and want to support its development, you can buy me a coffee.
+
+[![Buy me a coffee](https://img.shields.io/badge/Buy_me_a_coffee-FFDD00?logo=buy-me-a-coffee&logoColor=000000)](https://www.buymeacoffee.com/themartz90)
+
 ## Credits
 
 The Jellydash mascot is based on a [jellyfish icon](https://www.flaticon.com/free-icon/jellyfish_2977310) by Magnific from [Flaticon](https://www.flaticon.com), modified for this project.
