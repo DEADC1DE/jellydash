@@ -1,0 +1,24 @@
+{
+  "version": "1.6.0",
+  "auto_show": true,
+  "title": "A more complete History",
+  "summary": "History now knows where plays came from, travels through native CSV backups, and feeds more accurate Statistics. Now Playing adds deeper stream details without crowding its cards.",
+  "highlights": [
+    "See each item's real Jellyfin library. A one-time update safely matches older History after upgrading.",
+    "Export all History or a filtered selection to a portable Jellydash CSV, with an exact preview first.",
+    "Restore or move Jellydash CSV backups from Settings with a preview, duplicate detection, and transactional importing.",
+    "See bitrate, codecs, containers, output formats, and transcode reasons from compact Now Playing cards.",
+    "Get more accurate watch times, averages, user shares, playback percentages, and complete category totals in Statistics.",
+    "Keep Recently Added positioned correctly on Android after refreshing or returning to the app."
+  ],
+  "links": [
+    {
+      "label": "History CSV guide",
+      "url": "https://github.com/themartz90/jellydash/blob/main/docs/HISTORY_CSV.md"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.6.0"
+    }
+  ]
+}
