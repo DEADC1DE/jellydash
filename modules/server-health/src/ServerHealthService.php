@@ -53,10 +53,34 @@ final class ServerHealthService
         return $tasks;
     }
 
+    /**
+     * POST /ScheduledTasks/Running/{id} — same core limitation as stopTask:
+     * JellyfinClient (core) fails on Jellyfin's empty 204 response, so this
+     * module does its own call.
+     */
     public function triggerTask(string $id): bool
     {
-        $this->client->postJson('/ScheduledTasks/Running/' . rawurlencode($id), []);
-        return true;
+        $baseUrl = rtrim((string) Config::get('JELLYFIN_URL', ''), '/');
+        $token = (string) Config::get('JELLYFIN_API_TOKEN', Config::get('JELLYFIN_API_KEY', ''));
+
+        if ($baseUrl === '' || $token === '') {
+            throw new \RuntimeException('Jellyfin URL or API token is missing.');
+        }
+
+        $handle = curl_init($baseUrl . '/ScheduledTasks/Running/' . rawurlencode($id));
+        curl_setopt_array($handle, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => 8,
+            CURLOPT_HTTPHEADER => ['Authorization: MediaBrowser Token="' . $token . '"'],
+        ]);
+
+        curl_exec($handle);
+        $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        curl_close($handle);
+
+        return $status >= 200 && $status < 300;
     }
 
     /**
