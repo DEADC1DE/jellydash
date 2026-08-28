@@ -1,0 +1,82 @@
+.devices-table {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .02);
+}
+
+.devices-head,
+.devices-row {
+    display: grid;
+    grid-template-columns: minmax(160px, 1.4fr) minmax(140px, 1fr) 140px 160px 100px;
+    gap: 16px;
+    align-items: center;
+    padding: 0 18px;
+}
+
+.devices-head {
+    height: 38px;
+    color: var(--color-low);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.devices-row {
+    min-height: 60px;
+    padding-top: 11px;
+    padding-bottom: 11px;
+    border-top: 1px solid rgba(255, 255, 255, .05);
+    font-size: 13px;
+}
+
+.devices-row:first-of-type {
+    border-top: 0;
+}
+
+.devices-row:hover {
+    background: rgba(255, 255, 255, .025);
+}
+
+.devices-name {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.devices-app,
+.devices-user {
+    color: var(--color-muted);
+}
+
+.devices-activity {
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+}
+
+.devices-empty {
+    padding: 32px 18px;
+    color: var(--color-low);
+    text-align: center;
+}
+
+.devices-delete-btn {
+    padding: 8px 14px;
+    color: var(--color-amber);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    border: 1px solid rgba(247, 185, 85, .35);
+    border-radius: 9px;
+    background: rgba(247, 185, 85, .08);
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    justify-self: end;
+}
+
+.devices-delete-btn:hover {
+    background: rgba(247, 185, 85, .16);
+}
