@@ -18,8 +18,7 @@
   },
   "autoload": {
     "psr-4": {
-      "Mk\\Framework\\": "src/",
-      "Mk\\Modules\\": "modules/"
+      "Mk\\Framework\\": "src/"
     }
   },
   "scripts": {
