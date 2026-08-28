@@ -17,6 +17,50 @@
         <div class="users-profile-stat"><dt>Last seen</dt><dd>{{ summary.lastSeen|default('-') }}</dd></div>
     </dl>
 
+    <h2 class="users-profile-heatmap-title">Devices</h2>
+    <div class="devices-table">
+        <div class="devices-head">
+            <span>Device</span>
+            <span>App</span>
+            <span>Last user</span>
+            <span>Last activity</span>
+            <span></span>
+        </div>
+        {% for device in devices %}
+            <div class="devices-row">
+                <span class="devices-name">{{ device.name }}</span>
+                <span class="devices-app">{{ device.appName|default('-') }}</span>
+                <span class="devices-user">{{ device.lastUserName }}</span>
+                <span class="devices-activity">{{ device.lastActivity ? device.lastActivity|date('Y-m-d H:i') : '-' }}</span>
+                <span></span>
+            </div>
+        {% else %}
+            <div class="devices-empty">No devices reported for this user.</div>
+        {% endfor %}
+    </div>
+
+    <h2 class="users-profile-heatmap-title">Recent plays</h2>
+    <div class="users-recent-plays">
+        {% for play in recentPlays %}
+            <div class="users-recent-plays-row">
+                <div class="users-recent-plays-title">
+                    <strong>
+                        {% if play.seriesName %}{{ play.seriesName }}{% if play.seasonEp %} · {{ play.seasonEp }}{% endif %} — {{ play.itemName|default('Unknown') }}
+                        {% else %}{{ play.itemName|default('Unknown title') }}
+                        {% endif %}
+                    </strong>
+                    <small>{{ play.library|default('-') }} · {{ play.client|default('-') }} · {{ play.device|default('-') }}</small>
+                </div>
+                <div class="users-recent-plays-meta">
+                    <span>{{ (play.watchedSec / 60)|round }} min{{ play.isFinished ? ' · finished' : '' }}</span>
+                    <time>{{ play.startedAt|date('Y-m-d H:i') }}</time>
+                </div>
+            </div>
+        {% else %}
+            <div class="users-recent-plays-empty">No plays recorded yet.</div>
+        {% endfor %}
+    </div>
+
     <h2 class="users-profile-heatmap-title">Activity by weekday &times; hour</h2>
     <div class="users-profile-heatmap-scroll">
         <table class="users-profile-heatmap">
