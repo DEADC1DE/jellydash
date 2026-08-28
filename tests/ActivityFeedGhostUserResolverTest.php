@@ -48,6 +48,11 @@ final class ActivityFeedGhostUserResolverTest extends TestCase
         $rows = $dibi->select('user_name')->from('play_history')->where('user_id = %s', 'e965542d-dbc9-43e3-b994-8512afeee72c')->fetchAll();
         $this->assertSame('jf_deleted_user_1', (string) $rows[0]['user_name']);
         $this->assertSame('jf_deleted_user_1', (string) $rows[1]['user_name']);
+
+        // Proves the UPDATE's WHERE clause never touches a row that already
+        // has a name, even though its user_id was never a target.
+        $knownUserRow = $dibi->select('user_name')->from('play_history')->where('user_id = %s', 'known-user')->fetch();
+        $this->assertSame('AlreadyKnown', (string) $knownUserRow['user_name']);
     }
 
     public function testResolveReturnsEmptyWhenNoGhostRows(): void
