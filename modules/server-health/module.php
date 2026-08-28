@@ -19,4 +19,5 @@ return [
     ],
     'api' => 'api/server-health.php',
     'styles' => ['server-health.css'],
+    'scripts' => ['server-health.js'],
 ];
