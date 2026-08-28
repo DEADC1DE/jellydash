@@ -29,10 +29,17 @@ final class GhostUserResolver
      */
     public function resolve(): array
     {
+        // A single ->where() call, with the OR explicitly parenthesized: Dibi
+        // joins successive ->where() calls with a bare AND, so two separate
+        // calls here would let SQL's AND-before-OR precedence silently drop
+        // the user_id guard on one branch of the condition.
         $ghostIds = $this->dibi->select('DISTINCT user_id')
             ->from('play_history')
-            ->where('user_name IS NULL OR user_name = %s', '')
-            ->where('user_id IS NOT NULL AND user_id != %s', '')
+            ->where(
+                '(user_name IS NULL OR user_name = %s) AND user_id IS NOT NULL AND user_id != %s',
+                '',
+                ''
+            )
             ->fetchPairs('user_id', 'user_id');
 
         if ($ghostIds === []) {
@@ -71,23 +78,31 @@ final class GhostUserResolver
         }
 
         foreach ($resolved as $userId => $name) {
+            // Same single-where/explicit-parens rule as the SELECT above:
+            // this is the write that must never touch a row outside this
+            // exact user_id, nor one that already has a name.
             $this->dibi->update('play_history', ['user_name' => $name])
-                ->where('user_id = %s', $userId)
-                ->where('user_name IS NULL OR user_name = %s', '')
+                ->where('user_id = %s AND (user_name IS NULL OR user_name = %s)', $userId, '')
                 ->execute();
         }
 
         return $resolved;
     }
 
+    /**
+     * Only extracts a name when the line matches one of Jellyfin's two known
+     * verb phrases. Fail-safe on purpose: an unrelated log line for the same
+     * ghost user_id (e.g. an auth event) must never have its leading token
+     * written into play_history.user_name as a guessed "name".
+     */
     private function extractName(string $activityLogLine): ?string
     {
-        $space = strpos($activityLogLine, ' ');
-        if ($space === false) {
-            return null;
-        }
+        $matched = preg_match(
+            '/^(\S+) (?:wurde getrennt von|hat die Wiedergabe .*(?:gestartet|beendet))/u',
+            $activityLogLine,
+            $matches
+        );
 
-        $name = trim(substr($activityLogLine, 0, $space));
-        return $name !== '' ? $name : null;
+        return $matched === 1 ? $matches[1] : null;
     }
 }

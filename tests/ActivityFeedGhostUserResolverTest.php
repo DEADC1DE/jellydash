@@ -72,4 +72,119 @@ final class ActivityFeedGhostUserResolverTest extends TestCase
 
         $this->assertSame([], $resolved);
     }
+
+    // Regression test for the AND/OR precedence bug: with Dibi joining
+    // successive ->where() calls with a bare AND, an UPDATE scoped by two
+    // separate ->where() calls parses as (user_id = X AND user_name IS NULL)
+    // OR (user_name = ''), which has no user_id guard on the second half and
+    // overwrites every other empty-named row too. Two ghost user_ids, only
+    // one resolved by the activity log, proves the other is left alone.
+    public function testResolvingOneGhostUserDoesNotOverwriteAnotherUnresolvedGhostUser(): void
+    {
+        $db = Database::sqlite(':memory:');
+        $dibi = $db->getDibi();
+        $dibi->query('CREATE TABLE play_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_name TEXT)');
+        $dibi->insert('play_history', ['user_id' => 'ghost-user-1', 'user_name' => ''])->execute();
+        $dibi->insert('play_history', ['user_id' => 'ghost-user-2', 'user_name' => ''])->execute();
+
+        $logClient = new class {
+            public function page(int $startIndex, int $limit): array
+            {
+                if ($startIndex > 0) {
+                    return ['items' => [], 'total' => 1];
+                }
+                return [
+                    'items' => [[
+                        'date' => '2026-07-30T18:51:04Z',
+                        'name' => 'jf_deleted_user_1 wurde getrennt von TestTV/00',
+                        'userId' => 'ghost-user-1',
+                    ]],
+                    'total' => 1,
+                ];
+            }
+        };
+
+        $resolved = (new GhostUserResolver($logClient, $db))->resolve();
+
+        $this->assertSame(['ghost-user-1' => 'jf_deleted_user_1'], $resolved);
+
+        $rowOne = $dibi->select('user_name')->from('play_history')->where('user_id = %s', 'ghost-user-1')->fetch();
+        $this->assertSame('jf_deleted_user_1', (string) $rowOne['user_name']);
+
+        $rowTwo = $dibi->select('user_name')->from('play_history')->where('user_id = %s', 'ghost-user-2')->fetch();
+        $this->assertSame('', (string) $rowTwo['user_name']);
+    }
+
+    // Fail-safe extraction: an unrelated log line (e.g. an auth event) for a
+    // ghost user_id must never have its leading token guessed as a name.
+    public function testNonMatchingActivityLogLineIsNotUsedAsAName(): void
+    {
+        $db = Database::sqlite(':memory:');
+        $dibi = $db->getDibi();
+        $dibi->query('CREATE TABLE play_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_name TEXT)');
+        $dibi->insert('play_history', ['user_id' => 'ghost-user-1', 'user_name' => ''])->execute();
+
+        $logClient = new class {
+            public function page(int $startIndex, int $limit): array
+            {
+                if ($startIndex > 0) {
+                    return ['items' => [], 'total' => 1];
+                }
+                return [
+                    'items' => [[
+                        'date' => '2026-07-30T18:51:04Z',
+                        'name' => 'jf_deleted_user_1 hat sich angemeldet',
+                        'userId' => 'ghost-user-1',
+                    ]],
+                    'total' => 1,
+                ];
+            }
+        };
+
+        $resolved = (new GhostUserResolver($logClient, $db))->resolve();
+
+        $this->assertSame([], $resolved);
+
+        $row = $dibi->select('user_name')->from('play_history')->where('user_id = %s', 'ghost-user-1')->fetch();
+        $this->assertSame('', (string) $row['user_name']);
+    }
+
+    // Exercises the "no more pages" loop-termination branch: the first page
+    // has items but none resolve the ghost, so the loop must fetch a second
+    // page, find it empty, and terminate cleanly instead of looping forever.
+    public function testLoopTerminatesCleanlyWhenALaterPageIsEmpty(): void
+    {
+        $db = Database::sqlite(':memory:');
+        $dibi = $db->getDibi();
+        $dibi->query('CREATE TABLE play_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_name TEXT)');
+        $dibi->insert('play_history', ['user_id' => 'ghost-user-1', 'user_name' => ''])->execute();
+
+        $logClient = new class {
+            /** @var array<int, int> */
+            public array $requestedStartIndexes = [];
+
+            public function page(int $startIndex, int $limit): array
+            {
+                $this->requestedStartIndexes[] = $startIndex;
+
+                if ($startIndex === 0) {
+                    return [
+                        'items' => [[
+                            'date' => '2026-07-30T18:51:04Z',
+                            'name' => 'SomeoneElse wurde getrennt von TV',
+                            'userId' => 'unrelated-user',
+                        ]],
+                        'total' => 400,
+                    ];
+                }
+
+                return ['items' => [], 'total' => 400];
+            }
+        };
+
+        $resolved = (new GhostUserResolver($logClient, $db))->resolve();
+
+        $this->assertSame([], $resolved);
+        $this->assertSame([0, 200], $logClient->requestedStartIndexes);
+    }
 }
