@@ -1,0 +1,95 @@
+.health-tasks-table {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .02);
+}
+
+.health-tasks-head,
+.health-tasks-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.6fr) 120px 110px minmax(120px, 1fr) 110px;
+    gap: 16px;
+    align-items: center;
+    padding: 0 18px;
+}
+
+.health-tasks-head {
+    height: 38px;
+    color: var(--color-low);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.health-tasks-row {
+    min-height: 60px;
+    padding-top: 11px;
+    padding-bottom: 11px;
+    border-top: 1px solid rgba(255, 255, 255, .05);
+    font-size: 13px;
+}
+
+.health-tasks-row:first-of-type {
+    border-top: 0;
+}
+
+.health-tasks-row:hover {
+    background: rgba(255, 255, 255, .025);
+}
+
+.health-tasks-name {
+    color: var(--color-text);
+    font-weight: 600;
+}
+
+.health-tasks-state,
+.health-tasks-lastrun {
+    color: var(--color-muted);
+}
+
+.health-tasks-progress {
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+}
+
+.health-tasks-empty {
+    padding: 32px 18px;
+    color: var(--color-low);
+    text-align: center;
+}
+
+.health-task-btn {
+    padding: 8px 14px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    border-radius: 9px;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    justify-self: end;
+}
+
+.health-task-btn-run {
+    color: var(--color-green-text);
+    border: 1px solid rgba(52, 216, 166, .35);
+    background: rgba(52, 216, 166, .08);
+}
+
+.health-task-btn-run:hover {
+    background: rgba(52, 216, 166, .16);
+}
+
+.health-task-btn-stop {
+    color: var(--color-amber);
+    border: 1px solid rgba(247, 185, 85, .35);
+    background: rgba(247, 185, 85, .08);
+}
+
+.health-task-btn-stop:hover {
+    background: rgba(247, 185, 85, .16);
+}

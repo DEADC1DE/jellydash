@@ -1,0 +1,61 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Server Health</h1>
+        <p>{{ info.serverName }} — Jellyfin {{ info.version }} ({{ info.operatingSystem }})</p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="health-tasks-table">
+        <div class="health-tasks-head">
+            <span>Task</span>
+            <span>State</span>
+            <span>Progress</span>
+            <span>Last run</span>
+            <span></span>
+        </div>
+        {% for task in tasks %}
+            <div class="health-tasks-row" data-task-row="{{ task.id }}">
+                <span class="health-tasks-name">{{ task.name }}</span>
+                <span class="health-tasks-state">{{ task.state }}</span>
+                <span class="health-tasks-progress">{{ task.progress is not null ? task.progress ~ '%' : '-' }}</span>
+                <span class="health-tasks-lastrun">{{ task.lastRunStatus }}</span>
+                {% if task.state == 'Running' %}
+                    <button type="button" class="health-task-btn health-task-btn-stop" data-health-action="stop" data-health-id="{{ task.id }}">Stop</button>
+                {% else %}
+                    <button type="button" class="health-task-btn health-task-btn-run" data-health-action="trigger" data-health-id="{{ task.id }}">Run now</button>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="health-tasks-empty">No scheduled tasks reported.</div>
+        {% endfor %}
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+    <script>
+    (function () {
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = csrfMeta ? csrfMeta.content : '';
+
+        document.querySelectorAll('[data-health-action]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var action = btn.getAttribute('data-health-action');
+                var id = btn.getAttribute('data-health-id');
+                fetch('/api/module.php?m=server-health', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-Token': csrfToken,
+                    },
+                    body: 'action=' + encodeURIComponent(action) + '&id=' + encodeURIComponent(id),
+                }).then(function (response) {
+                    if (response.ok) { location.reload(); } else { alert('Task action failed.'); }
+                });
+            });
+        });
+    })();
+    </script>
+{% endblock %}
