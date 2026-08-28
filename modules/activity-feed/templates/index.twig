@@ -1,0 +1,70 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Activity</h1>
+        <p>Page {{ page }} of {{ totalPages }}</p>
+    </div>
+    {% if layout.user and layout.user.role <= 2 %}
+        <button type="button" class="activity-resolve-btn" data-activity-resolve>Resolve unknown users</button>
+    {% endif %}
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="activity-list">
+        {% for entry in entries %}
+            <div class="activity-row">
+                <time class="activity-date">{{ entry.date|date('Y-m-d H:i') }}</time>
+                <span class="activity-text">{{ entry.name }}</span>
+            </div>
+        {% else %}
+            <div class="activity-empty">No activity log entries.</div>
+        {% endfor %}
+    </div>
+
+    <nav class="activity-pager">
+        {% if page > 1 %}
+            <a class="activity-pager-btn" href="?p={{ page - 1 }}">&larr; Newer</a>
+        {% else %}
+            <span class="activity-pager-btn is-disabled">&larr; Newer</span>
+        {% endif %}
+        <span class="activity-pager-status">Page {{ page }} of {{ totalPages }}</span>
+        {% if page < totalPages %}
+            <a class="activity-pager-btn" href="?p={{ page + 1 }}">Older &rarr;</a>
+        {% else %}
+            <span class="activity-pager-btn is-disabled">Older &rarr;</span>
+        {% endif %}
+    </nav>
+{% endblock %}
+
+{% block page_scripts %}
+    <script>
+    (function () {
+        var btn = document.querySelector('[data-activity-resolve]');
+        if (!btn) { return; }
+
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = csrfMeta ? csrfMeta.content : '';
+
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            fetch('/api/module.php?m=activity-feed', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-Token': csrfToken,
+                },
+                body: 'action=resolve-ghosts',
+            }).then(function (response) { return response.json(); }).then(function (data) {
+                btn.disabled = false;
+                if (data.ok) {
+                    var count = Object.keys(data.resolved || {}).length;
+                    alert(count + ' user(s) resolved.');
+                } else {
+                    alert(data.error || 'Could not resolve ghost users.');
+                }
+            });
+        });
+    })();
+    </script>
+{% endblock %}

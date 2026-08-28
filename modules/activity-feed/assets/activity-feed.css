@@ -1,0 +1,104 @@
+.activity-list {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .02);
+}
+
+.activity-row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 16px;
+    align-items: center;
+    min-height: 44px;
+    padding: 9px 18px;
+    border-top: 1px solid rgba(255, 255, 255, .05);
+    font-size: 13px;
+}
+
+.activity-row:first-of-type {
+    border-top: 0;
+}
+
+.activity-row:hover {
+    background: rgba(255, 255, 255, .025);
+}
+
+.activity-date {
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+}
+
+.activity-text {
+    color: var(--color-text);
+}
+
+.activity-empty {
+    padding: 32px 18px;
+    color: var(--color-low);
+    text-align: center;
+}
+
+.activity-resolve-btn {
+    padding: 8px 14px;
+    color: var(--color-green-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    border: 1px solid rgba(52, 216, 166, .35);
+    border-radius: 9px;
+    background: rgba(52, 216, 166, .08);
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.activity-resolve-btn:hover {
+    background: rgba(52, 216, 166, .16);
+}
+
+.activity-resolve-btn:disabled {
+    color: var(--color-low);
+    cursor: not-allowed;
+    opacity: .6;
+}
+
+.activity-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 18px 0 0;
+}
+
+.activity-pager-status {
+    min-width: 7.5rem;
+    color: var(--color-muted);
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.activity-pager-btn {
+    min-height: 36px;
+    padding: 0 14px;
+    color: var(--color-text);
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 36px;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .05);
+    text-decoration: none;
+}
+
+a.activity-pager-btn:hover {
+    background: rgba(124, 92, 255, .18);
+    border-color: var(--color-purple);
+}
+
+.activity-pager-btn.is-disabled {
+    color: var(--color-low);
+    pointer-events: none;
+}
