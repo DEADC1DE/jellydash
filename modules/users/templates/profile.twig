@@ -48,6 +48,7 @@
     <div class="users-recent-plays">
         {% for play in recentPlays %}
             <div class="users-recent-plays-row">
+                <span class="users-recent-plays-poster" style="background-image: {{ play.poster }}"></span>
                 <div class="users-recent-plays-title">
                     <strong>
                         {% if play.seriesName %}{{ play.seriesName }}{% if play.seasonEp %} · {{ play.seasonEp }}{% endif %} — {{ play.itemName|default('Unknown') }}

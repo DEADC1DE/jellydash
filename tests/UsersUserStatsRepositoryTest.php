@@ -19,6 +19,8 @@ final class UsersUserStatsRepositoryTest extends TestCase
             CREATE TABLE play_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_name TEXT,
+                item_id TEXT,
+                item_type TEXT,
                 item_name TEXT,
                 series_name TEXT,
                 season_ep TEXT,
@@ -65,7 +67,8 @@ final class UsersUserStatsRepositoryTest extends TestCase
     {
         $dibi = $this->db->getDibi();
         $dibi->insert('play_history', [
-            'user_name' => 'jf_test_user_1', 'item_name' => 'Pilot', 'series_name' => 'Naruto', 'season_ep' => 'S1 E1',
+            'user_name' => 'jf_test_user_1', 'item_id' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'item_type' => 'Episode',
+            'item_name' => 'Pilot', 'series_name' => 'Naruto', 'season_ep' => 'S1 E1',
             'library' => 'Anime', 'client' => 'Jellyfin Web', 'device' => 'Test Fire TV Device',
             'watched_sec' => 1200, 'started_at' => '2026-08-20 20:00:00', 'is_finished' => 1,
         ])->execute();
@@ -87,6 +90,8 @@ final class UsersUserStatsRepositoryTest extends TestCase
         $this->assertNull($plays[0]['seriesName']);
         $this->assertFalse($plays[0]['isFinished']);
         $this->assertSame('Pilot', $plays[1]['itemName']);
+        $this->assertSame('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', $plays[1]['itemId']);
+        $this->assertSame('Episode', $plays[1]['itemType']);
         $this->assertSame('Naruto', $plays[1]['seriesName']);
         $this->assertSame('S1 E1', $plays[1]['seasonEp']);
         $this->assertTrue($plays[1]['isFinished']);
