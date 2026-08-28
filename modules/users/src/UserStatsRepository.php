@@ -63,11 +63,11 @@ final class UserStatsRepository
     }
 
     /**
-     * @return array<int, array{itemName: ?string, seriesName: ?string, seasonEp: ?string, library: ?string, client: ?string, device: ?string, watchedSec: int, startedAt: string, isFinished: bool}>
+     * @return array<int, array{itemId: ?string, itemType: ?string, itemName: ?string, seriesName: ?string, seasonEp: ?string, library: ?string, client: ?string, device: ?string, watchedSec: int, startedAt: string, isFinished: bool}>
      */
     public function recentPlays(string $userName, int $limit = 20, int $offset = 0): array
     {
-        $rows = $this->dibi->select('item_name, series_name, season_ep, library, client, device, watched_sec, started_at, is_finished')
+        $rows = $this->dibi->select('item_id, item_type, item_name, series_name, season_ep, library, client, device, watched_sec, started_at, is_finished')
             ->from('play_history')
             ->where('user_name = %s', $userName)
             ->orderBy('started_at')->desc()
@@ -77,6 +77,8 @@ final class UserStatsRepository
         $plays = [];
         foreach ($rows as $row) {
             $plays[] = [
+                'itemId' => $row['item_id'] !== null ? (string) $row['item_id'] : null,
+                'itemType' => $row['item_type'] !== null ? (string) $row['item_type'] : null,
                 'itemName' => $row['item_name'] !== null ? (string) $row['item_name'] : null,
                 'seriesName' => $row['series_name'] !== null ? (string) $row['series_name'] : null,
                 'seasonEp' => $row['season_ep'] !== null ? (string) $row['season_ep'] : null,
