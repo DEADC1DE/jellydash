@@ -18,4 +18,5 @@ return [
         'Mk\\Modules\\Devices\\' => 'src/',
     ],
     'api' => 'api/devices.php',
+    'styles' => ['devices.css'],
 ];
