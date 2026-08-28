@@ -26,7 +26,7 @@ final class ServerHealthService
         ];
     }
 
-    /** @return array<int, array{id: string, name: string, state: string, progress: ?float, lastRunStatus: string}> */
+    /** @return array<int, array{id: string, name: string, state: string, progress: ?float, lastRunStatus: string, lastRunAt: ?string}> */
     public function tasks(): array
     {
         $payload = $this->client->getJson('/ScheduledTasks');
@@ -47,10 +47,28 @@ final class ServerHealthService
                 'state' => (string) ($task['State'] ?? 'Idle'),
                 'progress' => is_numeric($progress) ? (float) $progress : null,
                 'lastRunStatus' => (string) ($lastResult['Status'] ?? '-'),
+                'lastRunAt' => $this->parseUtc($lastResult['EndTimeUtc'] ?? $lastResult['StartTimeUtc'] ?? null),
             ];
         }
 
         return $tasks;
+    }
+
+    /**
+     * Jellyfin's *TimeUtc fields ("2026-08-28T10:25:00.47979Z") carry a
+     * variable-length fractional-seconds part PHP's DateTime doesn't parse
+     * reliably across versions, so trim to whole seconds first.
+     */
+    private function parseUtc(mixed $value): ?string
+    {
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        $trimmed = preg_replace('/\.\d+Z$/', 'Z', $value);
+        $timestamp = strtotime((string) $trimmed);
+
+        return $timestamp !== false ? gmdate('Y-m-d H:i:s', $timestamp) : null;
     }
 
     /**

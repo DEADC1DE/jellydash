@@ -53,5 +53,30 @@ final class ServerHealthServiceTest extends TestCase
         $this->assertSame('Running', $tasks[0]['state']);
         $this->assertSame(42.5, $tasks[0]['progress']);
         $this->assertSame('Completed', $tasks[0]['lastRunStatus']);
+        $this->assertNull($tasks[0]['lastRunAt']);
+    }
+
+    public function testTasksParsesLastRunTimestampFromRealJellyfinFormat(): void
+    {
+        $client = new class {
+            public function getJson(string $path): mixed
+            {
+                return [[
+                    'Id' => 'task-1',
+                    'Name' => 'Clean Activity Log',
+                    'State' => 'Idle',
+                    // Live-verified Jellyfin format: variable fractional-second digits.
+                    'LastExecutionResult' => [
+                        'StartTimeUtc' => '2026-08-28T10:25:00.47979Z',
+                        'EndTimeUtc' => '2026-08-28T10:25:00.4803611Z',
+                        'Status' => 'Completed',
+                    ],
+                ]];
+            }
+        };
+
+        $tasks = (new ServerHealthService($client))->tasks();
+
+        $this->assertSame('2026-08-28 10:25:00', $tasks[0]['lastRunAt']);
     }
 }

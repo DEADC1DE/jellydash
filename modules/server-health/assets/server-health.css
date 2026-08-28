@@ -47,7 +47,16 @@
 
 .health-tasks-state,
 .health-tasks-lastrun {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     color: var(--color-muted);
+}
+
+.health-tasks-lastrun small {
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11px;
 }
 
 .health-tasks-progress {
