@@ -1,0 +1,72 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Devices</h1>
+        <p>{{ devices|length }} known {{ devices|length == 1 ? 'device' : 'devices' }}</p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="devices-table-wrap">
+        <table class="devices-table">
+            <thead>
+                <tr>
+                    <th>Device</th>
+                    <th>App</th>
+                    <th>Last user</th>
+                    <th>Last activity</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                    <tr data-device-row="{{ device.id }}">
+                        <td>{{ device.name }}</td>
+                        <td>{{ device.appName }}</td>
+                        <td>{{ device.lastUserName|default('-') }}</td>
+                        <td>{{ device.lastActivity|date('Y-m-d H:i') }}</td>
+                        <td>
+                            <button type="button" class="devices-delete-btn" data-devices-delete="{{ device.id }}">Delete</button>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr><td colspan="5">No devices reported yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
+
+{% block page_scripts %}
+    <script>
+    (function () {
+        var csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = csrfMeta ? csrfMeta.content : '';
+
+        document.querySelectorAll('[data-devices-delete]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var id = btn.getAttribute('data-devices-delete');
+                if (!confirm('Delete this device? It will need to re-authenticate.')) {
+                    return;
+                }
+                fetch('/api/module.php?m=devices', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRF-Token': csrfToken,
+                    },
+                    body: 'action=delete&id=' + encodeURIComponent(id),
+                }).then(function (response) {
+                    if (response.ok) {
+                        var row = document.querySelector('[data-device-row="' + id + '"]');
+                        if (row) { row.remove(); }
+                    } else {
+                        alert('Could not delete device.');
+                    }
+                });
+            });
+        });
+    })();
+    </script>
+{% endblock %}
