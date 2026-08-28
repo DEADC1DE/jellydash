@@ -106,4 +106,36 @@ final class UsersUserStatsRepositoryTest extends TestCase
 
         $this->assertCount(2, $plays);
     }
+
+    public function testRecentPlaysOffsetPagesThroughResultsNewestFirst(): void
+    {
+        $dibi = $this->db->getDibi();
+        for ($i = 0; $i < 5; $i++) {
+            $dibi->insert('play_history', [
+                'user_name' => 'jf_test_user_1', 'item_name' => "Item $i", 'watched_sec' => 60,
+                'started_at' => sprintf('2026-08-2%d 12:00:00', $i),
+            ])->execute();
+        }
+
+        $repository = new UserStatsRepository($this->db);
+        $firstPage = $repository->recentPlays('jf_test_user_1', 2, 0);
+        $secondPage = $repository->recentPlays('jf_test_user_1', 2, 2);
+
+        $this->assertSame('Item 4', $firstPage[0]['itemName']);
+        $this->assertSame('Item 3', $firstPage[1]['itemName']);
+        $this->assertSame('Item 2', $secondPage[0]['itemName']);
+        $this->assertSame('Item 1', $secondPage[1]['itemName']);
+    }
+
+    public function testRecentPlaysCountMatchesTotalRowsForUser(): void
+    {
+        $dibi = $this->db->getDibi();
+        $dibi->insert('play_history', ['user_name' => 'jf_test_user_1', 'item_name' => 'A', 'watched_sec' => 60, 'started_at' => '2026-08-20 12:00:00'])->execute();
+        $dibi->insert('play_history', ['user_name' => 'jf_test_user_1', 'item_name' => 'B', 'watched_sec' => 60, 'started_at' => '2026-08-21 12:00:00'])->execute();
+        $dibi->insert('play_history', ['user_name' => 'someone-else', 'item_name' => 'C', 'watched_sec' => 60, 'started_at' => '2026-08-22 12:00:00'])->execute();
+
+        $count = (new UserStatsRepository($this->db))->recentPlaysCount('jf_test_user_1');
+
+        $this->assertSame(2, $count);
+    }
 }
