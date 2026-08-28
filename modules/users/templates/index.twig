@@ -1,0 +1,23 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Users</h1>
+        <p>{{ rows|length }} Jellyfin {{ rows|length == 1 ? 'user' : 'users' }}</p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="users-grid">
+        {% for row in rows %}
+            <a class="users-card" href="/users?user={{ row.name|url_encode }}">
+                <strong class="users-card-name">{{ row.name }}</strong>
+                <span class="users-card-stat">{{ row.plays }} plays</span>
+                <span class="users-card-stat">{{ (row.watchSec / 3600)|round(1) }}h watched</span>
+                <small class="users-card-lastseen">{{ row.lastSeen ? 'Last seen ' ~ row.lastSeen|date('Y-m-d') : 'No plays recorded' }}</small>
+            </a>
+        {% else %}
+            <div class="users-empty">No Jellyfin users found.</div>
+        {% endfor %}
+    </div>
+{% endblock %}

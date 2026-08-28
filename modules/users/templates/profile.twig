@@ -1,0 +1,46 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>{{ userName }}</h1>
+        <p><a href="/users">&larr; Back to Users</a></p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <dl class="profile-stats">
+        <div class="profile-stat"><dt>Plays</dt><dd>{{ summary.plays }}</dd></div>
+        <div class="profile-stat"><dt>Watch time</dt><dd>{{ (summary.watchSec / 3600)|round(1) }}h</dd></div>
+        <div class="profile-stat"><dt>Top library</dt><dd>{{ summary.topLibrary|default('-') }}</dd></div>
+        <div class="profile-stat"><dt>Top device</dt><dd>{{ summary.topDevice|default('-') }}</dd></div>
+        <div class="profile-stat"><dt>Longest session</dt><dd>{{ (summary.longestSessionSec / 60)|round }} min</dd></div>
+        <div class="profile-stat"><dt>Last seen</dt><dd>{{ summary.lastSeen|default('-') }}</dd></div>
+    </dl>
+
+    <h2 class="profile-heatmap-title">Activity by weekday &times; hour</h2>
+    <div class="profile-heatmap-scroll">
+        <table class="profile-heatmap">
+            <thead>
+                <tr><th></th>{% for hour in 0..23 %}<th>{{ hour }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+                {% set days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+                {% set max = 1 %}
+                {% for day in 0..6 %}
+                    {% for hour in 0..23 %}
+                        {% if heatmap[day][hour] > max %}{% set max = heatmap[day][hour] %}{% endif %}
+                    {% endfor %}
+                {% endfor %}
+                {% for day in 0..6 %}
+                    <tr>
+                        <th>{{ days[day] }}</th>
+                        {% for hour in 0..23 %}
+                            {% set count = heatmap[day][hour] %}
+                            <td class="profile-heatmap-cell{{ count > 0 ? '' : ' is-empty' }}" style="--intensity: {{ count / max }}" title="{{ count }} plays">{{ count > 0 ? count : '' }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
