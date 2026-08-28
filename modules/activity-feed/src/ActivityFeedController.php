@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mk\Modules\ActivityFeed;
 
+use Mk\Framework\Authorization;
 use Mk\Framework\Controller;
 
 final class ActivityFeedController extends Controller
@@ -23,6 +24,7 @@ final class ActivityFeedController extends Controller
             'entries' => $result['items'],
             'page' => $page,
             'totalPages' => $totalPages,
+            'isAdmin' => (new Authorization())->hasRole(Authorization::ROLE_ADMIN),
         ]);
     }
 }

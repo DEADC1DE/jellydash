@@ -52,7 +52,9 @@
                     },
                     body: 'action=' + encodeURIComponent(action) + '&id=' + encodeURIComponent(id),
                 }).then(function (response) {
-                    if (response.ok) { location.reload(); } else { alert('Task action failed.'); }
+                    return response.ok ? response.json() : { ok: false };
+                }).then(function (data) {
+                    if (data.ok === true) { location.reload(); } else { alert('Task action failed.'); }
                 });
             });
         });

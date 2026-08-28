@@ -51,21 +51,21 @@
     text-align: center;
 }
 
-.profile-stats {
+.users-profile-stats {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 14px;
     margin: 0 0 28px;
 }
 
-.profile-stat {
+.users-profile-stat {
     padding: 16px 18px;
     background: var(--color-card);
     border: 1px solid var(--color-border);
     border-radius: 14px;
 }
 
-.profile-stat dt {
+.users-profile-stat dt {
     margin: 0 0 6px;
     color: var(--color-low);
     font-size: 10px;
@@ -74,7 +74,7 @@
     text-transform: uppercase;
 }
 
-.profile-stat dd {
+.users-profile-stat dd {
     margin: 0;
     overflow: hidden;
     color: var(--color-text);
@@ -84,45 +84,45 @@
     white-space: nowrap;
 }
 
-.profile-heatmap-title {
+.users-profile-heatmap-title {
     margin: 0 0 14px;
     font-size: 15px;
     font-weight: 700;
 }
 
-.profile-heatmap-scroll {
+.users-profile-heatmap-scroll {
     overflow-x: auto;
     border: 1px solid var(--color-border);
     border-radius: 14px;
     background: var(--color-card);
 }
 
-.profile-heatmap {
+.users-profile-heatmap {
     width: 100%;
     border-collapse: collapse;
     font-size: 11px;
 }
 
-.profile-heatmap th,
-.profile-heatmap td {
+.users-profile-heatmap th,
+.users-profile-heatmap td {
     padding: 6px;
     text-align: center;
 }
 
-.profile-heatmap thead th {
+.users-profile-heatmap thead th {
     color: var(--color-low);
     font-weight: 800;
     font-family: var(--font-mono);
 }
 
-.profile-heatmap tbody th {
+.users-profile-heatmap tbody th {
     color: var(--color-muted);
     font-weight: 700;
     text-align: right;
     white-space: nowrap;
 }
 
-.profile-heatmap-cell {
+.users-profile-heatmap-cell {
     min-width: 26px;
     color: var(--color-purple-soft);
     font-family: var(--font-mono);
@@ -130,7 +130,7 @@
     border-radius: 4px;
 }
 
-.profile-heatmap-cell.is-empty {
+.users-profile-heatmap-cell.is-empty {
     color: transparent;
     background: rgba(255, 255, 255, .02);
 }

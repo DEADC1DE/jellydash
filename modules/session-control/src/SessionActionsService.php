@@ -18,11 +18,35 @@ final class SessionActionsService
      * server's /api-docs/openapi.json in Task 5 Step 1. The brief's placeholder
      * (`/Sessions/{sessionId}/Playstate` with a `Command` body) does not exist;
      * the real endpoint takes the command as a path segment with no body.
+     *
+     * Jellyfin returns 204 with an empty body on success, and core
+     * JellyfinClient::postJson() unconditionally json_decode()s the response
+     * (throws on empty string) — same limitation as
+     * ServerHealthService::triggerTask(), so this makes its own raw cURL call.
      */
     public function stop(string $sessionId): bool
     {
-        $this->client->postJson('/Sessions/' . rawurlencode($sessionId) . '/Playing/Stop', []);
-        return true;
+        $baseUrl = rtrim((string) Config::get('JELLYFIN_URL', ''), '/');
+        $token = (string) Config::get('JELLYFIN_API_TOKEN', Config::get('JELLYFIN_API_KEY', ''));
+
+        if ($baseUrl === '' || $token === '') {
+            throw new \RuntimeException('Jellyfin URL or API token is missing.');
+        }
+
+        $handle = curl_init($baseUrl . '/Sessions/' . rawurlencode($sessionId) . '/Playing/Stop');
+        curl_setopt_array($handle, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => 8,
+            CURLOPT_HTTPHEADER => ['Authorization: MediaBrowser Token="' . $token . '"'],
+        ]);
+
+        curl_exec($handle);
+        $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+        curl_close($handle);
+
+        return $status >= 200 && $status < 300;
     }
 
     /**

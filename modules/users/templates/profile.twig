@@ -8,18 +8,18 @@
 {% endblock %}
 
 {% block dashboard_content %}
-    <dl class="profile-stats">
-        <div class="profile-stat"><dt>Plays</dt><dd>{{ summary.plays }}</dd></div>
-        <div class="profile-stat"><dt>Watch time</dt><dd>{{ (summary.watchSec / 3600)|round(1) }}h</dd></div>
-        <div class="profile-stat"><dt>Top library</dt><dd>{{ summary.topLibrary|default('-') }}</dd></div>
-        <div class="profile-stat"><dt>Top device</dt><dd>{{ summary.topDevice|default('-') }}</dd></div>
-        <div class="profile-stat"><dt>Longest session</dt><dd>{{ (summary.longestSessionSec / 60)|round }} min</dd></div>
-        <div class="profile-stat"><dt>Last seen</dt><dd>{{ summary.lastSeen|default('-') }}</dd></div>
+    <dl class="users-profile-stats">
+        <div class="users-profile-stat"><dt>Plays</dt><dd>{{ summary.plays }}</dd></div>
+        <div class="users-profile-stat"><dt>Watch time</dt><dd>{{ (summary.watchSec / 3600)|round(1) }}h</dd></div>
+        <div class="users-profile-stat"><dt>Top library</dt><dd>{{ summary.topLibrary|default('-') }}</dd></div>
+        <div class="users-profile-stat"><dt>Top device</dt><dd>{{ summary.topDevice|default('-') }}</dd></div>
+        <div class="users-profile-stat"><dt>Longest session</dt><dd>{{ (summary.longestSessionSec / 60)|round }} min</dd></div>
+        <div class="users-profile-stat"><dt>Last seen</dt><dd>{{ summary.lastSeen|default('-') }}</dd></div>
     </dl>
 
-    <h2 class="profile-heatmap-title">Activity by weekday &times; hour</h2>
-    <div class="profile-heatmap-scroll">
-        <table class="profile-heatmap">
+    <h2 class="users-profile-heatmap-title">Activity by weekday &times; hour</h2>
+    <div class="users-profile-heatmap-scroll">
+        <table class="users-profile-heatmap">
             <thead>
                 <tr><th></th>{% for hour in 0..23 %}<th>{{ hour }}</th>{% endfor %}</tr>
             </thead>
@@ -36,7 +36,7 @@
                         <th>{{ days[day] }}</th>
                         {% for hour in 0..23 %}
                             {% set count = heatmap[day][hour] %}
-                            <td class="profile-heatmap-cell{{ count > 0 ? '' : ' is-empty' }}" style="--intensity: {{ count / max }}" title="{{ count }} plays">{{ count > 0 ? count : '' }}</td>
+                            <td class="users-profile-heatmap-cell{{ count > 0 ? '' : ' is-empty' }}" style="--intensity: {{ count / max }}" title="{{ count }} plays">{{ count > 0 ? count : '' }}</td>
                         {% endfor %}
                     </tr>
                 {% endfor %}

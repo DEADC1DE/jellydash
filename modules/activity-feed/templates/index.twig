@@ -5,7 +5,7 @@
         <h1>Activity</h1>
         <p>Page {{ page }} of {{ totalPages }}</p>
     </div>
-    {% if layout.user and layout.user.role <= 2 %}
+    {% if isAdmin %}
         <button type="button" class="activity-resolve-btn" data-activity-resolve>Resolve unknown users</button>
     {% endif %}
 {% endblock %}
@@ -14,7 +14,7 @@
     <div class="activity-list">
         {% for entry in entries %}
             <div class="activity-row">
-                <time class="activity-date">{{ entry.date|date('Y-m-d H:i') }}</time>
+                <time class="activity-date">{{ entry.date ? entry.date|date('Y-m-d H:i') : '-' }}</time>
                 <span class="activity-text">{{ entry.name }}</span>
             </div>
         {% else %}

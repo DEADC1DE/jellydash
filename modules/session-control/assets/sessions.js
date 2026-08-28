@@ -8,6 +8,20 @@
         var csrfMeta = document.querySelector('meta[name="csrf-token"]');
         var csrfToken = csrfMeta ? csrfMeta.content : '';
 
+        // Set once a 403 is seen — no client-side role check exists (the
+        // module can't know the role without a core edit), so a non-admin
+        // sees the buttons until their first click 403s. After that, stop
+        // showing the confusing error and remove the control bars for good.
+        var forbidden = false;
+
+        function hideControlsPermanently() {
+            forbidden = true;
+            document.querySelectorAll('[data-session-control]').forEach(function (bar) {
+                bar.remove();
+            });
+            observer.disconnect();
+        }
+
         function sendAction(action, sessionId, button) {
             button.disabled = true;
             fetch('/api/module.php?m=session-control', {
@@ -18,10 +32,24 @@
                 },
                 body: 'action=' + encodeURIComponent(action) + '&sessionId=' + encodeURIComponent(sessionId),
             }).then(function (response) {
-                button.disabled = false;
+                if (response.status === 403) {
+                    hideControlsPermanently();
+                    return null;
+                }
                 if (!response.ok) {
+                    button.disabled = false;
+                    alert('Could not ' + action + ' this session.');
+                    return null;
+                }
+                return response.json();
+            }).then(function (data) {
+                button.disabled = false;
+                if (data && data.ok === false) {
                     alert('Could not ' + action + ' this session.');
                 }
+            }).catch(function () {
+                button.disabled = false;
+                alert('Could not ' + action + ' this session.');
             });
         }
 
@@ -60,13 +88,17 @@
         }
 
         function decorateAll() {
+            if (forbidden) {
+                return;
+            }
             document.querySelectorAll('.stream-card[data-stream-id]').forEach(decorate);
         }
 
-        decorateAll();
         // Now Playing re-renders cards on its own poll cycle — a light
         // MutationObserver keeps the buttons attached without touching core JS.
-        new MutationObserver(decorateAll).observe(page, { childList: true, subtree: true });
+        var observer = new MutationObserver(decorateAll);
+        decorateAll();
+        observer.observe(page, { childList: true, subtree: true });
     }
 
     if (document.readyState === 'loading') {

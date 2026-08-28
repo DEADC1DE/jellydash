@@ -50,7 +50,9 @@
                     },
                     body: 'action=delete&id=' + encodeURIComponent(id),
                 }).then(function (response) {
-                    if (response.ok) {
+                    return response.ok ? response.json() : { ok: false };
+                }).then(function (data) {
+                    if (data.ok === true) {
                         var row = document.querySelector('[data-device-row="' + id + '"]');
                         if (row) { row.remove(); }
                     } else {

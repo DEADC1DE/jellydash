@@ -83,14 +83,26 @@ final class SessionControlActionsServiceTest extends TestCase
 
     public function testStopSendsVerifiedPlaystatePath(): void
     {
-        $calls = [];
-        $client = $this->makeTrackingClient($calls, []);
+        // stop() now makes its own raw cURL POST (core JellyfinClient::postJson()
+        // json_decode()s the empty-body 204 Jellyfin returns and throws), so it
+        // never touches the tracking client — same limitation as kick()'s DELETE
+        // step. Point at a local port nothing listens on so the POST fails fast
+        // without a live server, and assert the real-world false result.
+        putenv('JELLYFIN_URL=http://127.0.0.1:1');
+        putenv('JELLYFIN_API_TOKEN=test-token');
 
-        $service = new SessionActionsService($client);
-        $result = $service->stop('sess-1');
+        try {
+            $calls = [];
+            $client = $this->makeTrackingClient($calls, []);
 
-        $this->assertTrue($result);
-        $this->assertSame('POST', $client->calls[0][0]);
-        $this->assertSame('/Sessions/sess-1/Playing/Stop', $client->calls[0][1]);
+            $service = new SessionActionsService($client);
+            $result = $service->stop('sess-1');
+
+            $this->assertFalse($result);
+            $this->assertCount(0, $client->calls);
+        } finally {
+            putenv('JELLYFIN_URL');
+            putenv('JELLYFIN_API_TOKEN');
+        }
     }
 }
