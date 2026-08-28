@@ -84,7 +84,12 @@
 
             bar.appendChild(stopBtn);
             bar.appendChild(kickBtn);
-            card.appendChild(bar);
+            // Append inside .stream-card-content (the padded flex column that
+            // holds all real card content) rather than the outer .stream-card
+            // (which has no padding of its own and clips with overflow:hidden)
+            // — otherwise the bar sits flush against the raw card edges.
+            var content = card.querySelector('.stream-card-content');
+            (content || card).appendChild(bar);
         }
 
         function decorateAll() {
