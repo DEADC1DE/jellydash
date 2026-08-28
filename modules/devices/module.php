@@ -19,4 +19,5 @@ return [
     ],
     'api' => 'api/devices.php',
     'styles' => ['devices.css'],
+    'scripts' => ['devices.js'],
 ];

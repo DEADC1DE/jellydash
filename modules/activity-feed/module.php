@@ -19,4 +19,5 @@ return [
     ],
     'api' => 'api/activity.php',
     'styles' => ['activity-feed.css'],
+    'scripts' => ['activity-feed.js'],
 ];
