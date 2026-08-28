@@ -85,9 +85,83 @@
 }
 
 .users-profile-heatmap-title {
-    margin: 0 0 14px;
+    margin: 28px 0 14px;
     font-size: 15px;
     font-weight: 700;
+}
+
+.users-profile-heatmap-title:first-child {
+    margin-top: 0;
+}
+
+.users-recent-plays {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .02);
+}
+
+.users-recent-plays-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 18px;
+    border-top: 1px solid rgba(255, 255, 255, .05);
+}
+
+.users-recent-plays-row:first-child {
+    border-top: 0;
+}
+
+.users-recent-plays-row:hover {
+    background: rgba(255, 255, 255, .025);
+}
+
+.users-recent-plays-title {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.users-recent-plays-title strong {
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-recent-plays-title small {
+    overflow: hidden;
+    color: var(--color-low);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-recent-plays-meta {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    align-items: flex-end;
+    gap: 3px;
+    color: var(--color-muted);
+    font-size: 12px;
+    text-align: right;
+}
+
+.users-recent-plays-meta time {
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.users-recent-plays-empty {
+    padding: 32px 18px;
+    color: var(--color-low);
+    text-align: center;
 }
 
 .users-profile-heatmap-scroll {

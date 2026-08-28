@@ -6,6 +6,7 @@ namespace Mk\Modules\Users;
 
 use Mk\Framework\Controller;
 use Mk\Framework\Jellyfin\JellyfinClient;
+use Mk\Modules\Devices\DeviceService;
 
 final class UsersController extends Controller
 {
@@ -15,11 +16,18 @@ final class UsersController extends Controller
         $repository = new UserStatsRepository();
 
         if ($selected !== '') {
+            $devices = array_values(array_filter(
+                (new DeviceService())->list(),
+                static fn (array $device): bool => $device['lastUserName'] === $selected
+            ));
+
             $this->render('@users/profile', [
                 'layout' => $this->layout(['title' => $selected, 'page' => 'users']),
                 'userName' => $selected,
                 'summary' => $repository->summaryForUser($selected),
                 'heatmap' => $repository->heatmap($selected),
+                'recentPlays' => $repository->recentPlays($selected),
+                'devices' => $devices,
             ]);
             return;
         }

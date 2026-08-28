@@ -55,6 +55,36 @@ final class UserStatsRepository
     }
 
     /**
+     * @return array<int, array{itemName: ?string, seriesName: ?string, seasonEp: ?string, library: ?string, client: ?string, device: ?string, watchedSec: int, startedAt: string, isFinished: bool}>
+     */
+    public function recentPlays(string $userName, int $limit = 20): array
+    {
+        $rows = $this->dibi->select('item_name, series_name, season_ep, library, client, device, watched_sec, started_at, is_finished')
+            ->from('play_history')
+            ->where('user_name = %s', $userName)
+            ->orderBy('started_at')->desc()
+            ->limit($limit)
+            ->fetchAll();
+
+        $plays = [];
+        foreach ($rows as $row) {
+            $plays[] = [
+                'itemName' => $row['item_name'] !== null ? (string) $row['item_name'] : null,
+                'seriesName' => $row['series_name'] !== null ? (string) $row['series_name'] : null,
+                'seasonEp' => $row['season_ep'] !== null ? (string) $row['season_ep'] : null,
+                'library' => $row['library'] !== null ? (string) $row['library'] : null,
+                'client' => $row['client'] !== null ? (string) $row['client'] : null,
+                'device' => $row['device'] !== null ? (string) $row['device'] : null,
+                'watchedSec' => (int) $row['watched_sec'],
+                'startedAt' => (string) $row['started_at'],
+                'isFinished' => (bool) $row['is_finished'],
+            ];
+        }
+
+        return $plays;
+    }
+
+    /**
      * @return array<int, array<int, int>> [weekday(0=Mon..6=Sun)][hour(0-23)] => count
      */
     public function heatmap(string $userName): array
