@@ -164,6 +164,45 @@
     text-align: center;
 }
 
+.users-profile-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 12px 0 0;
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.users-profile-pager a {
+    padding: 6px 12px;
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .05);
+}
+
+.users-profile-pager a:hover {
+    background: rgba(124, 92, 255, .18);
+    border-color: var(--color-purple);
+}
+
+/* Smaller units on the profile page — this is a secondary glance at a
+   single user's devices, not the full admin Devices page. */
+.users-profile-devices-compact .devices-head,
+.users-profile-devices-compact .devices-row {
+    grid-template-columns: minmax(120px, 1.4fr) minmax(100px, 1fr) 100px 130px 0;
+    padding: 0 14px;
+    font-size: 12px;
+}
+
+.users-profile-devices-compact .devices-row {
+    min-height: 44px;
+}
+
 .users-profile-heatmap-scroll {
     overflow-x: auto;
     border: 1px solid var(--color-border);

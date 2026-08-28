@@ -54,16 +54,24 @@ final class UserStatsRepository
         ];
     }
 
+    public function recentPlaysCount(string $userName): int
+    {
+        return (int) $this->dibi->select('COUNT(*)')
+            ->from('play_history')
+            ->where('user_name = %s', $userName)
+            ->fetchSingle();
+    }
+
     /**
      * @return array<int, array{itemName: ?string, seriesName: ?string, seasonEp: ?string, library: ?string, client: ?string, device: ?string, watchedSec: int, startedAt: string, isFinished: bool}>
      */
-    public function recentPlays(string $userName, int $limit = 20): array
+    public function recentPlays(string $userName, int $limit = 20, int $offset = 0): array
     {
         $rows = $this->dibi->select('item_name, series_name, season_ep, library, client, device, watched_sec, started_at, is_finished')
             ->from('play_history')
             ->where('user_name = %s', $userName)
             ->orderBy('started_at')->desc()
-            ->limit($limit)
+            ->limit($limit)->offset($offset)
             ->fetchAll();
 
         $plays = [];
