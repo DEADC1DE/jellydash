@@ -36,6 +36,7 @@ class Authorization
         $this->db = $db ?? Container::db();
         $this->dibi = $this->db->getDibi();
         $this->enforceTimeouts();
+        $this->resumeFromRememberCookie();
     }
 
     // --- State -------------------------------------------------------------
@@ -85,7 +86,7 @@ class Authorization
 
     // Returns true on success, false on bad credentials / lockout.
     // \Dibi\Exception propagates (handled centrally).
-    public function userLogin($username, $password): bool
+    public function userLogin($username, $password, bool $remember = false): bool
     {
         $username = trim(strtolower((string) $username));
         $ip = Log::userIP();
@@ -127,21 +128,97 @@ class Authorization
         $_SESSION[self::SESSION_LOGIN_TIME] = time();
         $_SESSION[self::SESSION_LAST_ACTIVITY] = time();
 
+        if ($remember) {
+            $this->setRememberCookie(RememberToken::issue((int) $row['id']));
+        }
+
         return true;
     }
 
+    // Explicit, user-initiated sign-out: also forgets this device's "stay
+    // signed in" token. A plain session timeout must NOT do this (see
+    // clearSession()) or remember-me would never survive past IDLE_TIMEOUT.
     public function userLogout(): bool
     {
-        unset(
-            $_SESSION[self::SESSION_USER],
-            $_SESSION[self::SESSION_LOGIN_TIME],
-            $_SESSION[self::SESSION_LAST_ACTIVITY]
-        );
-        $this->regenerateId();
+        $this->clearSession();
+
+        $cookie = $_COOKIE[RememberToken::COOKIE_NAME] ?? null;
+        if (is_string($cookie) && $cookie !== '') {
+            RememberToken::forget($cookie);
+        }
+        $this->clearRememberCookie();
+
         return true;
     }
 
     // --- Internals ---------------------------------------------------------
+
+    // If no session is active but a valid "stay signed in" cookie is
+    // presented, transparently resume the session from it (and rotate the
+    // token). Runs once per request, before any isUserLoggedIn() check.
+    private function resumeFromRememberCookie(): void
+    {
+        if (isset($_SESSION[self::SESSION_USER])) {
+            return;
+        }
+
+        $cookie = $_COOKIE[RememberToken::COOKIE_NAME] ?? null;
+        if (!is_string($cookie) || $cookie === '') {
+            return;
+        }
+
+        $result = RememberToken::consume($cookie);
+        if ($result === null) {
+            $this->clearRememberCookie();
+            return;
+        }
+
+        $this->regenerateId();
+        $_SESSION[self::SESSION_USER] = [
+            'id' => (int) $result['user']['id'],
+            'username' => $result['user']['username'],
+            'name' => $result['user']['name'],
+            'role' => (int) $result['user']['role'],
+        ];
+        $_SESSION[self::SESSION_LOGIN_TIME] = time();
+        $_SESSION[self::SESSION_LAST_ACTIVITY] = time();
+
+        $this->setRememberCookie($result['cookie']);
+    }
+
+    private function setRememberCookie(string $value): void
+    {
+        setcookie(RememberToken::COOKIE_NAME, $value, [
+            'expires' => time() + (30 * 24 * 60 * 60),
+            'path' => '/',
+            'secure' => $this->isHttps(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    private function clearRememberCookie(): void
+    {
+        if (!isset($_COOKIE[RememberToken::COOKIE_NAME])) {
+            return;
+        }
+
+        setcookie(RememberToken::COOKIE_NAME, '', [
+            'expires' => time() - 3600,
+            'path' => '/',
+            'secure' => $this->isHttps(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    // Mirrors the detection in utils/@settings.php for the session cookie.
+    private function isHttps(): bool
+    {
+        return (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
+            || (($_SERVER['SERVER_PORT'] ?? null) == 443)
+            || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+    }
 
     // Log the user out if the session is idle or past its absolute lifetime.
     private function enforceTimeouts(): void
@@ -155,11 +232,23 @@ class Authorization
         $age = $now - (int) ($_SESSION[self::SESSION_LOGIN_TIME] ?? $now);
 
         if ($idle > self::IDLE_TIMEOUT || $age > self::ABSOLUTE_TIMEOUT) {
-            $this->userLogout();
+            // Session expiry only: leaves any remember-me token untouched so
+            // resumeFromRememberCookie() can transparently sign back in.
+            $this->clearSession();
             return;
         }
 
         $_SESSION[self::SESSION_LAST_ACTIVITY] = $now;
+    }
+
+    private function clearSession(): void
+    {
+        unset(
+            $_SESSION[self::SESSION_USER],
+            $_SESSION[self::SESSION_LOGIN_TIME],
+            $_SESSION[self::SESSION_LAST_ACTIVITY]
+        );
+        $this->regenerateId();
     }
 
     private function regenerateId(): void

@@ -50,6 +50,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             'login_attempts',
             'play_history',
             'push_subscriptions',
+            'remember_tokens',
             'seerr_requests',
             'users',
         ], $this->tableNames());

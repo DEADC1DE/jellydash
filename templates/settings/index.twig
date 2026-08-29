@@ -105,6 +105,38 @@
         </div>
     </form>
 
+    {% if auth_enabled and layout.user %}
+        <section class="settings-card settings-account">
+            <header>
+                <strong>Account</strong>
+                <span>Change your own password.</span>
+            </header>
+            {% if password_changed %}
+                <div class="settings-saved" role="status">Password changed.</div>
+            {% elseif password_error %}
+                <div class="settings-error" role="alert">{{ password_error }}</div>
+            {% endif %}
+            <form action="?req=change-password" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <label class="settings-field">
+                    <span>Current password</span>
+                    <input type="password" name="current_pwd" autocomplete="current-password" required>
+                </label>
+                <label class="settings-field">
+                    <span>New password</span>
+                    <input type="password" name="new_pwd" autocomplete="new-password" minlength="8" required>
+                </label>
+                <label class="settings-field">
+                    <span>Confirm new password</span>
+                    <input type="password" name="new_pwd_confirm" autocomplete="new-password" minlength="8" required>
+                </label>
+                <div class="settings-actions">
+                    <button type="submit" class="settings-save-btn">Change password</button>
+                </div>
+            </form>
+        </section>
+    {% endif %}
+
     <div class="settings-dirty-bar" data-settings-dirty-bar hidden>
         <span aria-live="polite"><i aria-hidden="true"></i>Unsaved changes</span>
         <button type="submit" class="settings-save-btn" form="settings-form">Save changes</button>

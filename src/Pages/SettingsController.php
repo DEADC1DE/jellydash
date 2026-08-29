@@ -67,6 +67,8 @@ final class SettingsController extends Controller
                 'hide_footer' => true,
             ]),
             'saved' => isset($_GET['saved']),
+            'password_changed' => isset($_GET['password_changed']),
+            'password_error' => trim((string) (Main::captureGetString('password_error') ?? '')),
             'server_label_value' => AppSettings::get('server_label', 'Jellyfin dashboard'),
             'show_server_stats' => AppSettings::bool('show_server_stats', true),
             'show_recently_added' => AppSettings::bool('show_recently_added', true),
