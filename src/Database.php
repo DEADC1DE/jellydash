@@ -82,6 +82,30 @@ class Database
                 UNIQUE (`identifier`)
             )'
         );
+
+        // "Stay signed in": selector/validator pairs (Barry Jaspan's persistent
+        // login scheme). Only the validator's hash is stored, so a stolen DB row
+        // can't be replayed as a cookie.
+        $this->platform->createTable(
+            'CREATE TABLE IF NOT EXISTS `remember_tokens` (
+                `id` int NOT NULL AUTO_INCREMENT,
+                `user_id` mediumint(9) NOT NULL,
+                `selector` varchar(24) NOT NULL,
+                `validator_hash` varchar(64) NOT NULL,
+                `expires_at` datetime NOT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_selector` (`selector`),
+                KEY `idx_user_id` (`user_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `remember_tokens` (
+                `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+                `user_id` INTEGER NOT NULL,
+                `selector` TEXT NOT NULL,
+                `validator_hash` TEXT NOT NULL,
+                `expires_at` TEXT NOT NULL,
+                UNIQUE (`selector`)
+            )'
+        );
     }
 
     /** @return array<string, mixed> */
@@ -163,5 +187,14 @@ class Database
             ->from('users')->where('id = %i', $id)->limit(1)->fetch();
 
         return $row?->toArray();
+    }
+
+    // Verify a plaintext password against the stored hash for a user id.
+    public function verifyPassword(int $userId, string $password): bool
+    {
+        $row = $this->dibi->select('password')->from('users')
+            ->where('id = %i', $userId)->limit(1)->fetch();
+
+        return $row !== null && password_verify($password, (string) $row['password']);
     }
 }

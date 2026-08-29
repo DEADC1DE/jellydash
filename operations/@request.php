@@ -3,10 +3,13 @@
 declare(strict_types=1);
 
 use Mk\Framework\Authorization;
+use Mk\Framework\Container;
 use Mk\Framework\Csrf;
+use Mk\Framework\Database;
 use Mk\Framework\Main;
 use Mk\Framework\Pager;
 use Mk\Framework\Pages\LoginController;
+use Mk\Framework\RememberToken;
 use Mk\Framework\Requests;
 use Mk\Framework\Upload;
 use Mk\Framework\View;
@@ -27,8 +30,9 @@ use Mk\Framework\View;
         // password is passed raw to password_verify (never escaped)
         $username = Main::capturePostString("username");
         $password = $_POST["pwd"] ?? null;
+        $remember = isset($_POST['remember']);
 
-        if ($auth_class->userLogin($username, $password)) {
+        if ($auth_class->userLogin($username, $password, $remember)) {
             Pager::homePage();
         }
 
@@ -97,6 +101,46 @@ use Mk\Framework\View;
         \Mk\Framework\AppSettings::set('push_ignore_users', $csv($ignore, 'push_ignore_extra'));
 
         header('Location: /settings?saved=1');
+        exit;
+    }
+
+    // CHANGE PASSWORD ---------------------------------------------------------------------------------------------------
+    if ($requests->requestIs('change-password') && $isPost) {
+        Csrf::check();
+
+        $auth_class = new Authorization();
+        if (!$auth_class->isUserLoggedIn()) {
+            http_response_code(403);
+            exit('Forbidden');
+        }
+
+        $userId = (int) $auth_class->getUserData()['id'];
+        $username = (string) $auth_class->getUserData()['username'];
+        $currentPassword = (string) ($_POST['current_pwd'] ?? '');
+        $newPassword = (string) ($_POST['new_pwd'] ?? '');
+        $newPasswordConfirm = (string) ($_POST['new_pwd_confirm'] ?? '');
+
+        $error = null;
+        if (!Container::db()->verifyPassword($userId, $currentPassword)) {
+            $error = 'Current password is incorrect.';
+        } elseif ($newPassword !== $newPasswordConfirm) {
+            $error = 'New passwords do not match.';
+        } elseif (strlen($newPassword) < Database::MIN_PASSWORD_LENGTH) {
+            $error = 'New password must be at least ' . Database::MIN_PASSWORD_LENGTH . ' characters.';
+        }
+
+        if ($error !== null) {
+            header('Location: /settings?' . http_build_query(['password_error' => $error]));
+            exit;
+        }
+
+        Container::db()->setUserPassword($username, $newPassword);
+
+        // A changed password must invalidate any "stay signed in" cookies,
+        // including on other devices, so a stolen old password can't linger.
+        RememberToken::forgetForUser($userId);
+
+        header('Location: /settings?password_changed=1');
         exit;
     }
 

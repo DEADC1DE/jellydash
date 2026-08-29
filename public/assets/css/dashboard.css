@@ -1076,6 +1076,26 @@ svg.icon-filled {
     scroll-margin-top: 18px;
 }
 
+/* Single-column form (unlike the 2-column .settings-import grid above), so it
+   matches the width of the cards inside .settings-form instead of 900px. */
+.settings-account {
+    max-width: 760px;
+    margin-top: 18px;
+}
+
+/* This button lives inside a padded card, so it can never line up with the
+   main form's flush-right "Save settings" (that one sits outside any card
+   padding). Trying to align them just reads as a near-miss. Full width plus
+   real spacing above reads as its own self-contained action instead. */
+.settings-account .settings-actions {
+    justify-content: stretch;
+    margin-top: 18px;
+}
+
+.settings-account .settings-save-btn {
+    width: 100%;
+}
+
 .settings-import-sources {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

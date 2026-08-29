@@ -4,6 +4,7 @@ use Mk\Framework\Authorization;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\LoginThrottle;
+use Mk\Framework\RememberToken;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -203,5 +204,95 @@ final class AuthIntegrationTest extends TestCase
             self::CLI_USERNAME,
         ])->execute();
         $this->dibi->delete('login_attempts')->execute();
+        $this->dibi->delete('remember_tokens')->execute();
+    }
+
+    private function testUserId(): int
+    {
+        $row = $this->dibi->select('id')->from('users')
+            ->where('username = %s', self::USERNAME)->fetch();
+        return (int) $row['id'];
+    }
+
+    public function testRememberTokenRoundTripsAndRotatesOnConsume(): void
+    {
+        $cookie = RememberToken::issue($this->testUserId());
+
+        $result = RememberToken::consume($cookie);
+        $this->assertNotNull($result);
+        $this->assertSame(self::USERNAME, $result['user']['username']);
+        $this->assertNotSame($cookie, $result['cookie'], 'token must rotate on use');
+
+        // The original cookie is now dead (single use).
+        $this->assertNull(RememberToken::consume($cookie));
+
+        // The rotated cookie still works.
+        $this->assertNotNull(RememberToken::consume($result['cookie']));
+    }
+
+    public function testRememberTokenRejectsGarbageCookie(): void
+    {
+        $this->assertNull(RememberToken::consume('not-a-valid-cookie'));
+        $this->assertNull(RememberToken::consume(''));
+    }
+
+    public function testRememberTokenRejectsExpiredToken(): void
+    {
+        $userId = $this->testUserId();
+        $this->dibi->insert('remember_tokens', [
+            'user_id' => $userId,
+            'selector' => 'expiredselector',
+            'validator_hash' => hash('sha256', 'irrelevant'),
+            'expires_at' => '2000-01-01 00:00:00',
+        ])->execute();
+
+        $this->assertNull(RememberToken::consume('expiredselector:irrelevant'));
+    }
+
+    public function testForgetForUserRevokesEveryDevice(): void
+    {
+        $userId = $this->testUserId();
+        $deviceA = RememberToken::issue($userId);
+        $deviceB = RememberToken::issue($userId);
+
+        RememberToken::forgetForUser($userId);
+
+        $this->assertNull(RememberToken::consume($deviceA));
+        $this->assertNull(RememberToken::consume($deviceB));
+    }
+
+    public function testAuthorizationResumesSessionFromRememberCookie(): void
+    {
+        $userId = $this->testUserId();
+        $cookie = RememberToken::issue($userId);
+        $_COOKIE[RememberToken::COOKIE_NAME] = $cookie;
+
+        $auth = new Authorization($this->db);
+
+        $this->assertTrue($auth->isUserLoggedIn());
+        $this->assertSame(self::USERNAME, $auth->getUserData()['username']);
+
+        unset($_COOKIE[RememberToken::COOKIE_NAME]);
+    }
+
+    public function testAuthorizationLogoutForgetsRememberToken(): void
+    {
+        $userId = $this->testUserId();
+        $cookie = RememberToken::issue($userId);
+        $_COOKIE[RememberToken::COOKIE_NAME] = $cookie;
+
+        $auth = new Authorization($this->db);
+        $auth->userLogout();
+
+        unset($_COOKIE[RememberToken::COOKIE_NAME]);
+        $this->assertNull(RememberToken::consume($cookie));
+    }
+
+    public function testVerifyPasswordAcceptsCorrectAndRejectsWrong(): void
+    {
+        $userId = $this->testUserId();
+
+        $this->assertTrue($this->db->verifyPassword($userId, self::PASSWORD));
+        $this->assertFalse($this->db->verifyPassword($userId, 'wrong-password'));
     }
 }
