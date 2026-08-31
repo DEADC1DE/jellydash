@@ -57,11 +57,27 @@
         `;
     }
 
+    function itemLabel(library) {
+        if (library.available === false) {
+            return 'Item counts unavailable';
+        }
+
+        const unit = {
+            tv: 'episodes',
+            anime: 'episodes',
+            music: 'songs',
+            videos: 'videos',
+        }[library.kind] || 'items';
+
+        return `${escapeHtml(library.totalFiles)} ${unit}`;
+    }
+
     function renderLibrary(library) {
         const breakdown = Array.isArray(library.breakdown) ? library.breakdown : [];
+        const unavailable = library.available === false;
 
         return `
-            <article class="library-card" style="--library-accent: ${escapeAttr(library.accent)}; --library-chip-bg: ${escapeAttr(library.chipBg)}; --library-chip-border: ${escapeAttr(library.chipBorder)};">
+            <article class="library-card${unavailable ? ' is-unavailable' : ''}" style="--library-accent: ${escapeAttr(library.accent)}; --library-chip-bg: ${escapeAttr(library.chipBg)}; --library-chip-border: ${escapeAttr(library.chipBorder)};">
                 <div class="library-banner">
                     <span class="library-banner-art" style="background-image: ${escapeAttr(library.banner)}"></span>
                     <span class="library-banner-overlay"></span>
@@ -70,16 +86,21 @@
                         <span class="library-glyph">${escapeHtml(library.glyph)}</span>
                         <div>
                             <h2 class="library-title">${escapeHtml(library.name)}</h2>
-                            <p>${escapeHtml(library.totalFiles)} files &middot; ${escapeHtml(library.size)}</p>
+                            <p>${itemLabel(library)}</p>
                         </div>
                     </div>
                 </div>
 
                 <div class="library-body">
+                    ${unavailable ? `
+                        <div class="library-unavailable-note">
+                            <strong>Live item counts are unavailable.</strong>
+                            <span>Recorded playback stats are still shown below.</span>
+                        </div>
+                    ` : ''}
+
                     <dl class="library-stat-grid">
-                        ${stat('Total Time', library.totalTime)}
-                        ${stat('Total Files', library.totalFiles)}
-                        ${stat('Library Size', library.size)}
+                        ${stat('Total Items', library.totalFiles)}
                         ${stat('Total Plays', library.totalPlays)}
                         ${stat('Total Playback', library.playback)}
                         ${stat('Last Activity', library.lastActivity)}
@@ -91,9 +112,9 @@
                         <small>${escapeHtml(library.lastUser)}</small>
                     </div>
 
-                    <div class="library-breakdown">
+                    ${breakdown.length ? `<div class="library-breakdown">
                         ${breakdown.map((item) => `<span><strong style="color: ${escapeAttr(item.color)}">${escapeHtml(item.value)}</strong>${escapeHtml(item.label)}</span>`).join('')}
-                    </div>
+                    </div>` : ''}
                 </div>
             </article>
         `;
@@ -115,8 +136,9 @@
         gridRoot.innerHTML = libraries.map(renderLibrary).join('');
     }
 
-    function setStatus(text, error) {
-        status.classList.toggle('is-error', Boolean(error));
+    function setStatus(text, state = 'ok') {
+        status.classList.toggle('is-error', state === 'error');
+        status.classList.toggle('is-warning', state === 'warning');
         status.innerHTML = '<i></i>' + escapeHtml(text);
     }
 
@@ -133,11 +155,12 @@
         const payload = await response.json();
         renderSummary(payload.summary);
         renderLibraries(payload.libraries);
-        setStatus(payload.refreshedLabel || (payload.cached ? 'Cached library stats' : 'Live from Jellyfin'), false);
+        const state = payload.partial || payload.stale ? 'warning' : 'ok';
+        setStatus(payload.refreshedLabel || (payload.cached ? 'Cached library stats' : 'Live from Jellyfin'), state);
     }
 
     loadLibraries().catch(() => {
-        setStatus('Could not load library stats', true);
+        setStatus('Could not load library stats', 'error');
         gridRoot.classList.remove('is-loading');
         gridRoot.innerHTML = `
             <article class="library-empty-state">

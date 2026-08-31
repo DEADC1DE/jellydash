@@ -16,7 +16,7 @@
 {% block dashboard_content %}
     <div class="libraries-page" data-libraries-root>
         <section class="library-summary-grid is-loading" aria-label="Library summary" data-library-summary>
-            {% for label in ['Libraries', 'Total Items', 'Storage Used', 'Total Plays'] %}
+            {% for label in ['Libraries', 'Total Items', 'Total Playback', 'Total Plays'] %}
                 <article class="library-summary-card is-loading">
                     <span><i></i>{{ label }}</span>
                     <strong>...</strong>
@@ -35,5 +35,5 @@
 {% endblock %}
 
 {% block page_scripts %}
-    <script src="/assets/js/libraries.js?v=20260818-tabler-icons"></script>
+    <script src="/assets/js/libraries.js?v=20260831-large-libraries"></script>
 {% endblock %}

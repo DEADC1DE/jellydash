@@ -6,7 +6,7 @@ namespace Mk\Framework\Jellyfin;
 
 use Mk\Framework\Config;
 
-final class JellyfinClient
+final class JellyfinClient implements LibraryOverviewClient
 {
     private string $baseUrl;
     private string $token;

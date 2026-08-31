@@ -8,7 +8,7 @@ use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
 
-final class PlayHistoryRepository
+final class PlayHistoryRepository implements LibraryHistorySource
 {
     private \Dibi\Connection $db;
     private DatabasePlatform $platform;

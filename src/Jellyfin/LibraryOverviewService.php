@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mk\Framework\Jellyfin;
 
 use Mk\Framework\Config;
+use Mk\Framework\Log;
 
 final class LibraryOverviewService
 {
@@ -36,13 +37,14 @@ final class LibraryOverviewService
     private const SKIP_COLLECTION_TYPES = ['playlists', 'boxsets', 'books', 'livetv'];
 
     public function __construct(
-        private ?JellyfinClient $client = null,
-        private ?PlayHistoryRepository $history = null,
+        private ?LibraryOverviewClient $client = null,
+        private ?LibraryHistorySource $history = null,
+        private ?string $cachePath = null,
     ) {
     }
 
     /**
-     * @return array{summary: array<int, array<string, string>>, libraries: array<int, array<string, mixed>>, refreshedLabel: string}
+     * @return array{summary: array<int, array<string, string>>, libraries: array<int, array<string, mixed>>, refreshedLabel: string, complete: bool}
      */
     public function data(): array
     {
@@ -54,41 +56,37 @@ final class LibraryOverviewService
                 'summary' => $this->summary([]),
                 'libraries' => [],
                 'refreshedLabel' => 'Jellyfin unavailable',
+                'complete' => false,
             ];
         }
 
         $historyRows = $this->historyRows();
-        $scanned = [];
-        $itemLibrary = [];
+        $libraries = [];
+        $complete = true;
 
         foreach ($folders as $folder) {
             try {
                 $meta = is_array($folder['DashboardMeta'] ?? null) ? $folder['DashboardMeta'] : [];
                 $id = (string) ($folder['Id'] ?? '');
                 $kind = (string) ($meta['kind'] ?? 'mixed');
-                $items = $this->mediaItems($client, $id, $kind);
-                $actualName = (string) ($folder['DashboardName'] ?? ($meta['display'] ?? ''));
-                foreach ($items as $item) {
-                    $itemId = $this->normalizedItemId((string) ($item['Id'] ?? ''));
-                    if ($itemId !== '') {
-                        $itemLibrary[$itemId] = $actualName;
-                    }
-                }
-                $scanned[] = ['folder' => $folder, 'items' => $items];
-            } catch (\Throwable) {
-                continue;
+                $counts = $this->countSnapshot($client, $id, $kind, (string) ($meta['accent'] ?? '#7c5cff'));
+                $libraries[] = $this->libraryCard($folder, $counts, $historyRows);
+            } catch (\Throwable $e) {
+                $complete = false;
+                $name = (string) ($folder['DashboardName'] ?? $folder['Name'] ?? 'Unknown library');
+                Log::logException(new \RuntimeException(
+                    'Could not load Jellyfin library "' . $name . '": ' . $e->getMessage(),
+                    previous: $e,
+                ));
+                $libraries[] = $this->unavailableLibraryCard($folder, $historyRows);
             }
-        }
-
-        $libraries = [];
-        foreach ($scanned as $entry) {
-            $libraries[] = $this->libraryCard($client, $entry['folder'], $entry['items'], $historyRows, $itemLibrary);
         }
 
         return [
             'summary' => $this->summary($libraries),
             'libraries' => $libraries,
-            'refreshedLabel' => 'Live from Jellyfin',
+            'refreshedLabel' => $complete ? 'Live from Jellyfin' : 'Some library details unavailable',
+            'complete' => $complete,
         ];
     }
 
@@ -109,19 +107,27 @@ final class LibraryOverviewService
             return $cached;
         }
 
-        try {
-            return $this->refreshCache();
-        } catch (\Throwable $e) {
-            if ($cached !== null) {
-                $cached['cached'] = true;
-                $cached['stale'] = true;
-                $cached['refreshedLabel'] = 'Showing cached library stats';
-
-                return $cached;
+        $data = $this->data();
+        if ($data['refreshedLabel'] === 'Jellyfin unavailable') {
+            if ($cached === null) {
+                throw new \RuntimeException('Jellyfin unavailable; no library cache is available.');
             }
 
-            throw $e;
+            return $this->stalePayload($cached);
         }
+
+        if (!$data['complete']) {
+            if ($cached !== null && $this->cacheCoversLibraries($cached, $data)) {
+                return $this->stalePayload($cached, 'Showing cached stats after an incomplete refresh');
+            }
+
+            return $this->payload($data);
+        }
+
+        $payload = $this->payload($data);
+        $this->writeCache($payload);
+
+        return $payload;
     }
 
     /**
@@ -136,21 +142,72 @@ final class LibraryOverviewService
     {
         $data = $this->data();
 
-        if ($data['refreshedLabel'] === 'Jellyfin unavailable') {
-            throw new \RuntimeException('Jellyfin unavailable; keeping the existing library cache.');
+        if ($data['refreshedLabel'] === 'Jellyfin unavailable' || !$data['complete']) {
+            throw new \RuntimeException('One or more Jellyfin libraries are unavailable; keeping the existing library cache.');
         }
 
-        $payload = [
+        $payload = $this->payload($data);
+
+        $this->writeCache($payload);
+
+        return $payload;
+    }
+
+    /**
+     * @param array{summary: array<int, array<string, string>>, libraries: array<int, array<string, mixed>>, refreshedLabel: string, complete: bool} $data
+     * @return array<string, mixed>
+     */
+    private function payload(array $data): array
+    {
+        return [
             'summary' => $data['summary'],
             'libraries' => $data['libraries'],
             'refreshedLabel' => $data['refreshedLabel'],
             'generated_at' => time(),
             'cached' => false,
+            'partial' => !$data['complete'],
         ];
+    }
 
-        $this->writeCache($payload);
+    /**
+     * @param array<string, mixed> $cached
+     * @return array<string, mixed>
+     */
+    private function stalePayload(array $cached, string $label = 'Showing cached library stats'): array
+    {
+        $cached['cached'] = true;
+        $cached['stale'] = true;
+        $cached['refreshedLabel'] = $label;
 
-        return $payload;
+        return $cached;
+    }
+
+    /**
+     * A cache created before partial refreshes were tracked may already be
+     * missing libraries. Only use it as a fallback when it covers every
+     * library Jellyfin returned during the current refresh.
+     *
+     * @param array<string, mixed> $cached
+     * @param array{summary: array<int, array<string, string>>, libraries: array<int, array<string, mixed>>, refreshedLabel: string, complete: bool} $data
+     */
+    private function cacheCoversLibraries(array $cached, array $data): bool
+    {
+        $cachedLibraries = is_array($cached['libraries'] ?? null) ? $cached['libraries'] : [];
+        $cachedNames = [];
+        foreach ($cachedLibraries as $library) {
+            if (is_array($library)) {
+                $cachedNames[] = mb_strtolower((string) ($library['name'] ?? ''));
+            }
+        }
+
+        foreach ($data['libraries'] as $library) {
+            $name = mb_strtolower((string) ($library['name'] ?? ''));
+            if ($name !== '' && !in_array($name, $cachedNames, true)) {
+                return false;
+            }
+        }
+
+        return $data['libraries'] !== [];
     }
 
     private function ttl(): int
@@ -160,7 +217,7 @@ final class LibraryOverviewService
 
     private function cacheFile(): string
     {
-        return dirname(__DIR__, 2) . '/var/cache/libraries.json';
+        return $this->cachePath ?? dirname(__DIR__, 2) . '/var/cache/libraries.json';
     }
 
     /**
@@ -283,12 +340,10 @@ final class LibraryOverviewService
 
     /**
      * @param array<string, mixed> $folder
-     * @param array<int, array<string, mixed>> $items
      * @param array<int, \Dibi\Row> $historyRows
-     * @param array<string, string> $itemLibrary
      * @return array<string, mixed>
      */
-    private function libraryCard(JellyfinClient $client, array $folder, array $items, array $historyRows, array $itemLibrary): array
+    private function libraryCard(array $folder, array $counts, array $historyRows): array
     {
         /** @var array<string, string> $meta */
         $meta = $folder['DashboardMeta'];
@@ -297,16 +352,8 @@ final class LibraryOverviewService
         $kind = (string) $meta['kind'];
         $accent = (string) $meta['accent'];
         $actualName = (string) ($folder['DashboardName'] ?? $name);
-        $breakdown = $this->breakdown($client, $id, $kind, $accent);
-        $libraryHistory = $this->libraryHistory($historyRows, $name, $actualName, $itemLibrary);
-        $totalSeconds = 0;
-        $totalBytes = 0;
-        $totalFiles = count($items);
-
-        foreach ($items as $item) {
-            $totalSeconds += $this->ticksToSeconds((int) ($item['RunTimeTicks'] ?? 0));
-            $totalBytes += $this->itemBytes($item);
-        }
+        $libraryHistory = $this->libraryHistory($historyRows, $name, $actualName);
+        $totalFiles = (int) ($counts['total'] ?? 0);
 
         return [
             'name' => $name,
@@ -317,18 +364,17 @@ final class LibraryOverviewService
             'chipBg' => $this->alpha($accent, .15),
             'chipBorder' => $this->alpha($accent, .3),
             'banner' => $this->banner($id, $kind),
-            'totalTime' => $this->longDuration($totalSeconds),
             'totalFiles' => $this->comma($totalFiles),
             'totalFilesRaw' => $totalFiles,
-            'sizeBytes' => $totalBytes,
-            'size' => $totalBytes > 0 ? $this->bytes($totalBytes) : 'N/A',
             'totalPlays' => $this->comma((int) $libraryHistory['plays']),
             'totalPlaysRaw' => (int) $libraryHistory['plays'],
             'playback' => $this->longDuration((int) $libraryHistory['watch_sec']),
+            'playbackRaw' => (int) $libraryHistory['watch_sec'],
             'lastActivity' => (string) $libraryHistory['last_activity'],
             'lastPlayed' => (string) $libraryHistory['last_played'],
             'lastUser' => (string) $libraryHistory['last_user'],
-            'breakdown' => $breakdown,
+            'breakdown' => $counts['breakdown'] ?? [],
+            'available' => true,
             'isMovies' => $kind === 'movies' || $kind === 'standup' || $kind === 'events',
             'isTv' => $kind === 'tv',
             'isAnime' => $kind === 'anime',
@@ -337,57 +383,110 @@ final class LibraryOverviewService
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @param array<string, mixed> $folder
+     * @param array<int, \Dibi\Row> $historyRows
+     * @return array<string, mixed>
      */
-    private function mediaItems(JellyfinClient $client, string $parentId, string $kind): array
+    private function unavailableLibraryCard(array $folder, array $historyRows): array
     {
-        $types = match ($kind) {
-            'tv', 'anime' => 'Episode',
-            'music' => 'Audio',
-            'mixed' => 'Movie,Video,Episode',
-            default => 'Movie,Video',
-        };
+        /** @var array<string, string> $meta */
+        $meta = is_array($folder['DashboardMeta'] ?? null) ? $folder['DashboardMeta'] : $this->metaFor(
+            (string) ($folder['Name'] ?? 'Library'),
+            strtolower((string) ($folder['CollectionType'] ?? '')),
+        );
+        $id = (string) ($folder['Id'] ?? '');
+        $name = (string) ($meta['display'] ?? $folder['Name'] ?? 'Library');
+        $kind = (string) ($meta['kind'] ?? 'mixed');
+        $accent = (string) ($meta['accent'] ?? '#7c5cff');
+        $actualName = (string) ($folder['DashboardName'] ?? $folder['Name'] ?? $name);
+        $libraryHistory = $this->libraryHistory($historyRows, $name, $actualName);
 
-        return $client->items([
-            'ParentId' => $parentId,
-            'Recursive' => 'true',
-            'IncludeItemTypes' => $types,
-            'Fields' => 'MediaSources,RunTimeTicks,DateCreated',
-        ]);
+        return [
+            'name' => $name,
+            'type' => $this->typeLabel($kind),
+            'kind' => $kind,
+            'glyph' => (string) ($meta['glyph'] ?? $this->glyphFor($name)),
+            'accent' => $accent,
+            'chipBg' => $this->alpha($accent, .15),
+            'chipBorder' => $this->alpha($accent, .3),
+            'banner' => $this->banner($id, $kind),
+            'totalFiles' => 'Unavailable',
+            'totalFilesRaw' => 0,
+            'totalPlays' => $this->comma((int) $libraryHistory['plays']),
+            'totalPlaysRaw' => (int) $libraryHistory['plays'],
+            'playback' => $this->longDuration((int) $libraryHistory['watch_sec']),
+            'playbackRaw' => (int) $libraryHistory['watch_sec'],
+            'lastActivity' => (string) $libraryHistory['last_activity'],
+            'lastPlayed' => (string) $libraryHistory['last_played'],
+            'lastUser' => (string) $libraryHistory['last_user'],
+            'breakdown' => [],
+            'available' => false,
+            'isMovies' => $kind === 'movies' || $kind === 'standup' || $kind === 'events',
+            'isTv' => $kind === 'tv',
+            'isAnime' => $kind === 'anime',
+            'isEvent' => $kind === 'events',
+        ];
     }
 
     /**
-     * @return array<int, array<string, string>>
+     * @return array{total: int, breakdown: array<int, array<string, string>>}
      */
-    private function breakdown(JellyfinClient $client, string $parentId, string $kind, string $accent): array
+    private function countSnapshot(LibraryOverviewClient $client, string $parentId, string $kind, string $accent): array
     {
         if (in_array($kind, ['tv', 'anime'], true)) {
+            $series = $this->countItems($client, $parentId, 'Series');
+            $seasons = $this->countItems($client, $parentId, 'Season');
+            $episodes = $this->countItems($client, $parentId, 'Episode');
+
             return [
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Series')), 'label' => 'Series', 'color' => $accent],
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Season')), 'label' => 'Seasons', 'color' => '#f0c46b'],
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Episode')), 'label' => 'Episodes', 'color' => '#3b9eff'],
+                'total' => $episodes,
+                'breakdown' => [
+                    ['value' => $this->comma($series), 'label' => 'Series', 'color' => $accent],
+                    ['value' => $this->comma($seasons), 'label' => 'Seasons', 'color' => '#f0c46b'],
+                    ['value' => $this->comma($episodes), 'label' => 'Episodes', 'color' => '#3b9eff'],
+                ],
             ];
         }
 
         if ($kind === 'music') {
+            $artists = $this->countItems($client, $parentId, 'MusicArtist');
+            $albums = $this->countItems($client, $parentId, 'MusicAlbum');
+            $songs = $this->countItems($client, $parentId, 'Audio');
+
             return [
-                ['value' => $this->comma($this->countItems($client, $parentId, 'MusicArtist')), 'label' => 'Artists', 'color' => $accent],
-                ['value' => $this->comma($this->countItems($client, $parentId, 'MusicAlbum')), 'label' => 'Albums', 'color' => '#f0c46b'],
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Audio')), 'label' => 'Songs', 'color' => '#3b9eff'],
+                'total' => $songs,
+                'breakdown' => [
+                    ['value' => $this->comma($artists), 'label' => 'Artists', 'color' => $accent],
+                    ['value' => $this->comma($albums), 'label' => 'Albums', 'color' => '#f0c46b'],
+                    ['value' => $this->comma($songs), 'label' => 'Songs', 'color' => '#3b9eff'],
+                ],
             ];
         }
 
         if ($kind === 'videos') {
+            $videos = $this->countItems($client, $parentId, 'Video');
+
             return [
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Video')), 'label' => 'Videos', 'color' => $accent],
+                'total' => $videos,
+                'breakdown' => [
+                    ['value' => $this->comma($videos), 'label' => 'Videos', 'color' => $accent],
+                ],
             ];
         }
 
         if ($kind === 'mixed') {
+            $movies = $this->countItems($client, $parentId, 'Movie');
+            $series = $this->countItems($client, $parentId, 'Series');
+            $videos = $this->countItems($client, $parentId, 'Video');
+            $episodes = $this->countItems($client, $parentId, 'Episode');
+
             return [
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Movie')), 'label' => 'Movies', 'color' => $accent],
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Series')), 'label' => 'Series', 'color' => '#f0c46b'],
-                ['value' => $this->comma($this->countItems($client, $parentId, 'Video')), 'label' => 'Videos', 'color' => '#6fb6ff'],
+                'total' => $movies + $videos + $episodes,
+                'breakdown' => [
+                    ['value' => $this->comma($movies), 'label' => 'Movies', 'color' => $accent],
+                    ['value' => $this->comma($series), 'label' => 'Series', 'color' => '#f0c46b'],
+                    ['value' => $this->comma($videos), 'label' => 'Videos', 'color' => '#6fb6ff'],
+                ],
             ];
         }
 
@@ -397,13 +496,19 @@ final class LibraryOverviewService
             default => 'Movies',
         };
 
+        $movies = $this->countItems($client, $parentId, 'Movie');
+        $videos = $this->countItems($client, $parentId, 'Video');
+
         return [
-            ['value' => $this->comma($this->countItems($client, $parentId, 'Movie')), 'label' => $label, 'color' => $accent],
-            ['value' => $this->comma($this->countItems($client, $parentId, 'Video')), 'label' => 'Videos', 'color' => '#6fb6ff'],
+            'total' => $movies + $videos,
+            'breakdown' => [
+                ['value' => $this->comma($movies), 'label' => $label, 'color' => $accent],
+                ['value' => $this->comma($videos), 'label' => 'Videos', 'color' => '#6fb6ff'],
+            ],
         ];
     }
 
-    private function countItems(JellyfinClient $client, string $parentId, string $types): int
+    private function countItems(LibraryOverviewClient $client, string $parentId, string $types): int
     {
         return $client->itemCount([
             'ParentId' => $parentId,
@@ -413,15 +518,13 @@ final class LibraryOverviewService
     }
 
     /**
-     * Plays whose item still lives in this library, or whose stored library
-     * name matches when the item is gone (deleted / no longer in Jellyfin).
+     * Plays whose stored real library name matches this library.
      * $rows are per-item summaries (plays / watch_sec) from itemPlaySummaries().
      *
      * @param array<int, \Dibi\Row|array<string, mixed>> $rows
-     * @param array<string, string> $itemLibrary normalized item id => library name
      * @return array{plays: int, watch_sec: int, last_activity: string, last_played: string, last_user: string}
      */
-    private function libraryHistory(array $rows, string $displayName, string $actualName, array $itemLibrary = []): array
+    private function libraryHistory(array $rows, string $displayName, string $actualName): array
     {
         $plays = 0;
         $watchSec = 0;
@@ -432,11 +535,7 @@ final class LibraryOverviewService
         );
 
         foreach ($rows as $row) {
-            $resolved = $this->resolvedLibraryName(
-                (string) ($row['item_id'] ?? ''),
-                (string) ($row['library'] ?? ''),
-                $itemLibrary,
-            );
+            $resolved = (string) ($row['library'] ?? '');
             if (!in_array(mb_strtolower($resolved), $wanted, true)) {
                 continue;
             }
@@ -478,51 +577,22 @@ final class LibraryOverviewService
     {
         $items = 0;
         $plays = 0;
+        $playback = 0;
+        $complete = true;
 
         foreach ($libraries as $library) {
             $items += (int) ($library['totalFilesRaw'] ?? 0);
             $plays += (int) ($library['totalPlaysRaw'] ?? 0);
+            $playback += (int) ($library['playbackRaw'] ?? 0);
+            $complete = $complete && ($library['available'] ?? true) === true;
         }
 
         return [
             ['label' => 'Libraries', 'color' => '#7c5cff', 'value' => $this->comma(count($libraries)), 'sub' => 'selected media libraries'],
-            ['label' => 'Total Items', 'color' => '#3b9eff', 'value' => $this->comma($items), 'sub' => 'movies - episodes - videos'],
-            ['label' => 'Storage Used', 'color' => '#f7b955', 'value' => $this->summarySize($libraries), 'sub' => 'reported by Jellyfin'],
+            ['label' => 'Total Items', 'color' => '#3b9eff', 'value' => $complete ? $this->comma($items) : 'Unavailable', 'sub' => $complete ? 'movies - episodes - songs - videos' : 'one or more libraries could not be counted'],
+            ['label' => 'Total Playback', 'color' => '#f7b955', 'value' => $this->longDuration($playback), 'sub' => 'recorded by dashboard'],
             ['label' => 'Total Plays', 'color' => '#34d8a6', 'value' => $this->comma($plays), 'sub' => 'recorded by dashboard'],
         ];
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $libraries
-     */
-    private function summarySize(array $libraries): string
-    {
-        $bytes = 0;
-        foreach ($libraries as $library) {
-            $bytes += (int) ($library['sizeBytes'] ?? 0);
-        }
-
-        return $bytes > 0 ? $this->bytes($bytes) : 'N/A';
-    }
-
-    /**
-     * @param array<string, mixed> $item
-     */
-    private function itemBytes(array $item): int
-    {
-        $sources = $item['MediaSources'] ?? [];
-        if (!is_array($sources)) {
-            return 0;
-        }
-
-        $bytes = 0;
-        foreach ($sources as $source) {
-            if (is_array($source)) {
-                $bytes += (int) ($source['Size'] ?? 0);
-            }
-        }
-
-        return $bytes;
     }
 
     private function banner(string $id, string $kind): string
@@ -589,15 +659,6 @@ final class LibraryOverviewService
         return intdiv($diff, 86400) . ' days ago';
     }
 
-    private function bytes(int $bytes): string
-    {
-        if ($bytes >= 1099511627776) {
-            return number_format($bytes / 1099511627776, 2) . ' TB';
-        }
-
-        return number_format($bytes / 1073741824, 1) . ' GB';
-    }
-
     private function alpha(string $hex, float $alpha): string
     {
         $hex = ltrim($hex, '#');
@@ -608,34 +669,9 @@ final class LibraryOverviewService
         return 'rgba(' . $r . ',' . $g . ',' . $b . ',' . $alpha . ')';
     }
 
-    private function ticksToSeconds(int $ticks): int
-    {
-        return (int) floor($ticks / 10000000);
-    }
-
     private function comma(int $value): string
     {
         return number_format($value);
     }
 
-    /**
-     * Prefer the library that currently owns the item; fall back to the name
-     * stored on the play (type-based import labels, deleted items).
-     *
-     * @param array<string, string> $itemLibrary
-     */
-    private function resolvedLibraryName(string $itemId, string $storedLibrary, array $itemLibrary): string
-    {
-        $key = $this->normalizedItemId($itemId);
-        if ($key !== '' && isset($itemLibrary[$key])) {
-            return $itemLibrary[$key];
-        }
-
-        return $storedLibrary;
-    }
-
-    private function normalizedItemId(string $id): string
-    {
-        return strtolower(str_replace('-', '', trim($id)));
-    }
 }

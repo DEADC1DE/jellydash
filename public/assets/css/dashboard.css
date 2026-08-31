@@ -4813,6 +4813,11 @@ a.history-pager-btn:hover {
     box-shadow: 0 0 14px rgba(255, 107, 143, .38);
 }
 
+.library-status-chip.is-warning i {
+    background: var(--color-amber);
+    box-shadow: 0 0 14px rgba(247, 185, 85, .4);
+}
+
 .libraries-page {
     padding-bottom: 10px;
 }
@@ -4903,6 +4908,10 @@ a.history-pager-btn:hover {
     border-radius: 18px;
     background: #100f18;
     box-shadow: 0 20px 44px -28px rgba(0, 0, 0, .85);
+}
+
+.library-card.is-unavailable {
+    border-color: rgba(247, 185, 85, .18);
 }
 
 .library-banner {
@@ -5018,9 +5027,26 @@ a.history-pager-btn:hover {
 
 .library-stat-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 13px;
     margin: 0;
+}
+
+.library-unavailable-note {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 15px;
+    padding: 12px 13px;
+    color: rgba(255, 255, 255, .5);
+    font-size: 11.5px;
+    border: 1px solid rgba(247, 185, 85, .16);
+    border-radius: 12px;
+    background: rgba(247, 185, 85, .055);
+}
+
+.library-unavailable-note strong {
+    color: #f7c86e;
+    font-size: 12px;
 }
 
 .library-stat-grid div {
