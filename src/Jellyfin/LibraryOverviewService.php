@@ -650,7 +650,9 @@ final class LibraryOverviewService
     {
         $diff = max(0, time() - $date->getTimestamp());
         if ($diff < 3600) {
-            return max(1, intdiv($diff, 60)) . ' minutes ago';
+            $minutes = max(1, intdiv($diff, 60));
+
+            return $minutes . ' minute' . ($minutes === 1 ? '' : 's') . ' ago';
         }
         if ($diff < 86400) {
             return intdiv($diff, 3600) . ' hours ago';

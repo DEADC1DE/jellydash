@@ -3,6 +3,7 @@
     const label = document.querySelector('[data-live-label]');
     const dot = document.querySelector('[data-live-dot]');
     let hasLoaded = false;
+    let refreshInFlight = false;
     let openDiagnosticsId = null;
 
     if (!root || !label || !dot) {
@@ -333,21 +334,31 @@
     }
 
     async function refreshNowPlaying() {
-        const response = await fetch('/api/now-playing.php', {
-            headers: { Accept: 'application/json' },
-            cache: 'no-store',
-        });
-
-        if (!response.ok) {
-            throw new Error('Now Playing request failed with HTTP ' + response.status);
+        if (refreshInFlight) {
+            return;
         }
 
-        const payload = await response.json();
-        updateStats(payload);
-        renderStreams(payload);
-        hasLoaded = true;
+        refreshInFlight = true;
 
-        window.dispatchEvent(new CustomEvent('jellydash:now-playing', { detail: payload }));
+        try {
+            const response = await fetch('/api/now-playing.php', {
+                headers: { Accept: 'application/json' },
+                cache: 'no-store',
+            });
+
+            if (!response.ok) {
+                throw new Error('Now Playing request failed with HTTP ' + response.status);
+            }
+
+            const payload = await response.json();
+            updateStats(payload);
+            renderStreams(payload);
+            hasLoaded = true;
+
+            window.dispatchEvent(new CustomEvent('jellydash:now-playing', { detail: payload }));
+        } finally {
+            refreshInFlight = false;
+        }
     }
 
     root.addEventListener('click', (event) => {
