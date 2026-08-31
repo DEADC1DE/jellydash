@@ -108,6 +108,29 @@ final class NowPlayingFrontendTest extends TestCase
         );
     }
 
+    public function testStandaloneMobileShellUsesTheStableViewportHeight(): void
+    {
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($stylesheet);
+        $dynamicRule = "    .app-shell {\n"
+            . "        display: flex;\n"
+            . "        flex-direction: column;\n"
+            . "        width: 100%;\n"
+            . "        min-height: 100vh;\n"
+            . "        min-height: 100dvh;\n";
+        $stableRule = "@media (max-width: 900px) and (display-mode: standalone) {\n"
+            . "    .app-shell {\n"
+            . "        min-height: 100svh;\n"
+            . '    }';
+        $dynamicRulePosition = strpos($stylesheet, $dynamicRule);
+        $stableRulePosition = strpos($stylesheet, $stableRule);
+
+        $this->assertNotFalse($dynamicRulePosition);
+        $this->assertNotFalse($stableRulePosition);
+        $this->assertGreaterThan($dynamicRulePosition, $stableRulePosition);
+    }
+
     public function testRecentlyAddedStaysHiddenForEmptyOrFailedRequests(): void
     {
         $template = file_get_contents(TEMPLATES_DIR . '/now_playing/index.twig');
