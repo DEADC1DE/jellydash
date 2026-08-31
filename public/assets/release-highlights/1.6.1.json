@@ -1,0 +1,20 @@
+{
+  "version": "1.6.1",
+  "auto_show": true,
+  "title": "Large libraries and Android PWA fixes",
+  "summary": "The Libraries page now uses lightweight Jellyfin counts and keeps every discovered library visible on bigger servers. This patch also fixes the installed Android PWA layout and several playback, History, and text edge cases.",
+  "highlights": [
+    "Load library item totals without scanning every movie, episode, song, and video. Large libraries no longer disappear when a refresh is incomplete.",
+    "Keep recorded plays, playback time, and last activity visible when Jellyfin returns only partial live library data.",
+    "Keep Recently Added above Android's gesture bar after moving between pages in the installed Chrome PWA.",
+    "Skip overlapping Now Playing refreshes so an older response cannot replace newer session data.",
+    "Keep notification checks running when an active History write fails, and store emoji correctly in MariaDB.",
+    "Handle Unicode initials and the singular 1 minute ago label correctly, while long History CSV exports keep one fixed time boundary."
+  ],
+  "links": [
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.6.1"
+    }
+  ]
+}
