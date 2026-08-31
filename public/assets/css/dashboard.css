@@ -5548,6 +5548,15 @@ a.history-pager-btn:hover {
     }
 }
 
+/* Chrome can retain an oversized dynamic viewport height after navigation in
+   an installed Android PWA. The stable viewport keeps the shell aligned with
+   the visible standalone window without changing normal browser tabs. */
+@media (max-width: 900px) and (display-mode: standalone) {
+    .app-shell {
+        min-height: 100svh;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .recently-added-panel,
     .recently-added-header,
