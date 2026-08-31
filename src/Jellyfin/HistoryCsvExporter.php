@@ -43,8 +43,11 @@ final class HistoryCsvExporter
         'is_finished',
     ];
 
-    public function __construct(private ?PlayHistoryRepository $history = null)
-    {
+    /** @param (\Closure(): \DateTimeImmutable)|null $clock */
+    public function __construct(
+        private ?PlayHistoryRepository $history = null,
+        private ?\Closure $clock = null,
+    ) {
     }
 
     /**
@@ -55,6 +58,8 @@ final class HistoryCsvExporter
         if (!is_resource($stream)) {
             throw new \InvalidArgumentException('History CSV output must be a writable stream.');
         }
+
+        $now ??= $this->clock !== null ? ($this->clock)() : new \DateTimeImmutable('now');
 
         $this->writeBytes($stream, "\xEF\xBB\xBF");
         $this->writeRow($stream, self::COLUMNS);

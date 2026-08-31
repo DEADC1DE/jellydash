@@ -97,6 +97,7 @@ class Database
             'username' => DATABASE_USERNAME,
             'password' => DATABASE_PASSWORD,
             'database' => DATABASE_NAME,
+            'charset' => 'utf8mb4',
         ];
 
         if (defined('DATABASE_PORT') && DATABASE_PORT !== null && DATABASE_PORT !== '') {

@@ -2,13 +2,22 @@
 
 declare(strict_types=1);
 
-use Mk\Framework\Jellyfin\LibraryOverviewService;
 use Mk\Framework\Jellyfin\LibraryHistorySource;
 use Mk\Framework\Jellyfin\LibraryOverviewClient;
+use Mk\Framework\Jellyfin\LibraryOverviewService;
 use PHPUnit\Framework\TestCase;
 
 final class LibraryOverviewServiceTest extends TestCase
 {
+    public function testRelativeTimeUsesSingularForOneMinute(): void
+    {
+        $service = new LibraryOverviewService();
+        $relativeTime = new \ReflectionMethod($service, 'relativeTime');
+
+        $this->assertSame('1 minute ago', $relativeTime->invoke($service, new \DateTimeImmutable('@' . (time() - 60))));
+        $this->assertSame('2 minutes ago', $relativeTime->invoke($service, new \DateTimeImmutable('@' . (time() - 120))));
+    }
+
     public function testLargeLibrariesUseCountsWithoutEnumeratingEveryItem(): void
     {
         $client = new FakeLibraryOverviewClient(

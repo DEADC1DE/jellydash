@@ -19,6 +19,21 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString("navCount.textContent = '-'", $navCount);
     }
 
+    public function testNowPlayingSkipsOverlappingRefreshesAndReleasesTheGuardAfterFailure(): void
+    {
+        $nowPlaying = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+
+        $this->assertIsString($nowPlaying);
+        $this->assertMatchesRegularExpression(
+            '/async function refreshNowPlaying\(\) \{\s*'
+            . 'if \(refreshInFlight\) \{\s*return;\s*\}\s*'
+            . 'refreshInFlight = true;\s*'
+            . 'try \{.*?window\.dispatchEvent\(new CustomEvent\(\x27jellydash:now-playing\x27, \{ detail: payload \}\)\);\s*'
+            . '\} finally \{\s*refreshInFlight = false;\s*\}\s*\}/s',
+            $nowPlaying,
+        );
+    }
+
     public function testNowPlayingOwnsTheNavigationCountPollingLoop(): void
     {
         $nowPlaying = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');

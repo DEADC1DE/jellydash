@@ -85,6 +85,21 @@ final class SchemaCompatibilityTest extends TestCase
         ], $this->tableNames());
     }
 
+    public function testApplicationMariaDbConnectionUsesUtf8mb4(): void
+    {
+        if (DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
+            $this->markTestSkipped('This assertion applies only to MariaDB connections.');
+        }
+
+        $connection = (new Database())->getDibi();
+
+        $this->assertSame(
+            'utf8mb4',
+            strtolower((string) $connection->query('SELECT @@character_set_connection')->fetchSingle())
+        );
+        $this->assertSame('🪼', (string) $connection->query('SELECT %s AS value', '🪼')->fetchSingle());
+    }
+
     public function testExistingRowsSurviveSchemaInitialization(): void
     {
         $this->initializeAllSchemas();
