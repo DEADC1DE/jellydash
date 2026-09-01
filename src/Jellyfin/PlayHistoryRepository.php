@@ -10,6 +10,30 @@ use Mk\Framework\DatabasePlatform;
 
 final class PlayHistoryRepository implements LibraryHistorySource
 {
+    /**
+     * Fields consumed by PlaybackStatisticsService. Keeping this projection
+     * explicit avoids hydrating the larger History rows for every Statistics
+     * range while retaining the confirmed library metadata used by its strips.
+     *
+     * @var array<int, string>
+     */
+    private const STATISTICS_COLUMNS = [
+        'item_id',
+        'item_type',
+        'item_name',
+        'series_name',
+        'library',
+        'library_resolved_at',
+        'user_id',
+        'user_name',
+        'client',
+        'play_method',
+        'watched_sec',
+        'source_video_codec',
+        'transcode_reasons',
+        'started_at',
+    ];
+
     private \Dibi\Connection $db;
     private DatabasePlatform $platform;
     /** @var \WeakMap<\Dibi\Connection, true>|null */
@@ -409,7 +433,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
      */
     public function statisticsRowsForPeriod(?\DateTimeImmutable $start, ?\DateTimeImmutable $end): array
     {
-        $selection = $this->db->select('*')->from('play_history');
+        $selection = $this->db->select(implode(', ', self::STATISTICS_COLUMNS))->from('play_history');
 
         if ($start !== null) {
             $selection->where('started_at >= %s', $start->format('Y-m-d H:i:s'));
