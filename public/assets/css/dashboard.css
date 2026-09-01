@@ -913,6 +913,41 @@ svg.icon-filled {
     margin-top: 12px;
 }
 
+.login-remember {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-top: 16px;
+    padding: 10px 11px;
+    color: rgba(255, 255, 255, .72);
+    font-size: 12.5px;
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .025);
+    cursor: pointer;
+}
+
+.login-remember input {
+    margin-top: 2px;
+    accent-color: var(--color-purple);
+}
+
+.login-remember span {
+    display: grid;
+    gap: 2px;
+}
+
+.login-remember strong {
+    color: var(--color-text);
+    font-size: 12.5px;
+}
+
+.login-remember small {
+    color: var(--color-low);
+    font-size: 10.5px;
+    line-height: 1.4;
+}
+
 .login-submit {
     width: 100%;
     margin-top: 18px;

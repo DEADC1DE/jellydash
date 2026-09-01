@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Mk\Framework\Pages;
 
+use Mk\Framework\Authorization;
 use Mk\Framework\Container;
 use Mk\Framework\Controller;
+use Mk\Framework\Pager;
 
 final class LoginController extends Controller
 {
@@ -19,6 +21,10 @@ final class LoginController extends Controller
 
     public function handle(): void
     {
+        if ((new Authorization())->isUserLoggedIn()) {
+            Pager::homePage();
+        }
+
         $this->render('login', [
             'layout' => $this->layout(['title' => 'Login']),
             'error_msg' => $this->errorMessage,

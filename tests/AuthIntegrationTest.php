@@ -4,6 +4,7 @@ use Mk\Framework\Authorization;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\LoginThrottle;
+use Mk\Framework\RememberTokenRepository;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -35,6 +36,7 @@ final class AuthIntegrationTest extends TestCase
         }
 
         $_SESSION = [];
+        $_COOKIE = [];
         $this->cleanup();
         $this->db->addAuthUser(self::USERNAME, self::PASSWORD, 'Tester', Authorization::ROLE_ADMIN);
     }
@@ -45,6 +47,7 @@ final class AuthIntegrationTest extends TestCase
             $this->cleanup();
         }
         $_SESSION = [];
+        $_COOKIE = [];
     }
 
     public function testSuccessfulLoginSetsSessionAndRole(): void
@@ -109,6 +112,86 @@ final class AuthIntegrationTest extends TestCase
 
         $auth->userLogout();
         $this->assertFalse($auth->isUserLoggedIn());
+    }
+
+    public function testRememberedLoginRestoresAndRotatesAfterTheNormalSessionExpires(): void
+    {
+        $now = 1_788_192_000;
+        $written = [];
+        $writer = static function (string $value, int $expires) use (&$written): void {
+            $written[] = ['value' => $value, 'expires' => $expires];
+        };
+        $clock = static function () use (&$now): int {
+            return $now;
+        };
+        $tokens = new RememberTokenRepository($this->db);
+        $auth = new Authorization($this->db, $tokens, $clock, $writer);
+
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD, true));
+        $originalToken = (string) $_COOKIE[Authorization::REMEMBER_COOKIE];
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{24}\.[a-f0-9]{64}$/', $originalToken);
+        $this->assertSame($now + Authorization::REMEMBER_LIFETIME, $written[array_key_last($written)]['expires']);
+
+        $now += Authorization::SESSION_ABSOLUTE_TIMEOUT + 1;
+        $restored = new Authorization($this->db, $tokens, $clock, $writer);
+
+        $this->assertTrue($restored->isUserLoggedIn());
+        $this->assertSame(self::USERNAME, $restored->getUserData()['username']);
+        $rotatedToken = (string) $_COOKIE[Authorization::REMEMBER_COOKIE];
+        $this->assertNotSame($originalToken, $rotatedToken);
+        $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
+    }
+
+    public function testOrdinaryLoginExpiresWithoutPersistentToken(): void
+    {
+        $now = 1_788_192_000;
+        $clock = static function () use (&$now): int {
+            return $now;
+        };
+        $auth = new Authorization(
+            $this->db,
+            new RememberTokenRepository($this->db),
+            $clock,
+            static function (string $value, int $expires): void {
+            },
+        );
+
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD));
+        $now += Authorization::SESSION_ABSOLUTE_TIMEOUT + 1;
+        $expired = new Authorization(
+            $this->db,
+            new RememberTokenRepository($this->db),
+            $clock,
+            static function (string $value, int $expires): void {
+            },
+        );
+
+        $this->assertFalse($expired->isUserLoggedIn());
+        $this->assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
+    }
+
+    public function testLogoutRevokesRememberedLogin(): void
+    {
+        $now = 1_788_192_000;
+        $clock = static function () use (&$now): int {
+            return $now;
+        };
+        $writer = static function (string $value, int $expires): void {
+        };
+        $tokens = new RememberTokenRepository($this->db);
+        $auth = new Authorization($this->db, $tokens, $clock, $writer);
+
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD, true));
+        $token = (string) $_COOKIE[Authorization::REMEMBER_COOKIE];
+        $auth->userLogout();
+
+        $this->assertArrayNotHasKey(Authorization::REMEMBER_COOKIE, $_COOKIE);
+        $this->assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
+
+        $_SESSION = [];
+        $_COOKIE[Authorization::REMEMBER_COOKIE] = $token;
+        $restored = new Authorization($this->db, $tokens, $clock, $writer);
+        $this->assertFalse($restored->isUserLoggedIn());
     }
 
     public function testUserEnsureReadsInitialAdminFromEnvironment(): void
@@ -197,6 +280,7 @@ final class AuthIntegrationTest extends TestCase
 
     private function cleanup(): void
     {
+        $this->dibi->delete('auth_remember_tokens')->execute();
         $this->dibi->delete('users')->where('username IN %in', [
             self::USERNAME,
             self::ENV_USERNAME,

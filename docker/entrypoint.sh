@@ -14,6 +14,7 @@ mkdir -p /var/www/html/cache \
     /var/www/html/var/cache \
     /var/www/html/var/data \
     /var/www/html/var/log \
+    /var/www/html/var/sessions \
     /var/www/html/public/uploads \
     /var/www/html/public/uploads/images
 
@@ -22,6 +23,7 @@ chown -R www-data:www-data \
     /var/www/html/var/cache \
     /var/www/html/var/data \
     /var/www/html/var/log \
+    /var/www/html/var/sessions \
     /var/www/html/public/uploads
 
 # Clear compiled Twig templates on start so a deploy's template changes actually

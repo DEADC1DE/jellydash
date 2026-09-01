@@ -47,6 +47,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
 
         $this->assertSame([
             'app_settings',
+            'auth_remember_tokens',
             'login_attempts',
             'play_history',
             'push_subscriptions',
@@ -60,6 +61,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             'idx_user_name',
         ], $this->namedIndexes('play_history'));
         $this->assertSame(['idx_requested_at'], $this->namedIndexes('seerr_requests'));
+        $this->assertSame(['idx_auth_remember_user'], $this->namedIndexes('auth_remember_tokens'));
     }
 
     public function testEnvironmentConnectionUsesSQLiteSafetySettings(): void

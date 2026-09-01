@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Mk\Framework\Config;
+use Mk\Framework\Authorization;
 use Mk\Framework\Pager;
 
 // Database: credentials come from the environment (.env / .env.example)
@@ -12,8 +13,6 @@ define('DATABASE_PORT', Config::get('DB_PORT'));
 define('DATABASE_DRIVER_DIBI', Config::get('DB_DRIVER', 'mysqli'));
 define('DATABASE_USERNAME', Config::get('DB_USER', 'root'));
 define('DATABASE_PASSWORD', Config::get('DB_PASS', ''));
-
-$secondsInMonth = 30 * 24 * 60 * 60;
 
 // SESSION, COOKIES
 // Harden the session cookie. `secure` follows the actual connection so local
@@ -30,8 +29,18 @@ $isHttps = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off'
 session_name('jellydash_session');
 
 ini_set('session.use_strict_mode', '1');
+ini_set('session.use_only_cookies', '1');
+ini_set('session.gc_maxlifetime', (string) Authorization::SESSION_ABSOLUTE_TIMEOUT);
+
+// Keep Jellydash session files away from other PHP apps on the same host.
+// Otherwise another app with PHP's shorter cleanup window can remove them.
+$sessionPath = ROOT_DIR . '/var/sessions';
+if ((is_dir($sessionPath) || @mkdir($sessionPath, 0770, true)) && is_writable($sessionPath)) {
+    ini_set('session.save_path', $sessionPath);
+}
+
 session_set_cookie_params([
-    'lifetime' => $secondsInMonth,
+    'lifetime' => Authorization::SESSION_ABSOLUTE_TIMEOUT,
     'path' => '/',
     'secure' => $isHttps,
     'httponly' => true,
@@ -41,8 +50,8 @@ if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 
-// Session lifecycle for logged-in users (id regeneration on login, idle/absolute
-// timeouts) is handled by Authorization.
+// Session lifecycle and optional remembered-login restoration are handled by
+// Authorization. The ordinary cookie never outlives the 8-hour session.
 
 // TIMEZONE SETTINGS
 date_default_timezone_set(\Mk\Framework\Config::get('APP_TIMEZONE', TIMEZONE_DEFAULT) ?? TIMEZONE_DEFAULT);
