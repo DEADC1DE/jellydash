@@ -21,6 +21,7 @@ final class PlaybackStatisticsService
     public function __construct(
         private ?PlayHistoryRepository $repository = null,
         private ?JellyfinClient $client = null,
+        private ?StatisticsPayloadCache $payloadCache = null,
     ) {
     }
 
@@ -31,6 +32,26 @@ final class PlaybackStatisticsService
     private ?array $locationsCache = null;
 
     private ?JellyfinUserAvatars $avatars = null;
+
+    /**
+     * Return the completed Statistics payload through its short per-range
+     * cache. The calculation itself stays in data() so accuracy tests and
+     * callers that need an explicit snapshot remain deterministic.
+     *
+     * @return array<string, mixed>
+     */
+    public function cachedData(string $range, ?\DateTimeImmutable $now = null): array
+    {
+        $range = StatisticsPeriod::normalizeRange($range);
+        $now ??= new \DateTimeImmutable('now');
+
+        return ($this->payloadCache ?? new StatisticsPayloadCache())->remember(
+            $range,
+            $now,
+            $this->cacheContextFingerprint(),
+            fn (): array => $this->data($range, $now),
+        );
+    }
 
     /**
      * @return array<string, mixed>
@@ -353,6 +374,14 @@ final class PlaybackStatisticsService
             static fn (string $name): string => mb_strtolower(trim($name, " \t\n\r\0\x0B\"'")),
             explode(',', $raw)
         )));
+    }
+
+    private function cacheContextFingerprint(): string
+    {
+        return hash('sha256', json_encode([
+            'timezone' => date_default_timezone_get(),
+            'excludedLibraries' => $this->excludedLibraries(),
+        ], JSON_THROW_ON_ERROR));
     }
 
     private function poster(string $itemId, bool $isEpisode): string
