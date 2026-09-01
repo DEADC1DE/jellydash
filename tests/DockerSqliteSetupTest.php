@@ -24,6 +24,9 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertIsString($workflow);
         $this->assertStringNotContainsString('--env POLLER_ENABLED=false', $workflow);
         $this->assertStringContainsString('login_attempts', $workflow);
+        $this->assertStringContainsString('remember_me=1', $workflow);
+        $this->assertStringContainsString('jellydash_remember', $workflow);
+        $this->assertStringContainsString('auth_remember_tokens', $workflow);
     }
 
     public function testSQLiteComposeSetupIsSeparateAndPersistent(): void

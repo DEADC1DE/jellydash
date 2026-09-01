@@ -27,8 +27,9 @@ use Mk\Framework\View;
         // password is passed raw to password_verify (never escaped)
         $username = Main::capturePostString("username");
         $password = $_POST["pwd"] ?? null;
+        $remember = isset($_POST['remember_me']) && $_POST['remember_me'] === '1';
 
-        if ($auth_class->userLogin($username, $password)) {
+        if ($auth_class->userLogin($username, $password, $remember)) {
             Pager::homePage();
         }
 

@@ -87,10 +87,14 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $this->assertSame('Movies', (string) $history['library']);
         $this->assertStringStartsWith('2026-08-11 12:00:00', (string) $history['library_resolved_at']);
         $this->assertSame('Migration Movie', (string) $sqlite->select('title')->from('seerr_requests')->fetchSingle());
+        $this->assertSame(
+            str_repeat('a', 24),
+            (string) $sqlite->select('selector')->from('auth_remember_tokens')->fetchSingle(),
+        );
         $this->assertSame(102, $destination->addAuthUser('after-migration', 'password-123', 'After Migration', 2));
         $sqlite->disconnect();
 
-        foreach (['users', 'login_attempts', 'app_settings', 'play_history', 'push_subscriptions', 'seerr_requests'] as $table) {
+        foreach (['users', 'login_attempts', 'auth_remember_tokens', 'app_settings', 'play_history', 'push_subscriptions', 'seerr_requests'] as $table) {
             $this->assertSame(1, (int) $this->sourceConnection->select('COUNT(*)')->from($table)->fetchSingle());
         }
     }
@@ -251,6 +255,15 @@ final class MariaDbToSqliteMigratorTest extends TestCase
             'attempts' => 3,
             'locked_until' => null,
             'updated_at' => '2026-08-11 12:00:00',
+        ])->execute();
+        $this->sourceConnection->insert('auth_remember_tokens', [
+            'id' => 107,
+            'user_id' => 101,
+            'selector' => str_repeat('a', 24),
+            'validator_hash' => str_repeat('b', 64),
+            'expires_at' => '2026-11-11 12:00:00',
+            'created_at' => '2026-08-11 12:00:00',
+            'last_used_at' => '2026-08-11 12:00:00',
         ])->execute();
         $this->sourceConnection->insert('app_settings', [
             'setting_key' => 'migration-key',

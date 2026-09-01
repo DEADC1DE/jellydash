@@ -40,6 +40,8 @@ Thumbs.db
 !/var/log/.gitkeep
 /var/cache/*
 !/var/cache/.gitkeep
+/var/sessions/*
+!/var/sessions/.gitkeep
 
 # SQLite database from the optional Docker setup
 /sqlite-data/

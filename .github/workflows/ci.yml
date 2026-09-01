@@ -152,5 +152,15 @@ jobs:
             --data-urlencode "pwd=wrong-password" \
             'http://127.0.0.1:18080/login?auth=login'
           docker exec jellydash-sqlite-ci php -r '$db = new SQLite3("/var/www/html/var/data/jellydash.sqlite"); exit((int) $db->querySingle("SELECT COUNT(*) FROM login_attempts") === 1 ? 0 : 1);'
+          curl --fail --silent --output /dev/null \
+            --cookie "$cookie_jar" \
+            --cookie-jar "$cookie_jar" \
+            --data-urlencode "csrf_token=$csrf_token" \
+            --data-urlencode "username=ci-owner" \
+            --data-urlencode "pwd=ci-password-123" \
+            --data-urlencode "remember_me=1" \
+            'http://127.0.0.1:18080/login?auth=login'
+          grep --quiet $'\tjellydash_remember\t' "$cookie_jar"
+          docker exec jellydash-sqlite-ci php -r '$db = new SQLite3("/var/www/html/var/data/jellydash.sqlite"); exit((int) $db->querySingle("SELECT COUNT(*) FROM auth_remember_tokens") === 1 ? 0 : 1);'
           docker exec jellydash-sqlite-ci php -r '$db = new SQLite3("/var/www/html/var/data/jellydash.sqlite"); exit($db->querySingle("PRAGMA integrity_check") === "ok" ? 0 : 1);'
           test -f "$RUNNER_TEMP/jellydash-sqlite/jellydash.sqlite"

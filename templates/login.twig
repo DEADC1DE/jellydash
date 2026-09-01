@@ -9,7 +9,7 @@
     <link rel="apple-touch-icon" href="/assets/img/apple-touch-icon.png">
     <meta name="theme-color" content="#0a0910">
 
-    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260801-loginhint">
+    <link rel="stylesheet" href="/assets/css/dashboard.css?v=20260902-remember-login">
 </head>
 <body class="login-body">
 <main class="login-card">
@@ -42,6 +42,13 @@
         <label class="settings-field">
             <span>Password</span>
             <input type="password" name="pwd" autocomplete="current-password" required>
+        </label>
+        <label class="login-remember">
+            <input type="checkbox" name="remember_me" value="1">
+            <span>
+                <strong>Keep me signed in</strong>
+                <small>Stay signed in on this device for up to 90 days.</small>
+            </span>
         </label>
         <button type="submit" class="settings-save-btn login-submit">Sign in</button>
     </form>
