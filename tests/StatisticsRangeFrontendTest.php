@@ -25,6 +25,7 @@ final class StatisticsRangeFrontendTest extends TestCase
         $this->assertStringContainsString('aria-current="page"', $template);
         $this->assertStringContainsString('.statistics-range-control a.is-active', $stylesheet);
         $this->assertStringContainsString("AppSettings::get('statistics_default_range')", $controller);
+        $this->assertStringContainsString('->cachedData($range)', $controller);
         $this->assertStringContainsString("AppSettings::set('statistics_default_range'", $request);
         $this->assertStringContainsString("requestIs('statistics-default')", $request);
     }
