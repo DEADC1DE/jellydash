@@ -57,29 +57,48 @@
         {% endif %}
 
         {% if stats.hasMostWatched %}
-            <section class="trending-section" aria-label="Most watched of all time">
-                <header class="stats-section-header">
-                    <strong>Most Watched</strong>
-                    <span>All-time favourites - by play count</span>
-                    <i></i>
-                </header>
-                {% if stats.mostWatched.series is not empty %}
-                    <span class="trending-strip-label">TV Shows</span>
-                    <div class="trending-row">
-                        {% for item in stats.mostWatched.series %}
-                            {% include "statistics/_title_card.twig" with { item: item, rank: loop.index } only %}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-                {% if stats.mostWatched.movies is not empty %}
-                    <span class="trending-strip-label">Movies</span>
-                    <div class="trending-row">
-                        {% for item in stats.mostWatched.movies %}
-                            {% include "statistics/_title_card.twig" with { item: item, rank: loop.index } only %}
-                        {% endfor %}
-                    </div>
-                {% endif %}
-            </section>
+            <details class="most-watched-disclosure" data-most-watched>
+                <summary class="most-watched-summary">
+                    <span class="most-watched-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M8 21h8"></path>
+                            <path d="M12 17v4"></path>
+                            <path d="M7 4h10v5a5 5 0 0 1 -10 0z"></path>
+                            <path d="M7 5h-2a2 2 0 0 0 -2 2v1a3 3 0 0 0 3 3h1"></path>
+                            <path d="M17 5h2a2 2 0 0 1 2 2v1a3 3 0 0 1 -3 3h-1"></path>
+                        </svg>
+                    </span>
+                    <span class="most-watched-copy">
+                        <strong>Most Watched</strong>
+                        <small>All-time favourites</small>
+                    </span>
+                    <span class="most-watched-context" aria-hidden="true">
+                        {% if stats.mostWatched.series is not empty %}<span>TV Shows</span>{% endif %}
+                        {% if stats.mostWatched.movies is not empty %}<span>Movies</span>{% endif %}
+                    </span>
+                    <span class="most-watched-chevron" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M6 9l6 6l6 -6"></path></svg>
+                    </span>
+                </summary>
+                <div class="most-watched-content">
+                    {% if stats.mostWatched.series is not empty %}
+                        <span class="trending-strip-label">TV Shows</span>
+                        <div class="trending-row">
+                            {% for item in stats.mostWatched.series %}
+                                {% include "statistics/_title_card.twig" with { item: item, rank: loop.index, defer_poster: true } only %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if stats.mostWatched.movies is not empty %}
+                        <span class="trending-strip-label">Movies</span>
+                        <div class="trending-row">
+                            {% for item in stats.mostWatched.movies %}
+                                {% include "statistics/_title_card.twig" with { item: item, rank: loop.index, defer_poster: true } only %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </details>
         {% endif %}
 
         <section class="stats-kpi-grid" aria-label="Key playback metrics">
@@ -352,5 +371,6 @@
 {% endblock %}
 
 {% block page_scripts %}
+    <script src="/assets/js/statistics-most-watched.js?v=20260901-disclosure"></script>
     <script src="/assets/js/statistics-devices.js?v=20260819-device-icons"></script>
 {% endblock %}

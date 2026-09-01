@@ -577,6 +577,58 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame(200, (int) $arrival['watch_sec']);
     }
 
+    public function testStatisticsRowsUseTheCompleteMinimalProjection(): void
+    {
+        $expected = [
+            'item_id',
+            'item_type',
+            'item_name',
+            'series_name',
+            'library',
+            'library_resolved_at',
+            'user_id',
+            'user_name',
+            'client',
+            'play_method',
+            'watched_sec',
+            'source_video_codec',
+            'transcode_reasons',
+            'started_at',
+        ];
+        $itemId = 'phpunit-statistics-projection';
+        $this->insertPlay([
+            'item_id' => $itemId,
+            'library' => 'Movies',
+            'library_resolved_at' => '2099-06-19 12:00:00',
+            'source_video_codec' => 'HEVC',
+            'transcode_reasons' => '["VideoCodecNotSupported"]',
+        ]);
+
+        $rows = $this->repository->statisticsRowsForPeriod(
+            new DateTimeImmutable('2099-06-19 00:00:00'),
+            new DateTimeImmutable('2099-06-20 00:00:00'),
+        );
+        $row = null;
+        foreach ($rows as $candidate) {
+            if ((string) $candidate['item_id'] === $itemId) {
+                $row = $candidate;
+                break;
+            }
+        }
+
+        $this->assertNotNull($row);
+        $actual = array_keys($row->toArray());
+        sort($actual);
+        sort($expected);
+        $this->assertSame($expected, $actual);
+
+        $columns = new ReflectionClassConstant(PlayHistoryRepository::class, 'STATISTICS_COLUMNS');
+        $projected = $columns->getValue();
+        $this->assertIsArray($projected);
+        sort($projected);
+        $this->assertSame($expected, $projected);
+    }
+
     /**
      * @return array<string, mixed>
      */

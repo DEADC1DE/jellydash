@@ -208,6 +208,8 @@ final class PlaybackStatisticsService
                     'watched' => 0,
                     'latest' => '',
                     'itemId' => '',
+                    'library' => '',
+                    'libraryConfirmed' => false,
                 ];
             }
 
@@ -225,6 +227,10 @@ final class PlaybackStatisticsService
                 $groups[$key]['latest'] = $startedAt;
                 $groups[$key]['itemId'] = (string) $row['item_id'];
                 $groups[$key]['type'] = $type;
+                $library = trim((string) ($row['library'] ?? ''));
+                $resolvedAt = trim((string) ($row['library_resolved_at'] ?? ''));
+                $groups[$key]['library'] = $library;
+                $groups[$key]['libraryConfirmed'] = $library !== '' && $resolvedAt !== '';
             }
         }
 
@@ -257,6 +263,8 @@ final class PlaybackStatisticsService
                     . ' · ' . $userCount . ($userCount === 1 ? ' viewer' : ' viewers'),
                 'poster' => $this->poster((string) $group['itemId'], (bool) $group['isEpisode']),
                 'href' => '/history?search=' . rawurlencode((string) $group['title']),
+                '_library' => (string) $group['library'],
+                '_libraryConfirmed' => (bool) $group['libraryConfirmed'],
             ];
         }
 
@@ -276,54 +284,92 @@ final class PlaybackStatisticsService
     {
         $excluded = $this->excludedLibraries();
         if ($excluded === []) {
-            return array_slice($items, 0, 6);
+            return $this->visibleTitleCards(array_slice($items, 0, 6));
         }
 
         $client = $this->client ?? new JellyfinClient();
 
-        // Physical folder prefixes of the excluded libraries. Fetched once and
-        // reused: Trending and both Most Watched strips filter on one render.
-        if ($this->locationsCache === null) {
-            try {
-                $this->locationsCache = $client->libraryLocations();
-            } catch (\Throwable $e) {
-                return array_slice($items, 0, 6); // fail open
-            }
-        }
-        $locations = $this->locationsCache;
+        return $this->withoutExcludedLibraryNames(
+            $items,
+            $excluded,
+            static fn (): array => $client->libraryLocations(),
+            static fn (string $itemId): string => $client->itemPath($itemId),
+        );
+    }
 
-        $prefixes = [];
-        foreach ($excluded as $name) {
-            foreach ($locations[$name] ?? [] as $location) {
-                $location = MediaPath::normalize($location);
-                if ($location !== '') {
-                    $prefixes[] = $location;
-                }
-            }
-        }
-
-        if ($prefixes === []) {
-            return array_slice($items, 0, 6); // no matching libraries
-        }
-
+    /**
+     * Resolve exclusions locally for cards whose representative History row
+     * has a confirmed library. Older unresolved rows retain the path-based
+     * Jellyfin fallback.
+     *
+     * @param array<int, array<string, mixed>> $items
+     * @param array<int, string> $excluded lowercased library names
+     * @param callable(): array<string, array<int, string>> $loadLocations
+     * @param callable(string): string $loadItemPath
+     * @return array<int, array<string, mixed>>
+     */
+    private function withoutExcludedLibraryNames(
+        array $items,
+        array $excluded,
+        callable $loadLocations,
+        callable $loadItemPath,
+    ): array {
         $kept = [];
         $lookupFailed = false;
+        $prefixes = null;
 
         foreach ($items as $item) {
             if (count($kept) >= 6) {
                 break;
             }
 
-            if (!$lookupFailed) {
+            $library = trim((string) ($item['_library'] ?? ''));
+            $libraryConfirmed = ($item['_libraryConfirmed'] ?? false) === true && $library !== '';
+            if ($libraryConfirmed) {
+                if (in_array(mb_strtolower($library), $excluded, true)) {
+                    continue;
+                }
+
+                $kept[] = $this->visibleTitleCard($item);
+                continue;
+            }
+
+            if ($prefixes === null && !$lookupFailed) {
+                if ($this->locationsCache === null) {
+                    try {
+                        $this->locationsCache = $loadLocations();
+                    } catch (\Throwable $e) {
+                        $lookupFailed = true;
+                    }
+                }
+
+                if (!$lookupFailed) {
+                    $prefixes = [];
+                    foreach ($excluded as $name) {
+                        foreach ($this->locationsCache[$name] ?? [] as $location) {
+                            $location = MediaPath::normalize($location);
+                            if ($location !== '') {
+                                $prefixes[] = $location;
+                            }
+                        }
+                    }
+
+                    if ($prefixes === []) {
+                        $lookupFailed = true;
+                    }
+                }
+            }
+
+            if (!$lookupFailed && $prefixes !== null) {
                 try {
                     // Same titles surface in several strips, so look each item up once.
                     $itemId = (string) $item['itemId'];
-                    $path = $this->pathCache[$itemId] ??= $client->itemPath($itemId);
+                    $path = $this->pathCache[$itemId] ??= $loadItemPath($itemId);
                 } catch (\Throwable $e) {
                     // Jellyfin outage: stop probing and keep the rest so the
                     // strip never breaks.
                     $lookupFailed = true;
-                    $kept[] = $item;
+                    $kept[] = $this->visibleTitleCard($item);
                     continue;
                 }
 
@@ -335,10 +381,32 @@ final class PlaybackStatisticsService
                 }
             }
 
-            $kept[] = $item;
+            $kept[] = $this->visibleTitleCard($item);
         }
 
         return $kept;
+    }
+
+    /**
+     * Remove internal library metadata before cards reach the page payload.
+     *
+     * @param array<string, mixed> $item
+     * @return array<string, mixed>
+     */
+    private function visibleTitleCard(array $item): array
+    {
+        unset($item['_library'], $item['_libraryConfirmed']);
+
+        return $item;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function visibleTitleCards(array $items): array
+    {
+        return array_map($this->visibleTitleCard(...), $items);
     }
 
     /**
