@@ -306,6 +306,23 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame(0, (int) $stored['is_finished']);
     }
 
+    public function testImportedEmbyRowsWithNumericIdsAreIdempotent(): void
+    {
+        $parser = new PlaybackReportingParser();
+        $rows = $parser->parseTsv(
+            "2026-08-31 20:14:00.1234567\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t120\t192.0.2.10\t"
+        );
+        $rows[0]['user_name'] = 'PHPUnit Emby Import';
+
+        $first = $this->repository->importHistoricalPlays($rows);
+        $second = $this->repository->importHistoricalPlays($rows);
+
+        $this->assertSame(1, $first['inserted']);
+        $this->assertSame(0, $first['skipped']);
+        $this->assertSame(0, $second['inserted']);
+        $this->assertSame(1, $second['skipped']);
+    }
+
     public function testImportSkipsPlaysAlreadyRecordedByThePoller(): void
     {
         $itemId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';

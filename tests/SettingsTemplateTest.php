@@ -21,7 +21,9 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString('data-import-source="jellydash"', $template);
         $this->assertStringContainsString('data-import-source="playback-reporting"', $template);
         $this->assertStringContainsString('Jellydash CSV', $template);
+        $this->assertStringContainsString('Bring older Jellyfin or Emby history', $template);
         $this->assertStringContainsString('data-import-plugin', $template);
+        $this->assertStringContainsString('Import from server plugin', $template);
         $this->assertStringContainsString('data-import-alt', $template);
         $this->assertStringContainsString('checks the file before anything is written', $template);
         $this->assertStringContainsString('data-import-plugin-broken-note', $template);
