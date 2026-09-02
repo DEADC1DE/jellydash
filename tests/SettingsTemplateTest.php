@@ -55,4 +55,23 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString("window.addEventListener('beforeunload'", $script);
         $this->assertStringContainsString('.settings-dirty-bar[hidden]', $stylesheet);
     }
+
+    public function testSettingsUseOneResponsiveWorkspace(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/settings/index.twig');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($template);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString('class="settings-page"', $template);
+        $this->assertStringContainsString('class="settings-layout"', $template);
+        $this->assertStringContainsString('class="settings-card-head"', $template);
+        $this->assertStringContainsString('class="settings-card-mark"', $template);
+        $this->assertStringContainsString('class="settings-save-btn settings-header-save" form="settings-form"', $template);
+        $this->assertStringNotContainsString('class="settings-actions"', $template);
+        $this->assertStringContainsString('.settings-layout {', $stylesheet);
+        $this->assertStringContainsString('grid-template-columns: minmax(0, 760px) minmax(400px, 1fr);', $stylesheet);
+        $this->assertStringContainsString('.settings-layout > .settings-import .settings-import-sources', $stylesheet);
+        $this->assertStringContainsString('grid-template-columns: 1fr;', $stylesheet);
+    }
 }
