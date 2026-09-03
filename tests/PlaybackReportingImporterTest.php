@@ -21,6 +21,26 @@ final class PlaybackReportingImporterTest extends TestCase
         $this->assertSame(9, $preview['parsed']);
     }
 
+    public function testPreviewFileCountsEmbyTsvRows(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'emby-prtsv');
+        $this->assertNotFalse($path);
+
+        try {
+            file_put_contents(
+                $path,
+                "2026-08-31 20:14:00.1234567\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t120\t192.0.2.10\tVideoCodecNotSupported\n"
+            );
+
+            $preview = (new PlaybackReportingImporter())->previewFile($path);
+
+            $this->assertSame('tsv', $preview['kind']);
+            $this->assertSame(1, $preview['parsed']);
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function testPreviewFileDetectsSqliteWithoutParsingAsTsv(): void
     {
         if (!class_exists(SQLite3::class)) {
@@ -118,6 +138,20 @@ final class PlaybackReportingImporterTest extends TestCase
         $this->assertSame(185, $enriched[0]['watched_sec']);
         $this->assertSame(8026, $enriched[0]['runtime_sec']);
         $this->assertSame(0, $enriched[0]['is_finished']);
+    }
+
+    public function testApplyRuntimesPreservesRecordedEndTimeForPausedEmbySession(): void
+    {
+        $rows = (new PlaybackReportingParser())->parseTsv(
+            "2026-08-31 20:14:00.1234567\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t120\t192.0.2.10\t"
+        );
+
+        $enriched = (new PlaybackReportingImporter())->applyRuntimes($rows, ['1234567' => 500]);
+
+        $this->assertSame(480, $enriched[0]['watched_sec']);
+        $this->assertSame(1, $enriched[0]['is_finished']);
+        $this->assertSame('2026-08-31 20:24:00', $enriched[0]['updated_at']);
+        $this->assertSame('2026-08-31 20:24:00', $enriched[0]['ended_at']);
     }
 
     public function testApplyLibrariesReplacesTypeBasedLabel(): void

@@ -83,29 +83,31 @@ class Database
             )'
         );
 
-        // "Stay signed in": selector/validator pairs (Barry Jaspan's persistent
-        // login scheme). Only the validator's hash is stored, so a stolen DB row
-        // can't be replayed as a cookie.
         $this->platform->createTable(
-            'CREATE TABLE IF NOT EXISTS `remember_tokens` (
-                `id` int NOT NULL AUTO_INCREMENT,
+            'CREATE TABLE IF NOT EXISTS `auth_remember_tokens` (
+                `id` bigint NOT NULL AUTO_INCREMENT,
                 `user_id` mediumint(9) NOT NULL,
-                `selector` varchar(24) NOT NULL,
-                `validator_hash` varchar(64) NOT NULL,
+                `selector` char(24) NOT NULL,
+                `validator_hash` char(64) NOT NULL,
                 `expires_at` datetime NOT NULL,
+                `created_at` datetime NOT NULL,
+                `last_used_at` datetime NOT NULL,
                 PRIMARY KEY (`id`),
-                UNIQUE KEY `uniq_selector` (`selector`),
-                KEY `idx_user_id` (`user_id`)
+                UNIQUE KEY `uniq_auth_remember_selector` (`selector`),
+                KEY `idx_auth_remember_user` (`user_id`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
-            'CREATE TABLE IF NOT EXISTS `remember_tokens` (
+            'CREATE TABLE IF NOT EXISTS `auth_remember_tokens` (
                 `id` INTEGER PRIMARY KEY AUTOINCREMENT,
                 `user_id` INTEGER NOT NULL,
                 `selector` TEXT NOT NULL,
                 `validator_hash` TEXT NOT NULL,
                 `expires_at` TEXT NOT NULL,
+                `created_at` TEXT NOT NULL,
+                `last_used_at` TEXT NOT NULL,
                 UNIQUE (`selector`)
             )'
         );
+        $this->platform->createSqliteIndex('idx_auth_remember_user', 'auth_remember_tokens', ['user_id']);
     }
 
     /** @return array<string, mixed> */
@@ -121,6 +123,7 @@ class Database
             'username' => DATABASE_USERNAME,
             'password' => DATABASE_PASSWORD,
             'database' => DATABASE_NAME,
+            'charset' => 'utf8mb4',
         ];
 
         if (defined('DATABASE_PORT') && DATABASE_PORT !== null && DATABASE_PORT !== '') {
@@ -169,16 +172,32 @@ class Database
     // Set (reset) a user's password. Returns false if no such user.
     public function setUserPassword(string $username, string $password): bool
     {
+        $this->ensureAuthSchema();
+
         if (strlen($password) < self::MIN_PASSWORD_LENGTH) {
             throw new \InvalidArgumentException(
                 'Password must be at least ' . self::MIN_PASSWORD_LENGTH . ' characters.'
             );
         }
 
-        $this->dibi->update('users', ['password' => password_hash($password, PASSWORD_DEFAULT)])
-            ->where('username = %s', strtolower($username))->execute();
+        $userId = $this->dibi->select('id')->from('users')
+            ->where('username = %s', strtolower($username))->fetchSingle();
+        if ($userId === false) {
+            return false;
+        }
 
-        return $this->dibi->getAffectedRows() > 0;
+        $this->dibi->begin();
+        try {
+            $this->dibi->update('users', ['password' => password_hash($password, PASSWORD_DEFAULT)])
+                ->where('id = %i', $userId)->execute();
+            $this->dibi->delete('auth_remember_tokens')->where('user_id = %i', $userId)->execute();
+            $this->dibi->commit();
+        } catch (\Throwable $e) {
+            $this->dibi->rollback();
+            throw $e;
+        }
+
+        return true;
     }
 
     public function getUser($id): ?array
@@ -189,7 +208,6 @@ class Database
         return $row?->toArray();
     }
 
-    // Verify a plaintext password against the stored hash for a user id.
     public function verifyPassword(int $userId, string $password): bool
     {
         $row = $this->dibi->select('password')->from('users')

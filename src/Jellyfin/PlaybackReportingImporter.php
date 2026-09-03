@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Mk\Framework\Jellyfin;
 
 /**
- * Imports historical plays from the Jellyfin Playback Reporting plugin into
- * Jellydash. Sources: a TSV backup, the plugin SQLite file, or the plugin API.
+ * Imports historical plays from the Jellyfin or Emby Playback Reporting plugin
+ * into Jellydash. Sources: a TSV backup, the plugin SQLite file, or the plugin
+ * API.
  */
 final class PlaybackReportingImporter
 {
@@ -131,9 +132,9 @@ final class PlaybackReportingImporter
     }
 
     /**
-     * Fill runtime_sec from a map of item id => seconds. PlayDuration is
-     * session length and is kept as recorded. is_finished uses the same 95%
-     * rule as live history.
+     * Fill runtime_sec from a map of item id => seconds. watched_sec is the
+     * plugin's active playback time. is_finished uses the same 95% rule as
+     * live history.
      * Missing items keep runtime_sec = 0.
      *
      * @param list<array<string, mixed>> $rows
@@ -155,7 +156,10 @@ final class PlaybackReportingImporter
             $watched = max(0, (int) ($row['watched_sec'] ?? 0));
 
             $finished = PlayHistoryRepository::isPlayFinished($watched, $runtime);
-            $endedAt = $this->endedAt((string) ($row['started_at'] ?? ''), $watched);
+            $recordedEnd = trim((string) ($row['updated_at'] ?? ''));
+            $endedAt = $recordedEnd !== ''
+                ? $recordedEnd
+                : $this->endedAt((string) ($row['started_at'] ?? ''), $watched);
             $row['runtime_sec'] = $runtime;
             $row['watched_sec'] = $watched;
             $row['is_finished'] = $finished ? 1 : 0;
@@ -517,7 +521,7 @@ final class PlaybackReportingImporter
 
         $map = [];
         foreach ($users as $user) {
-            $key = $this->parser->strippedId($user['id']);
+            $key = $this->parser->idKey($user['id']);
             $name = trim($user['name']);
             if ($key !== '' && $name !== '') {
                 $map[$key] = $name;

@@ -185,4 +185,117 @@ final class PlaybackReportingParserTest extends TestCase
         $this->assertSame(90000, $this->parser->parseTsv($long)[0]['watched_sec']);
         $this->assertSame([], $this->parser->parseTsv($negative));
     }
+
+    public function testParseEmbyTsvPreservesNumericIdsAndExcludesPausedTime(): void
+    {
+        $line = "2026-08-31 20:14:00.1234567\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t120\t192.0.2.10\tVideoCodecNotSupported";
+
+        $rows = $this->parser->parseTsv($line);
+        $named = $this->parser->applyUserNames($rows, ['7654321' => 'Emby User']);
+
+        $this->assertCount(1, $named);
+        $this->assertSame('7654321', $named[0]['user_id']);
+        $this->assertSame('Emby User', $named[0]['user_name']);
+        $this->assertSame('1234567', $named[0]['item_id']);
+        $this->assertSame(480, $named[0]['watched_sec']);
+        $this->assertSame('2026-08-31 20:24:00', $named[0]['updated_at']);
+        $this->assertSame('2026-08-31 20:24:00', $named[0]['ended_at']);
+    }
+
+    public function testParseApiResultsUsesOptionalPauseDuration(): void
+    {
+        $rows = $this->parser->parseApiResults(
+            ['DateCreated', 'UserId', 'ItemId', 'ItemType', 'ItemName', 'PlaybackMethod', 'ClientName', 'DeviceName', 'PlayDuration', 'PauseDuration'],
+            [[
+                '2026-08-31 20:14:00.1234567',
+                '7654321',
+                '1234567',
+                'Movie',
+                'Arrival',
+                'DirectPlay',
+                'Emby Web',
+                'Chrome',
+                '600',
+                '120',
+            ]],
+        );
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('1234567', $rows[0]['item_id']);
+        $this->assertSame(480, $rows[0]['watched_sec']);
+        $this->assertSame('2026-08-31 20:24:00', $rows[0]['updated_at']);
+    }
+
+    public function testParseEmbySqliteReadsOptionalPauseDuration(): void
+    {
+        if (!class_exists(SQLite3::class)) {
+            $this->markTestSkipped('sqlite3 extension is not available.');
+        }
+
+        $path = tempnam(sys_get_temp_dir(), 'emby-prdb');
+        $this->assertNotFalse($path);
+        $dbPath = $path . '.db';
+        rename($path, $dbPath);
+
+        try {
+            $sqlite = new SQLite3($dbPath);
+            $sqlite->exec('CREATE TABLE PlaybackActivity (
+                DateCreated DATETIME NOT NULL,
+                UserId TEXT,
+                ItemId TEXT,
+                ItemType TEXT,
+                ItemName TEXT,
+                PlaybackMethod TEXT,
+                ClientName TEXT,
+                DeviceName TEXT,
+                PlayDuration INT,
+                PauseDuration INT,
+                RemoteAddress TEXT,
+                TranscodeReasons TEXT
+            )');
+            $sqlite->exec("INSERT INTO PlaybackActivity VALUES (
+                '2026-08-31 20:14:00.1234567',
+                '7654321',
+                '1234567',
+                'Movie',
+                'Arrival',
+                'DirectPlay',
+                'Emby Web',
+                'Chrome',
+                600,
+                120,
+                '192.0.2.10',
+                'VideoCodecNotSupported'
+            )");
+            $sqlite->close();
+
+            $rows = $this->parser->parseSqliteFile($dbPath);
+
+            $this->assertCount(1, $rows);
+            $this->assertSame('1234567', $rows[0]['item_id']);
+            $this->assertSame(480, $rows[0]['watched_sec']);
+            $this->assertSame('2026-08-31 20:24:00', $rows[0]['updated_at']);
+        } finally {
+            @unlink($dbPath);
+        }
+    }
+
+    public function testParseTsvStillRejectsUnsupportedIds(): void
+    {
+        $line = "2026-08-31 20:14:00.1234567\t7654321\temby.item\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t0";
+
+        $this->assertSame([], $this->parser->parseTsv($line));
+    }
+
+    public function testParseEmbyTsvHandlesBlankAndOversizedPauseDurations(): void
+    {
+        $blank = "2026-08-31 20:14:00.1234567\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t\t\t";
+        $longPause = "2026-08-31 20:14:00.1234567\t7654321\t1234568\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t900\t\t";
+        $invalidPause = "2026-08-31 20:14:00.1234567\t7654321\t1234569\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\tpaused\t\t";
+
+        $this->assertSame(600, $this->parser->parseTsv($blank)[0]['watched_sec']);
+        $this->assertSame(0, $this->parser->parseTsv($longPause)[0]['watched_sec']);
+        $this->assertSame('2026-08-31 20:24:00', $this->parser->parseTsv($longPause)[0]['updated_at']);
+        $this->assertSame([], $this->parser->parseTsv($invalidPause));
+    }
 }

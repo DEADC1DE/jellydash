@@ -65,7 +65,7 @@ The project is very young and in very active development.
 
 - **Now Playing.** Live cards for every active stream: artwork, user, quality, progress and the playback method (Direct Play, Remux or Transcode, including the reason why). Live TV channels from tuners like Tunarr show up too, with real program progress and a red on-air badge.
 
-- **History.** Every play gets recorded by a background poller, so history is complete even when nobody has the dashboard open. Search it, filter by user or library, export the matching plays to CSV, and enjoy the poster art. Existing Jellyfin Playback Reporting backups can be imported from Settings.
+- **History.** Every play gets recorded by a background poller, so history is complete even when nobody has the dashboard open. Search it, filter by user or library, export the matching plays to CSV, and enjoy the poster art. Existing Jellyfin or Emby Playback Reporting backups can be imported from Settings.
 
 - **Statistics.** Watch time trends, top users, device activity, clients, codecs and transcode reasons. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
 
@@ -108,6 +108,8 @@ docker compose up -d
 ```
 
 Open `http://your-host:8080` and you are done. Both setups create everything they need automatically, there is nothing to import.
+
+Set `APP_TIMEZONE` in `.env` to your local IANA timezone so History and Statistics use the right date boundaries. Custom `docker run` setups may pass the standard `TZ` variable instead. `APP_TIMEZONE` takes priority when both are present.
 
 Whichever database you choose, the active setup is saved as `docker-compose.yml`. Normal commands, aliases and update scripts work the same way for both.
 
@@ -253,6 +255,8 @@ AUTH_ADMIN_PASSWORD=pick-a-strong-one
 
 The password needs at least 8 characters. The admin user is created automatically on the next start. More users can be added with `docker compose exec app php bin/console.php user:add`.
 
+On the login page, **Keep me signed in** lets that browser restore your login for up to 90 days. The remembered login is renewed when you return and removed when you sign out or change your password.
+
 ## Exporting History
 
 Use **Export CSV** on the History page to choose a search, user, library and time period before downloading. Jellydash shows the exact number of matching plays, and the export is never limited to the page you are viewing. Its versioned format keeps the playback fields Jellydash needs for a native round-trip import. See [docs/HISTORY_CSV.md](docs/HISTORY_CSV.md) for the v1 format.
@@ -261,13 +265,15 @@ To restore that file, open **Settings → Import play history** and choose **Jel
 
 ## Importing Playback Reporting history
 
-Jellydash only records plays from the moment it starts. If you already used the [Playback Reporting](https://github.com/jellyfin/jellyfin-plugin-playbackreporting) plugin, you can import that history.
+Jellydash only records plays from the moment it starts. If you already used Playback Reporting on [Jellyfin](https://github.com/jellyfin/jellyfin-plugin-playbackreporting) or [Emby](https://github.com/faush01/playback_reporting), you can import that history.
 
-The plugin backup is a TSV file (no header row): Dashboard → Playback Reporting → Save Backup Data. You can also point at `playback_reporting.db` in the Jellyfin data folder, or pull live from the plugin API.
+The plugin backup is a TSV file with no header row. You can also provide `playback_reporting.db`, or import directly while the plugin API is available.
 
-Use **Import history** on the History page, or open the importer directly from Settings. Drop a TSV backup or `playback_reporting.db` (20 MB max) there. The file type is detected automatically. Jellydash counts the plays first, then asks you to confirm before writing anything. If the plugin is still installed, **Import from Jellyfin (API)** appears too.
+Use **Import history** on the History page, or open the importer directly from Settings. Drop a TSV backup or `playback_reporting.db` (20 MB max) there. The file type is detected automatically. Jellydash counts the plays first, then asks you to confirm before writing anything. If the plugin is still installed, **Import from server plugin** appears too.
 
-User names are resolved via the Jellyfin `/Users` API (admin token). Media runtime is looked up from Jellyfin (`RunTimeTicks`) so the completion bar matches live history; plays are marked finished at 95% of that runtime, same as the poller. If an item no longer exists, runtime stays empty and the play is left unfinished. `PlayDuration` in the backup is session length, not playback position: a resume that ran 20 minutes shows 20 minutes watched, not 90% of the film. Dates are kept as the plugin recorded them (Jellyfin server local time). Each play is attached to the Jellyfin library that currently owns the item (from its file path); if the item is gone, the type is used as a fallback (Movie → Movies, Episode → TV Shows). Imported plays never trigger notifications. Re-importing skips duplicates, but will fill in a missing runtime and replace a generic library label if Jellyfin is reachable the second time.
+User names are resolved through the connected server's `/Users` API. Media runtime is looked up through `/Items` (`RunTimeTicks`) so the completion bar matches live history; plays are marked finished at 95% of that runtime, same as the poller. If an item no longer exists, runtime stays empty and the play is left unfinished. `PlayDuration` is elapsed session time, not playback position. When an Emby backup includes `PauseDuration`, Jellydash excludes that paused time from the watched total. Dates are kept as the plugin recorded them in the server's local time. Each play is attached to the library that currently owns the item from its file path; if the item is gone, the type is used as a fallback (Movie → Movies, Episode → TV Shows). Imported plays never trigger notifications. Re-importing skips duplicates, but will fill in a missing runtime and replace a generic library label if the server is reachable the second time.
+
+This compatibility only covers Playback Reporting imports from Emby. Jellydash is still built and tested for Jellyfin, so Emby is not a fully supported server yet.
 
 ## Good to know
 

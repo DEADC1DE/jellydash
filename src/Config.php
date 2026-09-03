@@ -13,6 +13,9 @@ namespace Mk\Framework;
  */
 class Config
 {
+    /** @var array<string, true>|null */
+    private static ?array $validTimezones = null;
+
     // Raw string lookup with fallback.
     public static function get(string $key, ?string $default = null): ?string
     {
@@ -40,6 +43,32 @@ class Config
     public static function env(): string
     {
         return self::get('APP_ENV', 'production');
+    }
+
+    /**
+     * Resolve the timezone used for stored timestamps and date boundaries.
+     * APP_TIMEZONE remains the explicit Jellydash setting, while TZ supports
+     * conventional Docker installations that pass only the standard variable.
+     */
+    public static function timezone(): string
+    {
+        self::$validTimezones ??= array_fill_keys(
+            \DateTimeZone::listIdentifiers(\DateTimeZone::ALL_WITH_BC),
+            true,
+        );
+
+        foreach (['APP_TIMEZONE', 'TZ'] as $key) {
+            $timezone = self::get($key);
+            if ($timezone === null) {
+                continue;
+            }
+
+            if (isset(self::$validTimezones[$timezone])) {
+                return $timezone;
+            }
+        }
+
+        return 'UTC';
     }
 
     public static function isDebug(): bool

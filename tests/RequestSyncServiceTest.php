@@ -9,12 +9,7 @@ final class RequestSyncServiceTest extends TestCase
 {
     public function testRequestedAtUsesConfiguredAppTimezone(): void
     {
-        $originalTimezone = date_default_timezone_get();
-        $hadEnv = array_key_exists('APP_TIMEZONE', $_ENV);
-        $originalEnv = $_ENV['APP_TIMEZONE'] ?? null;
-
-        try {
-            $_ENV['APP_TIMEZONE'] = 'America/New_York';
+        $this->withTimezoneEnvironment('America/New_York', 'Europe/London', function (): void {
             date_default_timezone_set('UTC');
 
             $requestedAt = (new \ReflectionClass(RequestSyncService::class))
@@ -26,12 +21,70 @@ final class RequestSyncServiceTest extends TestCase
                 );
 
             $this->assertSame('2026-08-09 08:00:00', $requestedAt);
+        });
+    }
+
+    public function testRequestedAtUsesDockerTimezoneWhenAppTimezoneIsMissing(): void
+    {
+        $this->withTimezoneEnvironment(null, 'America/New_York', function (): void {
+            date_default_timezone_set('UTC');
+
+            $requestedAt = (new \ReflectionClass(RequestSyncService::class))
+                ->getMethod('requestedAt')
+                ->invoke(
+                    new RequestSyncService(),
+                    ['createdAt' => '2026-08-09T12:00:00Z'],
+                    'fallback'
+                );
+
+            $this->assertSame('2026-08-09 08:00:00', $requestedAt);
+        });
+    }
+
+    private function withTimezoneEnvironment(?string $appTimezone, ?string $dockerTimezone, callable $assertion): void
+    {
+        $originalTimezone = date_default_timezone_get();
+        $snapshot = [];
+
+        foreach (['APP_TIMEZONE', 'TZ'] as $key) {
+            $snapshot[$key] = [
+                'process' => getenv($key),
+                'env_exists' => array_key_exists($key, $_ENV),
+                'env' => $_ENV[$key] ?? null,
+                'server_exists' => array_key_exists($key, $_SERVER),
+                'server' => $_SERVER[$key] ?? null,
+            ];
+            unset($_ENV[$key], $_SERVER[$key]);
+            putenv($key);
+        }
+
+        try {
+            if ($appTimezone !== null) {
+                putenv('APP_TIMEZONE=' . $appTimezone);
+            }
+            if ($dockerTimezone !== null) {
+                putenv('TZ=' . $dockerTimezone);
+            }
+
+            $assertion();
         } finally {
             date_default_timezone_set($originalTimezone);
-            if ($hadEnv) {
-                $_ENV['APP_TIMEZONE'] = $originalEnv;
-            } else {
-                unset($_ENV['APP_TIMEZONE']);
+
+            foreach ($snapshot as $key => $values) {
+                $process = $values['process'];
+                putenv($process === false ? $key : $key . '=' . $process);
+
+                if ($values['env_exists']) {
+                    $_ENV[$key] = $values['env'];
+                } else {
+                    unset($_ENV[$key]);
+                }
+
+                if ($values['server_exists']) {
+                    $_SERVER[$key] = $values['server'];
+                } else {
+                    unset($_SERVER[$key]);
+                }
             }
         }
     }

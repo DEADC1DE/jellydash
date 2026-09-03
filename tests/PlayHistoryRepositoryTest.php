@@ -306,6 +306,23 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame(0, (int) $stored['is_finished']);
     }
 
+    public function testImportedEmbyRowsWithNumericIdsAreIdempotent(): void
+    {
+        $parser = new PlaybackReportingParser();
+        $rows = $parser->parseTsv(
+            "2026-08-31 20:14:00.1234567\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t600\t120\t192.0.2.10\t"
+        );
+        $rows[0]['user_name'] = 'PHPUnit Emby Import';
+
+        $first = $this->repository->importHistoricalPlays($rows);
+        $second = $this->repository->importHistoricalPlays($rows);
+
+        $this->assertSame(1, $first['inserted']);
+        $this->assertSame(0, $first['skipped']);
+        $this->assertSame(0, $second['inserted']);
+        $this->assertSame(1, $second['skipped']);
+    }
+
     public function testImportSkipsPlaysAlreadyRecordedByThePoller(): void
     {
         $itemId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -558,6 +575,58 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertStringStartsWith('2024-01-02 15:00:00', (string) $dune['started_at']);
         $this->assertSame(1, (int) $arrival['plays']);
         $this->assertSame(200, (int) $arrival['watch_sec']);
+    }
+
+    public function testStatisticsRowsUseTheCompleteMinimalProjection(): void
+    {
+        $expected = [
+            'item_id',
+            'item_type',
+            'item_name',
+            'series_name',
+            'library',
+            'library_resolved_at',
+            'user_id',
+            'user_name',
+            'client',
+            'play_method',
+            'watched_sec',
+            'source_video_codec',
+            'transcode_reasons',
+            'started_at',
+        ];
+        $itemId = 'phpunit-statistics-projection';
+        $this->insertPlay([
+            'item_id' => $itemId,
+            'library' => 'Movies',
+            'library_resolved_at' => '2099-06-19 12:00:00',
+            'source_video_codec' => 'HEVC',
+            'transcode_reasons' => '["VideoCodecNotSupported"]',
+        ]);
+
+        $rows = $this->repository->statisticsRowsForPeriod(
+            new DateTimeImmutable('2099-06-19 00:00:00'),
+            new DateTimeImmutable('2099-06-20 00:00:00'),
+        );
+        $row = null;
+        foreach ($rows as $candidate) {
+            if ((string) $candidate['item_id'] === $itemId) {
+                $row = $candidate;
+                break;
+            }
+        }
+
+        $this->assertNotNull($row);
+        $actual = array_keys($row->toArray());
+        sort($actual);
+        sort($expected);
+        $this->assertSame($expected, $actual);
+
+        $columns = new ReflectionClassConstant(PlayHistoryRepository::class, 'STATISTICS_COLUMNS');
+        $projected = $columns->getValue();
+        $this->assertIsArray($projected);
+        sort($projected);
+        $this->assertSame($expected, $projected);
     }
 
     /**

@@ -1,24 +1,34 @@
 {% extends "_shell.twig" %}
 
 {% block dashboard_header %}
-    <div class="header-copy">
-        <h1>Settings</h1>
-        <p>Preferences stored in the database; infrastructure stays in <code>.env</code></p>
+    <div class="settings-page-header">
+        <div class="header-copy">
+            <h1>Settings</h1>
+            <p>Preferences stored in the database; infrastructure stays in <code>.env</code></p>
+        </div>
+        <button type="submit" class="settings-save-btn settings-header-save" form="settings-form">Save settings</button>
     </div>
 {% endblock %}
 
 {% block dashboard_content %}
-    {% if saved %}
-        <div class="settings-saved" role="status">Settings saved.</div>
-    {% endif %}
+    <div class="settings-page">
+        {% if saved %}
+            <div class="settings-saved" role="status">Settings saved.</div>
+        {% endif %}
 
-    <form class="settings-form" id="settings-form" action="?req=settings" method="post" data-settings-form>
+        <div class="settings-layout">
+            <form class="settings-form" id="settings-form" action="?req=settings" method="post" data-settings-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <section class="settings-card">
-            <header>
-                <strong>General</strong>
-                <span>Branding and dashboard display</span>
+            <header class="settings-card-head">
+                <span class="settings-card-mark" aria-hidden="true">
+                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M14.647 4.081a.724 .724 0 0 0 1.08 .448c2.439 -1.485 5.23 1.305 3.745 3.744a.724 .724 0 0 0 .447 1.08c2.775 .673 2.775 4.62 0 5.294a.724 .724 0 0 0 -.448 1.08c1.485 2.439 -1.305 5.23 -3.744 3.745a.724 .724 0 0 0 -1.08 .447c-.673 2.775 -4.62 2.775 -5.294 0a.724 .724 0 0 0 -1.08 -.448c-2.439 1.485 -5.23 -1.305 -3.745 -3.744a.724 .724 0 0 0 -.447 -1.08c-2.775 -.673 -2.775 -4.62 0 -5.294a.724 .724 0 0 0 .448 -1.08c-1.485 -2.439 1.305 -5.23 3.744 -3.745a.722 .722 0 0 0 1.08 -.447c.673 -2.775 4.62 -2.775 5.294 0zm-2.647 4.919a3 3 0 1 0 0 6a3 3 0 0 0 0 -6"></path></svg>
+                </span>
+                <span class="settings-card-copy">
+                    <strong>General</strong>
+                    <span>Branding and dashboard display</span>
+                </span>
             </header>
             <label class="settings-field">
                 <span>Server label</span>
@@ -44,9 +54,14 @@
         </section>
 
         <section class="settings-card">
-            <header>
-                <strong>Statistics exclusions</strong>
-                <span>Selected libraries are hidden from Trending and Most Watched.</span>
+            <header class="settings-card-head">
+                <span class="settings-card-mark" aria-hidden="true">
+                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M9.883 2.207a1.9 1.9 0 0 1 2.087 1.522l.025 .167l.005 .104v7a1 1 0 0 0 .883 .993l.117 .007h6.8a2 2 0 0 1 2 2a1 1 0 0 1 -.026 .226a10 10 0 1 1 -12.27 -11.933l.27 -.067l.11 -.02z"></path><path d="M14 3.5v5.5a1 1 0 0 0 1 1h5.5a1 1 0 0 0 .943 -1.332a10 10 0 0 0 -6.11 -6.111a1 1 0 0 0 -1.333 .943z"></path></svg>
+                </span>
+                <span class="settings-card-copy">
+                    <strong>Statistics exclusions</strong>
+                    <span>Selected libraries are hidden from Trending and Most Watched.</span>
+                </span>
             </header>
             {% if libraries is not null and libraries is not empty %}
                 <div class="settings-checks">
@@ -73,9 +88,14 @@
         </section>
 
         <section class="settings-card">
-            <header>
-                <strong>Notification exclusions</strong>
-                <span>Selected users never trigger playback alerts.</span>
+            <header class="settings-card-head">
+                <span class="settings-card-mark" aria-hidden="true">
+                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M14.235 19c.865 0 1.322 1.024 .745 1.668a3.992 3.992 0 0 1 -2.98 1.332a3.992 3.992 0 0 1 -2.98 -1.332c-.552 -.616 -.158 -1.579 .634 -1.661l.11 -.006h4.471z"></path><path d="M12 2c1.358 0 2.506 .903 2.875 2.141l.046 .171l.008 .043a8.013 8.013 0 0 1 4.024 6.069l.028 .287l.019 .289v2.931l.021 .136a3 3 0 0 0 1.143 1.847l.167 .117l.162 .099c.86 .487 .56 1.766 -.377 1.864l-.116 .006h-16c-1.028 0 -1.387 -1.364 -.493 -1.87a3 3 0 0 0 1.472 -2.063l.021 -.143l.001 -2.97a8 8 0 0 1 3.821 -6.454l.248 -.146l.01 -.043a3.003 3.003 0 0 1 2.562 -2.29l.182 -.017l.176 -.004z"></path></svg>
+                </span>
+                <span class="settings-card-copy">
+                    <strong>Notification exclusions</strong>
+                    <span>Selected users never trigger playback alerts.</span>
+                </span>
             </header>
             {% if users is not empty %}
                 <div class="settings-checks">
@@ -100,10 +120,7 @@
             {% endif %}
         </section>
 
-        <div class="settings-actions">
-            <button type="submit" class="settings-save-btn">Save settings</button>
-        </div>
-    </form>
+            </form>
 
     {% if auth_enabled and layout.user %}
         <section class="settings-card settings-account">
@@ -130,22 +147,22 @@
                     <span>Confirm new password</span>
                     <input type="password" name="new_pwd_confirm" autocomplete="new-password" minlength="8" required>
                 </label>
-                <div class="settings-actions">
+                <div class="settings-account-actions">
                     <button type="submit" class="settings-save-btn">Change password</button>
                 </div>
             </form>
         </section>
     {% endif %}
 
-    <div class="settings-dirty-bar" data-settings-dirty-bar hidden>
-        <span aria-live="polite"><i aria-hidden="true"></i>Unsaved changes</span>
-        <button type="submit" class="settings-save-btn" form="settings-form">Save changes</button>
-    </div>
-
-    <section class="settings-card settings-import" id="import-history">
-        <header>
-            <strong>Import play history</strong>
-            <span>Restore a Jellydash backup or bring your old Playback Reporting history with you. Jellydash checks the file before anything is written.</span>
+            <section class="settings-card settings-import" id="import-history">
+        <header class="settings-card-head">
+            <span class="settings-card-mark" aria-hidden="true">
+                <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M12 2l.117 .007a1 1 0 0 1 .876 .876l.007 .117v4l.005 .15a2 2 0 0 0 1.838 1.844l.157 .006h4l.117 .007a1 1 0 0 1 .876 .876l.007 .117v9a3 3 0 0 1 -2.824 2.995l-.176 .005h-10a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-14a3 3 0 0 1 2.824 -2.995l.176 -.005zm0 9l-.09 .004l-.058 .007l-.118 .025l-.105 .035l-.113 .054l-.111 .071a1 1 0 0 0 -.112 .097l-2.5 2.5a1 1 0 0 0 0 1.414l.094 .083a1 1 0 0 0 1.32 -.083l.793 -.793v3.586a1 1 0 0 0 2 0v-3.585l.793 .792a1 1 0 0 0 1.414 -1.414l-2.5 -2.5l-.082 -.073l-.104 -.074l-.098 -.052l-.11 -.044l-.112 -.03l-.126 -.017z"></path><path d="M19 7h-4l-.001 -4.001z"></path></svg>
+            </span>
+            <span class="settings-card-copy">
+                <strong>Import play history</strong>
+                <span>Restore a Jellydash backup or bring your old Playback Reporting history with you. Jellydash checks the file before anything is written.</span>
+            </span>
         </header>
         {% if import.error %}
             <div class="settings-error" role="alert">{{ import.error }}</div>
@@ -178,7 +195,7 @@
                     <span class="settings-import-source-mark" aria-hidden="true">
                         <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M11 4a1 1 0 0 1 2 0v5h5a1 1 0 0 1 0 2h-5v5a1 1 0 0 1 -2 0v-5h-5a1 1 0 0 1 0 -2h5z"></path><path d="M5 2h14a3 3 0 0 1 3 3v14a3 3 0 0 1 -3 3h-14a3 3 0 0 1 -3 -3v-14a3 3 0 0 1 3 -3m0 2a1 1 0 0 0 -1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1 -1v-14a1 1 0 0 0 -1 -1z"></path></svg>
                     </span>
-                    <span><strong>Playback Reporting</strong><small>Bring older Jellyfin history</small></span>
+                    <span><strong>Playback Reporting</strong><small>Bring older Jellyfin or Emby history</small></span>
                 </div>
                 <form class="settings-import-form" action="/api/playback-reporting.php" method="post" enctype="multipart/form-data" data-import-drop data-import-endpoint="/api/playback-reporting.php" data-import-source="playback-reporting">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -191,14 +208,21 @@
                     </label>
                     <div class="settings-import-alt" data-import-alt hidden>
                         <span class="settings-import-or">or</span>
-                        <button type="submit" name="import_source" value="plugin" class="settings-secondary-btn" data-import-plugin>Import from Jellyfin API</button>
+                        <button type="submit" name="import_source" value="plugin" class="settings-secondary-btn" data-import-plugin>Import from server plugin</button>
                     </div>
                 </form>
             </article>
         </div>
         <small class="settings-note" data-import-plugin-broken-note hidden>Playback Reporting v17 crashes on Jellyfin 10.11.9+. Catalog v18 is still unpublished (<a href="https://github.com/jellyfin/jellyfin-plugin-playbackreporting/pull/131" target="_blank" rel="noopener noreferrer">PR #131</a>). Drop a TSV backup instead.</small>
         <small class="settings-note" data-import-plugin-ok-note>Re-importing skips plays already in Jellydash. Imported plays never trigger notifications. Uploads must be 20 MB or smaller.</small>
-    </section>
+            </section>
+        </div>
+
+        <div class="settings-dirty-bar" data-settings-dirty-bar hidden>
+            <span aria-live="polite"><i aria-hidden="true"></i>Unsaved changes</span>
+            <button type="submit" class="settings-save-btn" form="settings-form">Save changes</button>
+        </div>
+    </div>
 {% endblock %}
 
 {% block page_scripts %}

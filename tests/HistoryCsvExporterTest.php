@@ -96,6 +96,44 @@ final class HistoryCsvExporterTest extends TestCase
         $this->assertArrayNotHasKey('notified', $newestRow);
     }
 
+    public function testExportCapturesOneDefaultClockForAllCursorBatches(): void
+    {
+        $exportNow = new DateTimeImmutable('2030-01-31 12:00:00');
+        for ($index = 0; $index < 500; $index++) {
+            $this->insertPlay(
+                'phpunit-csv-clock-recent-' . $index,
+                '2030-01-31 12:00:00',
+                'Recent ' . $index,
+            );
+        }
+
+        $this->insertPlay(
+            'phpunit-csv-clock-boundary',
+            '2030-01-02 12:00:00',
+            'Boundary row',
+        );
+
+        $clockCalls = 0;
+        $stream = fopen('php://temp', 'w+b');
+        $this->assertIsResource($stream);
+
+        try {
+            $count = (new HistoryCsvExporter($this->repository, static function () use (&$clockCalls, $exportNow): DateTimeImmutable {
+                $clockCalls++;
+
+                return $exportNow;
+            }))->write(
+                new HistoryFilters(user: 'PHPUnit CSV Export', range: '30'),
+                $stream,
+            );
+        } finally {
+            fclose($stream);
+        }
+
+        $this->assertSame(501, $count);
+        $this->assertSame(1, $clockCalls);
+    }
+
     public function testEndpointIsAuthenticatedAndDownloadsAFilteredCsv(): void
     {
         $endpoint = (string) file_get_contents(ROOT_DIR . '/public/api/history-export.php');

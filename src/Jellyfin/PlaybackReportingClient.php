@@ -16,6 +16,8 @@ class PlaybackReportingClient
 
     private JellyfinClient $jellyfin;
 
+    private ?bool $pauseDurationAvailable = null;
+
     public function __construct(?JellyfinClient $jellyfin = null)
     {
         $this->jellyfin = $jellyfin ?? new JellyfinClient();
@@ -30,7 +32,12 @@ class PlaybackReportingClient
     {
         $limit = max(1, $limit);
         $offset = max(0, $offset);
-        $sql = 'SELECT ' . self::ACTIVITY_COLUMNS
+        $columns = self::ACTIVITY_COLUMNS;
+        if ($this->hasPauseDuration()) {
+            $columns .= ', PauseDuration';
+        }
+
+        $sql = 'SELECT ' . $columns
             . ' FROM PlaybackActivity ORDER BY DateCreated LIMIT ' . $limit . ' OFFSET ' . $offset;
 
         $payload = $this->customQuery($sql, 60);
@@ -108,7 +115,7 @@ class PlaybackReportingClient
     /**
      * @return array{columns: array<int, mixed>, results: array<int, mixed>}
      */
-    private function customQuery(string $sql, int $timeout): array
+    protected function customQuery(string $sql, int $timeout): array
     {
         try {
             $payload = $this->jellyfin->postJson(
@@ -142,6 +149,42 @@ class PlaybackReportingClient
             'columns' => $columns,
             'results' => $results,
         ];
+    }
+
+    private function hasPauseDuration(): bool
+    {
+        if ($this->pauseDurationAvailable !== null) {
+            return $this->pauseDurationAvailable;
+        }
+
+        try {
+            $payload = $this->customQuery('PRAGMA table_info(PlaybackActivity)', 15);
+        } catch (\Throwable) {
+            return $this->pauseDurationAvailable = false;
+        }
+
+        $nameIndex = null;
+        foreach ($payload['columns'] as $index => $column) {
+            if (strcasecmp((string) $column, 'name') === 0) {
+                $nameIndex = (int) $index;
+                break;
+            }
+        }
+
+        foreach ($payload['results'] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $name = $nameIndex !== null
+                ? (string) ($row[$nameIndex] ?? '')
+                : (string) ($row[1] ?? '');
+            if (strcasecmp($name, 'PauseDuration') === 0) {
+                return $this->pauseDurationAvailable = true;
+            }
+        }
+
+        return $this->pauseDurationAvailable = false;
     }
 
     private function queryErrorMessage(string $message): string

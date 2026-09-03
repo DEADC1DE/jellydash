@@ -749,11 +749,11 @@ final class JellyfinSessionMapper
 
         foreach ($parts as $part) {
             if ($part !== '') {
-                $letters .= strtoupper(substr($part, 0, 1));
+                $letters .= mb_strtoupper(mb_substr($part, 0, 1));
             }
         }
 
-        return substr($letters !== '' ? $letters : 'U', 0, 2);
+        return mb_substr($letters !== '' ? $letters : 'U', 0, 2);
     }
 
     private function intValue(mixed $value): int

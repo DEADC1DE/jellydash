@@ -150,9 +150,9 @@ final class RequestSyncService
             return $fallback;
         }
 
-        // Read the configured zone directly so this stays correct even when a
-        // caller did not run the normal web bootstrap first.
-        $zone = Config::get('APP_TIMEZONE', TIMEZONE_DEFAULT) ?? TIMEZONE_DEFAULT;
+        // Resolve the zone directly so this stays correct even when a caller
+        // did not run the normal web bootstrap first.
+        $zone = Config::timezone();
 
         try {
             return (new \DateTimeImmutable($raw))
