@@ -27,7 +27,7 @@ define('DATABASE_USERNAME', Config::get('DB_USER', 'root'));
 define('DATABASE_PASSWORD', Config::get('DB_PASS', ''));
 
 // Match the web app's timezone so CLI-written timestamps line up with the UI.
-date_default_timezone_set(Config::get('APP_TIMEZONE', TIMEZONE_DEFAULT) ?? TIMEZONE_DEFAULT);
+date_default_timezone_set(Config::timezone());
 
 $command = $argv[1] ?? '';
 

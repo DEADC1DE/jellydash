@@ -56,4 +56,82 @@ final class ConfigTest extends TestCase
         $this->assertFalse(Config::isDebug());
         $this->assertTrue(Config::isProduction());
     }
+
+    public function testTimezonePrefersAppTimezoneOverDockerTimezone(): void
+    {
+        $this->withTimezoneEnvironment('America/Los_Angeles', 'Europe/London', function (): void {
+            $this->assertSame('America/Los_Angeles', Config::timezone());
+        });
+    }
+
+    public function testTimezoneUsesDockerTimezoneWhenAppTimezoneIsMissing(): void
+    {
+        $this->withTimezoneEnvironment('', 'America/New_York', function (): void {
+            $this->assertSame('America/New_York', Config::timezone());
+        });
+    }
+
+    public function testTimezoneSkipsInvalidValuesAndFallsBackToUtc(): void
+    {
+        $this->withTimezoneEnvironment('Invalid/App', 'Europe/London', function (): void {
+            $this->assertSame('Europe/London', Config::timezone());
+        });
+
+        $this->withTimezoneEnvironment('+02:00', 'Europe/London', function (): void {
+            $this->assertSame('Europe/London', Config::timezone());
+        });
+
+        $this->withTimezoneEnvironment('Invalid/App', 'Invalid/Tz', function (): void {
+            $this->assertSame('UTC', Config::timezone());
+        });
+
+        $this->withTimezoneEnvironment(null, null, function (): void {
+            $this->assertSame('UTC', Config::timezone());
+        });
+    }
+
+    private function withTimezoneEnvironment(?string $appTimezone, ?string $dockerTimezone, callable $assertion): void
+    {
+        $snapshot = [];
+
+        foreach (['APP_TIMEZONE', 'TZ'] as $key) {
+            $snapshot[$key] = [
+                'process' => getenv($key),
+                'env_exists' => array_key_exists($key, $_ENV),
+                'env' => $_ENV[$key] ?? null,
+                'server_exists' => array_key_exists($key, $_SERVER),
+                'server' => $_SERVER[$key] ?? null,
+            ];
+            unset($_ENV[$key], $_SERVER[$key]);
+            putenv($key);
+        }
+
+        try {
+            if ($appTimezone !== null) {
+                putenv('APP_TIMEZONE=' . $appTimezone);
+            }
+            if ($dockerTimezone !== null) {
+                putenv('TZ=' . $dockerTimezone);
+            }
+
+            $assertion();
+        } finally {
+            foreach ($snapshot as $key => $values) {
+                $process = $values['process'];
+                putenv($process === false ? $key : $key . '=' . $process);
+
+                if ($values['env_exists']) {
+                    $_ENV[$key] = $values['env'];
+                } else {
+                    unset($_ENV[$key]);
+                }
+
+                if ($values['server_exists']) {
+                    $_SERVER[$key] = $values['server'];
+                } else {
+                    unset($_SERVER[$key]);
+                }
+            }
+        }
+    }
 }

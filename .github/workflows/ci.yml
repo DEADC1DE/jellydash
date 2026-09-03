@@ -105,6 +105,10 @@ jobs:
         run: |
           docker run --rm --entrypoint php jellydash:ci -r "exit(extension_loaded('mysqli') && extension_loaded('sqlite3') ? 0 : 1);"
 
+      - name: Check Docker timezone compatibility
+        run: |
+          test "$(docker run --rm --env TZ=America/New_York --entrypoint php jellydash:ci -r "require '/var/www/html/vendor/autoload.php'; date_default_timezone_set(\Mk\Framework\Config::timezone()); echo date_default_timezone_get();")" = "America/New_York"
+
       - name: Boot Jellydash with SQLite
         run: |
           mkdir -p "$RUNNER_TEMP/jellydash-sqlite"

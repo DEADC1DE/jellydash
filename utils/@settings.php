@@ -54,7 +54,7 @@ if (session_status() == PHP_SESSION_NONE) {
 // Authorization. The ordinary cookie never outlives the 8-hour session.
 
 // TIMEZONE SETTINGS
-date_default_timezone_set(\Mk\Framework\Config::get('APP_TIMEZONE', TIMEZONE_DEFAULT) ?? TIMEZONE_DEFAULT);
+date_default_timezone_set(Config::timezone());
 
 // FEATURE MODULES: discover manifests and register their autoloaders.
 \Mk\Framework\Modules::boot();
