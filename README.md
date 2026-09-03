@@ -109,6 +109,8 @@ docker compose up -d
 
 Open `http://your-host:8080` and you are done. Both setups create everything they need automatically, there is nothing to import.
 
+Set `APP_TIMEZONE` in `.env` to your local IANA timezone so History and Statistics use the right date boundaries. Custom `docker run` setups may pass the standard `TZ` variable instead. `APP_TIMEZONE` takes priority when both are present.
+
 Whichever database you choose, the active setup is saved as `docker-compose.yml`. Normal commands, aliases and update scripts work the same way for both.
 
 If you want to use your own MariaDB server or mount modules, copy [docker-compose.override.example.yml](docker-compose.override.example.yml) to `docker-compose.override.yml` and adjust it there.

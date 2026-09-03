@@ -15,8 +15,8 @@ const OP_DIR = ROOT_DIR . '/operations/';
 const MODULES_DIR = ROOT_DIR . '/modules';
 
 // Settings & Config Values
-// Default timezone when APP_TIMEZONE is not set in the environment.
-const TIMEZONE_DEFAULT = 'Europe/Prague';
+// Compatibility constant for modules. Runtime resolution lives in Config.
+const TIMEZONE_DEFAULT = 'UTC';
 const TIMEZONE_US_LA = 'America/Los_Angeles';
 const DEFAULT_TIMEZONE = 'UTC';
 
