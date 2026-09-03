@@ -23,7 +23,12 @@ final class DockerSqliteSetupTest extends TestCase
         $workflow = file_get_contents(ROOT_DIR . '/.github/workflows/ci.yml');
         $this->assertIsString($workflow);
         $this->assertStringNotContainsString('--env POLLER_ENABLED=false', $workflow);
+        $this->assertStringContainsString('--env TZ=America/New_York', $workflow);
+        $this->assertStringContainsString('Config::timezone()', $workflow);
         $this->assertStringContainsString('login_attempts', $workflow);
+        $this->assertStringContainsString('remember_me=1', $workflow);
+        $this->assertStringContainsString('jellydash_remember', $workflow);
+        $this->assertStringContainsString('auth_remember_tokens', $workflow);
     }
 
     public function testSQLiteComposeSetupIsSeparateAndPersistent(): void
@@ -36,6 +41,15 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertStringContainsString('./sqlite-data:/var/www/html/var/data', $compose);
         $this->assertStringNotContainsString("\n  db:", $compose);
         $this->assertStringNotContainsString('depends_on:', $compose);
+    }
+
+    public function testMainComposeForwardsBothSupportedTimezoneVariables(): void
+    {
+        $compose = file_get_contents(ROOT_DIR . '/docker-compose.yml');
+
+        $this->assertIsString($compose);
+        $this->assertStringContainsString('APP_TIMEZONE: "${APP_TIMEZONE:-}"', $compose);
+        $this->assertStringContainsString('TZ: "${TZ:-}"', $compose);
     }
 
     public function testReadmeMakesTheSelectedComposeSetupTheDefault(): void
@@ -55,5 +69,18 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertStringContainsString('cp docker-compose.mariadb.yml docker-compose.yml', $readme);
         $this->assertStringNotContainsString('docker compose -f docker-compose.sqlite.yml pull', $readme);
         $this->assertStringNotContainsString('docker compose -f docker-compose.sqlite.yml up -d', $readme);
+    }
+
+    public function testWebAndConsoleUseTheSharedTimezoneResolver(): void
+    {
+        $webSettings = file_get_contents(ROOT_DIR . '/utils/@settings.php');
+        $console = file_get_contents(ROOT_DIR . '/bin/console.php');
+
+        $this->assertIsString($webSettings);
+        $this->assertIsString($console);
+        $this->assertStringContainsString('Config::timezone()', $webSettings);
+        $this->assertStringContainsString('Config::timezone()', $console);
+        $this->assertStringNotContainsString("Config::get('APP_TIMEZONE'", $webSettings);
+        $this->assertStringNotContainsString("Config::get('APP_TIMEZONE'", $console);
     }
 }

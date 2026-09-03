@@ -17,7 +17,7 @@ final class StatisticsController extends Controller
         $defaultRange = StatisticsPeriod::normalizeRange(AppSettings::get('statistics_default_range'));
         $range = StatisticsPeriod::normalizeRange(Main::captureGetString('range'), $defaultRange);
 
-        $stats = (new PlaybackStatisticsService())->data($range);
+        $stats = (new PlaybackStatisticsService())->cachedData($range);
 
         $this->render('statistics/index', [
             'layout' => $this->layout([

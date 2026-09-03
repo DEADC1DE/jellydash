@@ -9,7 +9,6 @@ use Mk\Framework\Database;
 use Mk\Framework\Main;
 use Mk\Framework\Pager;
 use Mk\Framework\Pages\LoginController;
-use Mk\Framework\RememberToken;
 use Mk\Framework\Requests;
 use Mk\Framework\Upload;
 use Mk\Framework\View;
@@ -30,7 +29,7 @@ use Mk\Framework\View;
         // password is passed raw to password_verify (never escaped)
         $username = Main::capturePostString("username");
         $password = $_POST["pwd"] ?? null;
-        $remember = isset($_POST['remember']);
+        $remember = isset($_POST['remember_me']) && $_POST['remember_me'] === '1';
 
         if ($auth_class->userLogin($username, $password, $remember)) {
             Pager::homePage();
@@ -108,14 +107,14 @@ use Mk\Framework\View;
     if ($requests->requestIs('change-password') && $isPost) {
         Csrf::check();
 
-        $auth_class = new Authorization();
-        if (!$auth_class->isUserLoggedIn()) {
+        $authClass = new Authorization();
+        if (!$authClass->isUserLoggedIn()) {
             http_response_code(403);
             exit('Forbidden');
         }
 
-        $userId = (int) $auth_class->getUserData()['id'];
-        $username = (string) $auth_class->getUserData()['username'];
+        $userId = (int) $authClass->getUserData()['id'];
+        $username = (string) $authClass->getUserData()['username'];
         $currentPassword = (string) ($_POST['current_pwd'] ?? '');
         $newPassword = (string) ($_POST['new_pwd'] ?? '');
         $newPasswordConfirm = (string) ($_POST['new_pwd_confirm'] ?? '');
@@ -134,11 +133,8 @@ use Mk\Framework\View;
             exit;
         }
 
-        Container::db()->setUserPassword($username, $newPassword);
-
-        // A changed password must invalidate any "stay signed in" cookies,
-        // including on other devices, so a stolen old password can't linger.
-        RememberToken::forgetForUser($userId);
+        $database = Container::db();
+        $database->setUserPassword($username, $newPassword);
 
         header('Location: /settings?password_changed=1');
         exit;

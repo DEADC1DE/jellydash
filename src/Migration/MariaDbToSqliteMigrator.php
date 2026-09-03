@@ -15,6 +15,7 @@ final class MariaDbToSqliteMigrator
     private const TABLES = [
         'users',
         'login_attempts',
+        'auth_remember_tokens',
         'app_settings',
         'play_history',
         'push_subscriptions',

@@ -8,10 +8,10 @@ namespace Mk\Framework\Jellyfin;
  * Turns Playback Reporting plugin data (TSV backup, SQLite db, or custom-query
  * API rows) into play_history rows. The plugin stores one finished play per
  * line; Jellydash records live sessions, so imported rows get a synthetic
- * session key and are already-notified. PlayDuration is session length, not
- * media runtime: runtime_sec and is_finished are filled by the importer via
- * the Jellyfin API. Recorded PlayDuration is kept as-is, including short
- * sessions.
+ * session key and are already-notified. PlayDuration is elapsed session time,
+ * not media runtime: runtime_sec and is_finished are filled by the importer
+ * via the server API. When PauseDuration is available, watched time excludes
+ * it while the recorded session end still uses the full elapsed duration.
  */
 final class PlaybackReportingParser
 {
@@ -85,9 +85,23 @@ final class PlaybackReportingParser
                 throw new \RuntimeException('This SQLite file has no PlaybackActivity table.');
             }
 
-            $result = $sqlite->query(
-                'SELECT DateCreated, UserId, ItemId, ItemType, ItemName, PlaybackMethod, ClientName, DeviceName, PlayDuration FROM PlaybackActivity ORDER BY DateCreated'
-            );
+            $hasPauseDuration = false;
+            $schema = $sqlite->query('PRAGMA table_info(PlaybackActivity)');
+            if ($schema !== false) {
+                while ($column = $schema->fetchArray(SQLITE3_ASSOC)) {
+                    if (strcasecmp((string) ($column['name'] ?? ''), 'PauseDuration') === 0) {
+                        $hasPauseDuration = true;
+                        break;
+                    }
+                }
+            }
+
+            $columns = 'DateCreated, UserId, ItemId, ItemType, ItemName, PlaybackMethod, ClientName, DeviceName, PlayDuration';
+            if ($hasPauseDuration) {
+                $columns .= ', PauseDuration';
+            }
+
+            $result = $sqlite->query('SELECT ' . $columns . ' FROM PlaybackActivity ORDER BY DateCreated');
             if ($result === false) {
                 throw new \RuntimeException('Could not read PlaybackActivity from the SQLite file.');
             }
@@ -124,6 +138,9 @@ final class PlaybackReportingParser
         }
 
         $order = ['datecreated', 'userid', 'itemid', 'itemtype', 'itemname', 'playbackmethod', 'clientname', 'devicename', 'playduration'];
+        if (isset($index['pauseduration'])) {
+            $order[] = 'pauseduration';
+        }
         $rows = [];
 
         foreach ($results as $result) {
@@ -151,7 +168,7 @@ final class PlaybackReportingParser
     }
 
     /**
-     * Fill user_name from a map of stripped-hex user id => display name.
+     * Fill user_name from a map of normalized user id => display name.
      *
      * @param list<array<string, mixed>> $rows
      * @param array<string, string> $userNames
@@ -160,7 +177,7 @@ final class PlaybackReportingParser
     public function applyUserNames(array $rows, array $userNames): array
     {
         foreach ($rows as &$row) {
-            $key = $this->strippedId((string) ($row['user_id'] ?? ''));
+            $key = $this->idKey((string) ($row['user_id'] ?? ''));
             if ($key !== '' && isset($userNames[$key])) {
                 $row['user_name'] = $userNames[$key];
             }
@@ -176,17 +193,23 @@ final class PlaybackReportingParser
      */
     private function mapTokens(array $tokens): ?array
     {
-        if (count($tokens) !== 9) {
+        if (count($tokens) < 9) {
             return null;
         }
 
         $startedAt = $this->startedAt($tokens[0]);
-        $itemId = $this->jellyfinGuid($tokens[2]);
-        $watchedSec = $this->watchedSec($tokens[8]);
+        $itemId = $this->playbackId($tokens[2]);
+        $playDuration = $this->watchedSec($tokens[8]);
+        $pauseDuration = 0;
+        if (array_key_exists(9, $tokens) && trim($tokens[9]) !== '') {
+            $pauseDuration = $this->watchedSec($tokens[9]);
+        }
 
-        if ($startedAt === null || $itemId === '' || $watchedSec === null) {
+        if ($startedAt === null || $itemId === '' || $playDuration === null || $pauseDuration === null) {
             return null;
         }
+
+        $watchedSec = max(0, $playDuration - $pauseDuration);
 
         $itemType = trim($tokens[3]);
         if ($itemType === '') {
@@ -195,8 +218,8 @@ final class PlaybackReportingParser
 
         $titles = $this->titles($itemType, $tokens[4]);
         $method = $this->playMethod($tokens[5]);
-        $endedAt = $this->endedAt($startedAt, $watchedSec);
-        $userId = $this->jellyfinGuid($tokens[1]);
+        $endedAt = $this->endedAt($startedAt, $playDuration);
+        $userId = $this->playbackId($tokens[1]);
 
         return [
             'session_key' => self::SESSION_PREFIX . sha1($tokens[0] . '|' . trim($tokens[1]) . '|' . trim($tokens[2])),
@@ -385,25 +408,26 @@ final class PlaybackReportingParser
         };
     }
 
-    private function jellyfinGuid(string $id): string
+    private function playbackId(string $id): string
     {
-        $hex = $this->strippedId($id);
-        if ($hex === '') {
-            return '';
+        $raw = trim($id);
+        $hex = strtolower(str_replace('-', '', $raw));
+        if (preg_match('/^[0-9a-f]{32}$/', $hex) === 1) {
+            return substr($hex, 0, 8) . '-'
+                . substr($hex, 8, 4) . '-'
+                . substr($hex, 12, 4) . '-'
+                . substr($hex, 16, 4) . '-'
+                . substr($hex, 20, 12);
         }
 
-        return substr($hex, 0, 8) . '-'
-            . substr($hex, 8, 4) . '-'
-            . substr($hex, 12, 4) . '-'
-            . substr($hex, 16, 4) . '-'
-            . substr($hex, 20, 12);
+        return preg_match('/^[0-9]{1,64}$/', $raw) === 1 ? $raw : '';
     }
 
-    public function strippedId(string $id): string
+    public function idKey(string $id): string
     {
-        $hex = strtolower(str_replace('-', '', trim($id)));
+        $normalized = $this->playbackId($id);
 
-        return preg_match('/^[0-9a-f]{32}$/', $hex) === 1 ? $hex : '';
+        return strtolower(str_replace('-', '', $normalized));
     }
 
     private function parseTsvLine(string $line): ?array

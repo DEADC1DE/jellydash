@@ -21,7 +21,9 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString('data-import-source="jellydash"', $template);
         $this->assertStringContainsString('data-import-source="playback-reporting"', $template);
         $this->assertStringContainsString('Jellydash CSV', $template);
+        $this->assertStringContainsString('Bring older Jellyfin or Emby history', $template);
         $this->assertStringContainsString('data-import-plugin', $template);
+        $this->assertStringContainsString('Import from server plugin', $template);
         $this->assertStringContainsString('data-import-alt', $template);
         $this->assertStringContainsString('checks the file before anything is written', $template);
         $this->assertStringContainsString('data-import-plugin-broken-note', $template);
@@ -52,5 +54,26 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString("form.addEventListener('change', sync)", $script);
         $this->assertStringContainsString("window.addEventListener('beforeunload'", $script);
         $this->assertStringContainsString('.settings-dirty-bar[hidden]', $stylesheet);
+    }
+
+    public function testSettingsUseOneResponsiveWorkspace(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/settings/index.twig');
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($template);
+        $this->assertIsString($stylesheet);
+        $this->assertStringContainsString('class="settings-page"', $template);
+        $this->assertStringContainsString('class="settings-layout"', $template);
+        $this->assertStringContainsString('class="settings-card-head"', $template);
+        $this->assertStringContainsString('class="settings-card-mark"', $template);
+        $this->assertStringContainsString('class="settings-save-btn settings-header-save" form="settings-form"', $template);
+        $this->assertStringNotContainsString('class="settings-actions"', $template);
+        $this->assertStringContainsString('action="?req=change-password"', $template);
+        $this->assertStringContainsString('class="settings-account-actions"', $template);
+        $this->assertStringContainsString('.settings-layout {', $stylesheet);
+        $this->assertStringContainsString('grid-template-columns: minmax(0, 760px) minmax(400px, 1fr);', $stylesheet);
+        $this->assertStringContainsString('.settings-layout > .settings-import .settings-import-sources', $stylesheet);
+        $this->assertStringContainsString('grid-template-columns: 1fr;', $stylesheet);
     }
 }

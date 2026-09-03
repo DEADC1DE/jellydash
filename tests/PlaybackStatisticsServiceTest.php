@@ -247,6 +247,155 @@ final class PlaybackStatisticsServiceTest extends TestCase
         $this->assertSame('1 of 2 transcodes with reason data', $stats['reasonCoverage']);
     }
 
+    public function testConfirmedLibrariesAreFilteredWithoutJellyfinLookups(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $filter = new ReflectionMethod($service, 'withoutExcludedLibraryNames');
+        $locationCalls = 0;
+        $pathCalls = 0;
+
+        $cards = $filter->invoke(
+            $service,
+            [
+                $this->titleCard('blocked', 'WRESTLING (CURRENT)', true),
+                $this->titleCard('included', 'Movies', true),
+            ],
+            ['wrestling (current)'],
+            static function () use (&$locationCalls): array {
+                $locationCalls++;
+
+                return ['wrestling (current)' => ['/media/wrestling']];
+            },
+            static function (string $itemId) use (&$pathCalls): string {
+                $pathCalls++;
+
+                return '/media/' . $itemId;
+            },
+        );
+
+        $this->assertIsArray($cards);
+        $this->assertSame(['included'], array_column($cards, 'title'));
+        $this->assertSame(0, $locationCalls);
+        $this->assertSame(0, $pathCalls);
+        $this->assertArrayNotHasKey('_library', $cards[0]);
+        $this->assertArrayNotHasKey('_libraryConfirmed', $cards[0]);
+    }
+
+    public function testLatestRepresentativeRowCarriesItsConfirmedLibrary(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $groupTitles = new ReflectionMethod($service, 'groupTitles');
+        $titleCards = new ReflectionMethod($service, 'titleCards');
+        $filter = new ReflectionMethod($service, 'withoutExcludedLibraryNames');
+        $rows = [
+            $this->titleRow('2026-08-20 10:00:00', 'old-item', 'Blocked', '2026-08-20 10:00:00'),
+            $this->titleRow('2026-08-21 10:00:00', 'new-item', 'Movies', '2026-08-21 10:00:00'),
+        ];
+
+        $groups = $groupTitles->invoke($service, $rows);
+        $this->assertIsArray($groups);
+        $cards = $titleCards->invoke($service, $groups);
+        $this->assertIsArray($cards);
+        $filtered = $filter->invoke(
+            $service,
+            $cards,
+            ['blocked'],
+            static fn (): never => throw new RuntimeException('Confirmed cards must not load locations.'),
+            static fn (string $itemId): never => throw new RuntimeException('Confirmed cards must not load paths: ' . $itemId),
+        );
+
+        $this->assertIsArray($filtered);
+        $this->assertCount(1, $filtered);
+        $this->assertSame('new-item', $filtered[0]['itemId']);
+    }
+
+    public function testUnresolvedLibrariesRetainPathFallbackAndDeletedItemHandling(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $filter = new ReflectionMethod($service, 'withoutExcludedLibraryNames');
+        $locationCalls = 0;
+        $pathCalls = [];
+        $paths = [
+            'excluded' => '/media/wrestling/show.mkv',
+            'deleted' => '',
+            'included' => '/media/movies/film.mkv',
+        ];
+
+        $cards = $filter->invoke(
+            $service,
+            [
+                $this->titleCard('excluded'),
+                $this->titleCard('deleted'),
+                $this->titleCard('included'),
+            ],
+            ['wrestling'],
+            static function () use (&$locationCalls): array {
+                $locationCalls++;
+
+                return ['wrestling' => ['/media/wrestling']];
+            },
+            static function (string $itemId) use (&$pathCalls, $paths): string {
+                $pathCalls[] = $itemId;
+
+                return $paths[$itemId];
+            },
+        );
+
+        $this->assertIsArray($cards);
+        $this->assertSame(['included'], array_column($cards, 'title'));
+        $this->assertSame(1, $locationCalls);
+        $this->assertSame(['excluded', 'deleted', 'included'], $pathCalls);
+    }
+
+    public function testUnresolvedLibraryLookupStillFailsOpen(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $filter = new ReflectionMethod($service, 'withoutExcludedLibraryNames');
+        $pathCalls = 0;
+
+        $cards = $filter->invoke(
+            $service,
+            [$this->titleCard('first'), $this->titleCard('second')],
+            ['wrestling'],
+            static fn (): never => throw new RuntimeException('Jellyfin unavailable'),
+            static function (string $itemId) use (&$pathCalls): string {
+                $pathCalls++;
+
+                return '/media/' . $itemId;
+            },
+        );
+
+        $this->assertIsArray($cards);
+        $this->assertSame(['first', 'second'], array_column($cards, 'title'));
+        $this->assertSame(0, $pathCalls);
+    }
+
+    /** @return array<string, mixed> */
+    private function titleCard(string $itemId, string $library = '', bool $confirmed = false): array
+    {
+        return [
+            'title' => $itemId,
+            'itemId' => $itemId,
+            '_library' => $library,
+            '_libraryConfirmed' => $confirmed,
+        ];
+    }
+
+    private function titleRow(string $startedAt, string $itemId, string $library, string $resolvedAt): \Dibi\Row
+    {
+        return new \Dibi\Row([
+            'item_type' => 'Movie',
+            'series_name' => '',
+            'item_name' => 'Shared title',
+            'watched_sec' => 60,
+            'user_name' => 'Viewer',
+            'started_at' => $startedAt,
+            'item_id' => $itemId,
+            'library' => $library,
+            'library_resolved_at' => $resolvedAt,
+        ]);
+    }
+
     private function statisticsRow(
         string $user,
         string $client,

@@ -1,0 +1,18 @@
+{
+  "version": "1.6.2",
+  "auto_show": true,
+  "title": "Emby Playback Reporting imports",
+  "summary": "Playback Reporting history from Emby can now be imported from a TSV backup, playback_reporting.db, or the installed plugin. This compatibility is limited to history imports; Jellydash is still built and tested for Jellyfin.",
+  "highlights": [
+    "Accept Emby's numeric user and item IDs while keeping Jellyfin GUID imports unchanged.",
+    "Read Emby's additional Playback Reporting columns and exclude paused time from the watched total.",
+    "Keep the complete elapsed session time for History dates, even when a session contains pauses.",
+    "Detect PauseDuration before a live plugin import and fall back to the existing Jellyfin query when the column is unavailable."
+  ],
+  "links": [
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.6.2"
+    }
+  ]
+}

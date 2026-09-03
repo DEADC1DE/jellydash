@@ -77,13 +77,28 @@ final class SchemaCompatibilityTest extends TestCase
 
         $this->assertSame([
             'app_settings',
+            'auth_remember_tokens',
             'login_attempts',
             'play_history',
             'push_subscriptions',
-            'remember_tokens',
             'seerr_requests',
             'users',
         ], $this->tableNames());
+    }
+
+    public function testApplicationMariaDbConnectionUsesUtf8mb4(): void
+    {
+        if (DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
+            $this->markTestSkipped('This assertion applies only to MariaDB connections.');
+        }
+
+        $connection = (new Database())->getDibi();
+
+        $this->assertSame(
+            'utf8mb4',
+            strtolower((string) $connection->query('SELECT @@character_set_connection')->fetchSingle())
+        );
+        $this->assertSame('🪼', (string) $connection->query('SELECT %s AS value', '🪼')->fetchSingle());
     }
 
     public function testExistingRowsSurviveSchemaInitialization(): void
@@ -101,6 +116,15 @@ final class SchemaCompatibilityTest extends TestCase
             'attempts' => 2,
             'locked_until' => null,
             'updated_at' => '2026-08-09 12:00:00',
+        ])->execute();
+        $userId = (int) $this->dibi->select('id')->from('users')->fetchSingle();
+        $this->dibi->insert('auth_remember_tokens', [
+            'user_id' => $userId,
+            'selector' => str_repeat('a', 24),
+            'validator_hash' => str_repeat('b', 64),
+            'expires_at' => '2026-11-09 12:00:00',
+            'created_at' => '2026-08-09 12:00:00',
+            'last_used_at' => '2026-08-09 12:00:00',
         ])->execute();
         $this->dibi->insert('play_history', [
             'session_key' => 'schema-session',
@@ -142,6 +166,7 @@ final class SchemaCompatibilityTest extends TestCase
 
         $this->assertSame('schema-user', (string) $this->dibi->select('username')->from('users')->fetchSingle());
         $this->assertSame(2, (int) $this->dibi->select('attempts')->from('login_attempts')->fetchSingle());
+        $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
         $this->assertSame(300, (int) $this->dibi->select('watched_sec')->from('play_history')->fetchSingle());
         $this->assertSame(1, (int) $this->dibi->select('notified')->from('play_history')->fetchSingle());
         $this->assertNull($this->dibi->select('library_resolved_at')->from('play_history')->fetchSingle());

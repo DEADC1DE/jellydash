@@ -19,6 +19,21 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString("navCount.textContent = '-'", $navCount);
     }
 
+    public function testNowPlayingSkipsOverlappingRefreshesAndReleasesTheGuardAfterFailure(): void
+    {
+        $nowPlaying = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
+
+        $this->assertIsString($nowPlaying);
+        $this->assertMatchesRegularExpression(
+            '/async function refreshNowPlaying\(\) \{\s*'
+            . 'if \(refreshInFlight\) \{\s*return;\s*\}\s*'
+            . 'refreshInFlight = true;\s*'
+            . 'try \{.*?window\.dispatchEvent\(new CustomEvent\(\x27jellydash:now-playing\x27, \{ detail: payload \}\)\);\s*'
+            . '\} finally \{\s*refreshInFlight = false;\s*\}\s*\}/s',
+            $nowPlaying,
+        );
+    }
+
     public function testNowPlayingOwnsTheNavigationCountPollingLoop(): void
     {
         $nowPlaying = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
@@ -91,6 +106,29 @@ final class NowPlayingFrontendTest extends TestCase
             . '    }',
             $stylesheet,
         );
+    }
+
+    public function testStandaloneMobileShellUsesTheStableViewportHeight(): void
+    {
+        $stylesheet = file_get_contents(ROOT_DIR . '/public/assets/css/dashboard.css');
+
+        $this->assertIsString($stylesheet);
+        $dynamicRule = "    .app-shell {\n"
+            . "        display: flex;\n"
+            . "        flex-direction: column;\n"
+            . "        width: 100%;\n"
+            . "        min-height: 100vh;\n"
+            . "        min-height: 100dvh;\n";
+        $stableRule = "@media (max-width: 900px) and (display-mode: standalone) {\n"
+            . "    .app-shell {\n"
+            . "        min-height: 100svh;\n"
+            . '    }';
+        $dynamicRulePosition = strpos($stylesheet, $dynamicRule);
+        $stableRulePosition = strpos($stylesheet, $stableRule);
+
+        $this->assertNotFalse($dynamicRulePosition);
+        $this->assertNotFalse($stableRulePosition);
+        $this->assertGreaterThan($dynamicRulePosition, $stableRulePosition);
     }
 
     public function testRecentlyAddedStaysHiddenForEmptyOrFailedRequests(): void
