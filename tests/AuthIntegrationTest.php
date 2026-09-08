@@ -22,6 +22,7 @@ final class AuthIntegrationTest extends TestCase
 
     private Database $db;
     private \Dibi\Connection $dibi;
+    private int $userId;
 
     protected function setUp(): void
     {
@@ -38,7 +39,7 @@ final class AuthIntegrationTest extends TestCase
         $_SESSION = [];
         $_COOKIE = [];
         $this->cleanup();
-        $this->db->addAuthUser(self::USERNAME, self::PASSWORD, 'Tester', Authorization::ROLE_ADMIN);
+        $this->userId = $this->db->addAuthUser(self::USERNAME, self::PASSWORD, 'Tester', Authorization::ROLE_ADMIN);
     }
 
     protected function tearDown(): void
@@ -148,7 +149,7 @@ final class AuthIntegrationTest extends TestCase
         $this->assertSame(self::USERNAME, $restored->getUserData()['username']);
         $rotatedToken = (string) $_COOKIE[Authorization::REMEMBER_COOKIE];
         $this->assertNotSame($originalToken, $rotatedToken);
-        $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
+        $this->assertSame(1, $this->rememberTokenCount($this->userId));
     }
 
     public function testOrdinaryLoginExpiresWithoutPersistentToken(): void
@@ -176,7 +177,7 @@ final class AuthIntegrationTest extends TestCase
         );
 
         $this->assertFalse($expired->isUserLoggedIn());
-        $this->assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
+        $this->assertSame(0, $this->rememberTokenCount($this->userId));
     }
 
     public function testLogoutRevokesRememberedLogin(): void
@@ -195,7 +196,7 @@ final class AuthIntegrationTest extends TestCase
         $auth->userLogout();
 
         $this->assertArrayNotHasKey(Authorization::REMEMBER_COOKIE, $_COOKIE);
-        $this->assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
+        $this->assertSame(0, $this->rememberTokenCount($this->userId));
 
         $_SESSION = [];
         $_COOKIE[Authorization::REMEMBER_COOKIE] = $token;
@@ -289,12 +290,30 @@ final class AuthIntegrationTest extends TestCase
 
     private function cleanup(): void
     {
-        $this->dibi->delete('auth_remember_tokens')->execute();
+        $userIds = $this->dibi->select('id')->from('users')->where('username IN %in', [
+            self::USERNAME,
+            self::ENV_USERNAME,
+            self::CLI_USERNAME,
+        ])->fetchPairs(null, 'id');
+        foreach ($userIds as $userId) {
+            $this->dibi->delete('auth_remember_tokens')->where('user_id = %i', (int) $userId)->execute();
+        }
         $this->dibi->delete('users')->where('username IN %in', [
             self::USERNAME,
             self::ENV_USERNAME,
             self::CLI_USERNAME,
         ])->execute();
-        $this->dibi->delete('login_attempts')->execute();
+        foreach ([self::USERNAME, self::ENV_USERNAME, self::CLI_USERNAME] as $username) {
+            $prefix = $username . '|';
+            $this->dibi->delete('login_attempts')
+                ->where('SUBSTR(identifier, 1, %i) = %s', strlen($prefix), $prefix)
+                ->execute();
+        }
+    }
+
+    private function rememberTokenCount(int $userId): int
+    {
+        return (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')
+            ->where('user_id = %i', $userId)->fetchSingle();
     }
 }
