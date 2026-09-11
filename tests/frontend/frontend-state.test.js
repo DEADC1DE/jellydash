@@ -163,10 +163,138 @@ async function testNavCountTransitions() {
     assert.equal(nav.classList.contains('is-stale'), false);
 }
 
+async function testNavCountLifecycleAndSingleFlight() {
+    const nav = element(['is-loading']);
+    const documentListeners = {};
+    const windowListeners = {};
+    const intervals = [];
+    let fetchCount = 0;
+    let resolveFetch;
+    const document = {
+        hidden: true,
+        querySelector: (selector) => selector === '[data-nav-count]' ? nav : null,
+        addEventListener(type, callback) { documentListeners[type] = callback; },
+    };
+    const hooks = {};
+    const window = {
+        JellydashFrontendTestHooks: hooks,
+        setInterval(callback) { intervals.push(callback); },
+        setTimeout() { return 1; },
+        clearTimeout() {},
+        addEventListener(type, callback) { windowListeners[type] = callback; },
+    };
+    const fetch = () => {
+        fetchCount += 1;
+        return new Promise((resolve) => { resolveFetch = resolve; });
+    };
+
+    runScript('public/assets/js/nav-count.js', { window, document, fetch, Number });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(fetchCount, 0);
+    assert.equal(intervals.length, 1);
+
+    document.hidden = false;
+    documentListeners.visibilitychange();
+    hooks.refreshNavCount();
+    assert.equal(fetchCount, 1);
+
+    resolveFetch({ ok: true, status: 200, json: async () => ({ stats: { active_streams: 3 } }) });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(nav.textContent, '3');
+
+    windowListeners.pageshow();
+    assert.equal(fetchCount, 2);
+}
+
+async function testDeviceManagementLinkVisibility() {
+    async function render(manageUrl) {
+        const manage = element();
+        manage.hidden = false;
+        const list = element();
+        list.replaceChildren = function () { this.children = []; };
+        list.append = function (child) { this.children.push(child); };
+        const note = element();
+        const rangeCopy = element();
+        const section = element();
+        section.hidden = true;
+        section.dataset = { range: 'week' };
+        section.querySelector = (selector) => ({
+            '[data-device-list]': list,
+            '[data-device-range-copy]': rangeCopy,
+            '[data-device-note]': note,
+            '[data-device-manage]': manage,
+        }[selector] || null);
+        const document = {
+            querySelector: (selector) => selector === '[data-statistics-devices]' ? section : null,
+            createElement: () => element(),
+            createElementNS: () => element(),
+        };
+        const window = { setTimeout() { return 1; }, clearTimeout() {} };
+        const fetch = async () => ({
+            ok: true,
+            json: async () => ({ items: [], known: 0, seen: 0, active: 0, manageUrl }),
+        });
+
+        runScript('public/assets/js/statistics-devices.js', { window, document, fetch, URL, Set, Number, AbortController });
+        await new Promise((resolve) => setImmediate(resolve));
+        return manage;
+    }
+
+    const hidden = await render('');
+    assert.equal(hidden.hidden, true);
+    assert.equal(hidden.attributes.href, undefined);
+
+    const visible = await render('https://jellyfin.example/web/#/dashboard/devices');
+    assert.equal(visible.hidden, false);
+    assert.equal(visible.href, 'https://jellyfin.example/web/#/dashboard/devices');
+}
+
+function testDashboardContentScrollRestoration() {
+    const listeners = {};
+    const frames = [];
+    const pane = { scrollTop: 684 };
+    let replacedState = null;
+    let replacedUrl = null;
+    const window = {
+        history: {
+            state: { existing: 'kept' },
+            replaceState(state, title, url) {
+                this.state = state;
+                replacedState = state;
+                replacedUrl = url;
+            },
+        },
+        location: { href: 'http://jellydash.loc/statistics?range=all' },
+        addEventListener(type, callback) { listeners[type] = callback; },
+        requestAnimationFrame(callback) { frames.push(callback); },
+        scrollY: 321,
+    };
+    const document = {
+        querySelector: (selector) => selector === '.dashboard-content' ? pane : null,
+    };
+
+    runScript('public/assets/js/dashboard-scroll.js', { window, document, Number });
+    listeners.pagehide();
+
+    assert.equal(replacedState.existing, 'kept');
+    assert.equal(replacedState.jellydashContentScrollTop, 684);
+    assert.equal(replacedUrl, window.location.href);
+
+    pane.scrollTop = 0;
+    listeners.pageshow();
+    assert.equal(frames.length, 1);
+    frames.shift()();
+    assert.equal(pane.scrollTop, 684);
+    assert.equal(window.scrollY, 321);
+}
+
 (async () => {
     await testHistoryStreams();
     await testNowPlayingTransitions();
     await testNavCountTransitions();
+    await testNavCountLifecycleAndSingleFlight();
+    await testDeviceManagementLinkVisibility();
+    testDashboardContentScrollRestoration();
     console.log('Frontend state tests passed.');
 })().catch((error) => {
     console.error(error);

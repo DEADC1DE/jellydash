@@ -37,6 +37,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
 
     private \Dibi\Connection $db;
     private DatabasePlatform $platform;
+    private ?MonitoringExclusions $monitoringExclusions;
     /** @var \WeakMap<\Dibi\Connection, true>|null */
     private static ?\WeakMap $schemaConnections = null;
 
@@ -51,11 +52,16 @@ final class PlayHistoryRepository implements LibraryHistorySource
     private const LIVE_OVERLAP_SECONDS = 300;
     private const MAX_SAMPLE_GAP_SECONDS = 120;
 
-    public function __construct(?Database $database = null)
-    {
+    /** @param (\Closure(array<string, mixed>): void)|null $beforeImportWrite */
+    public function __construct(
+        ?Database $database = null,
+        ?MonitoringExclusions $monitoringExclusions = null,
+        private ?\Closure $beforeImportWrite = null,
+    ) {
         $database ??= Container::db();
         $this->db = $database->getDibi();
         $this->platform = $database->getPlatform();
+        $this->monitoringExclusions = $monitoringExclusions;
         $this->ensureSchema();
     }
 
@@ -68,6 +74,9 @@ final class PlayHistoryRepository implements LibraryHistorySource
         $nowSql = $now->format('Y-m-d H:i:s');
 
         foreach ($streams as $stream) {
+            if ($this->exclusions()->excludes($this->nullableString($stream['user'] ?? null))) {
+                continue;
+            }
             $previousSampleEpoch = null;
             $sessionKey = (string) ($stream['id'] ?? '');
             $itemId = (string) ($stream['itemId'] ?? '');
@@ -309,7 +318,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
         $claimed = [];
         $ignore = array_map(
             static fn (string $u): string => mb_strtolower(trim($u)),
-            $ignoreUsers
+            [...$ignoreUsers, ...$this->exclusions()->names()]
         );
         foreach ($rows as $row) {
             $token = bin2hex(random_bytes(32));
@@ -376,8 +385,11 @@ final class PlayHistoryRepository implements LibraryHistorySource
         $start = $now->setTime(0, 0)->format('Y-m-d H:i:s');
         $end = $now->setTime(23, 59, 59)->format('Y-m-d H:i:s');
 
-        return (int) $this->db->select('COALESCE(SUM(COALESCE(watch_duration_sec, watched_sec)), 0)')
-            ->from('play_history')
+        $selection = $this->db->select('COALESCE(SUM(COALESCE(watch_duration_sec, watched_sec)), 0)')
+            ->from('play_history');
+        $this->excludeConfiguredUsers($selection);
+
+        return (int) $selection
             ->where('started_at BETWEEN %s AND %s', $start, $end)
             ->fetchSingle();
     }
@@ -388,7 +400,10 @@ final class PlayHistoryRepository implements LibraryHistorySource
         $start = $now->setTime(0, 0)->format('Y-m-d H:i:s');
         $end = $now->setTime(23, 59, 59)->format('Y-m-d H:i:s');
 
-        return (int) $this->db->select('COUNT(*)')->from('play_history')
+        $selection = $this->db->select('COUNT(*)')->from('play_history');
+        $this->excludeConfiguredUsers($selection);
+
+        return (int) $selection
             ->where('started_at BETWEEN %s AND %s', $start, $end)
             ->where('watch_duration_sec IS NULL')
             ->fetchSingle() > 0;
@@ -514,14 +529,20 @@ final class PlayHistoryRepository implements LibraryHistorySource
     /** @return array{plays: int, unique_users: int, watch_sec: int, estimated_plays: int, transcodes: int} */
     public function historyAggregate(HistoryFilters $filters, ?\DateTimeImmutable $now = null): array
     {
+        $exactTranscode = $this->platform->isSqlite()
+            ? "play_method COLLATE BINARY = 'Transcode'"
+            : "BINARY play_method = 'Transcode'";
+        $uniqueUsers = $this->platform->isSqlite()
+            ? "COUNT(DISTINCT COALESCE(user_name, '') COLLATE BINARY)"
+            : "COUNT(DISTINCT BINARY COALESCE(user_name, ''))";
         $row = $this->filteredSelection(
             $filters,
             $now,
             "COUNT(*) AS plays,
-                COUNT(DISTINCT NULLIF(user_name, '')) AS unique_users,
+                {$uniqueUsers} AS unique_users,
                 COALESCE(SUM(COALESCE(watch_duration_sec, watched_sec)), 0) AS watch_sec,
                 COALESCE(SUM(CASE WHEN watch_duration_sec IS NULL THEN 1 ELSE 0 END), 0) AS estimated_plays,
-                COALESCE(SUM(CASE WHEN play_method = 'Transcode' THEN 1 ELSE 0 END), 0) AS transcodes",
+                COALESCE(SUM(CASE WHEN {$exactTranscode} THEN 1 ELSE 0 END), 0) AS transcodes",
         )->fetch();
 
         return [
@@ -535,9 +556,10 @@ final class PlayHistoryRepository implements LibraryHistorySource
 
     public function totalRows(): int
     {
-        return (int) $this->db->select('COUNT(*)')
-            ->from('play_history')
-            ->fetchSingle();
+        $selection = $this->db->select('COUNT(*)')->from('play_history');
+        $this->excludeConfiguredUsers($selection);
+
+        return (int) $selection->fetchSingle();
     }
 
     /**
@@ -560,6 +582,9 @@ final class PlayHistoryRepository implements LibraryHistorySource
      */
     public function itemPlaySummaries(): array
     {
+        $excluded = $this->excludedStoredUserNames();
+        $where = $excluded === [] ? '' : ' WHERE ' . $this->exactUserExclusionSql($excluded);
+
         return $this->db->query(
             'SELECT item_id, library, plays, watch_sec, estimated_plays, started_at, series_name, item_name, season_ep, user_name
             FROM (
@@ -568,7 +593,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
                     SUM(COALESCE(watch_duration_sec, watched_sec)) OVER (PARTITION BY item_id) AS watch_sec,
                     SUM(CASE WHEN watch_duration_sec IS NULL THEN 1 ELSE 0 END) OVER (PARTITION BY item_id) AS estimated_plays,
                     ROW_NUMBER() OVER (PARTITION BY item_id ORDER BY started_at DESC, id DESC) AS rn
-                FROM play_history
+                FROM play_history' . $where . '
             ) AS ranked
             WHERE rn = 1'
         )->fetchAll();
@@ -580,6 +605,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
     public function statisticsRowsForPeriod(?\DateTimeImmutable $start, ?\DateTimeImmutable $end): array
     {
         $selection = $this->db->select(implode(', ', self::STATISTICS_COLUMNS))->from('play_history');
+        $this->excludeConfiguredUsers($selection);
 
         if ($start !== null) {
             $selection->where('started_at >= %s', $start->format('Y-m-d H:i:s'));
@@ -612,6 +638,31 @@ final class PlayHistoryRepository implements LibraryHistorySource
      */
     public function importHistoricalPlays(array $rows, bool $dryRun = false, ?callable $onProgress = null): array
     {
+        if ($dryRun) {
+            return $this->importHistoricalPlaysBatch($rows, true, $onProgress);
+        }
+
+        $this->db->begin();
+        try {
+            $result = $this->importHistoricalPlaysBatch($rows, false, null);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+
+        $this->reportImportProgress($onProgress, count($rows), count($rows), $result['inserted'], $result['skipped']);
+
+        return $result;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
+     * @return array{inserted: int, skipped: int, repaired: int}
+     */
+    private function importHistoricalPlaysBatch(array $rows, bool $dryRun, ?callable $onProgress): array
+    {
         $inserted = 0;
         $skipped = 0;
         $repaired = 0;
@@ -622,7 +673,9 @@ final class PlayHistoryRepository implements LibraryHistorySource
         foreach ($rows as $row) {
             $sessionKey = (string) ($row['session_key'] ?? '');
             $itemId = (string) ($row['item_id'] ?? '');
-            if ($sessionKey === '' || $itemId === '') {
+            if ($this->exclusions()->excludes($this->nullableString($row['user_name'] ?? null))) {
+                $skipped++;
+            } elseif ($sessionKey === '' || $itemId === '') {
                 $skipped++;
             } elseif ($this->overlapsLivePlay($row, $livePlays)) {
                 $skipped++;
@@ -638,6 +691,9 @@ final class PlayHistoryRepository implements LibraryHistorySource
                     $inserted++;
                 }
             } else {
+                if ($this->beforeImportWrite !== null) {
+                    ($this->beforeImportWrite)($row);
+                }
                 try {
                     $this->db->insert('play_history', $row)->execute();
                     $inserted++;
@@ -683,7 +739,9 @@ final class PlayHistoryRepository implements LibraryHistorySource
         foreach ($rows as $row) {
             $sessionKey = (string) ($row['session_key'] ?? '');
             $itemId = (string) ($row['item_id'] ?? '');
-            if ($sessionKey === '' || $itemId === '') {
+            if ($this->exclusions()->excludes($this->nullableString($row['user_name'] ?? null))) {
+                $skipped++;
+            } elseif ($sessionKey === '' || $itemId === '') {
                 $skipped++;
             } elseif ($dryRun) {
                 $exists = $this->db->select('id')
@@ -923,15 +981,21 @@ final class PlayHistoryRepository implements LibraryHistorySource
     /**
      * @return array<int, string>
      */
-    public function users(): array
+    public function users(bool $includeExcluded = false): array
     {
-        $pairs = $this->db->select('DISTINCT user_name')
+        $pairs = $this->db->select($this->platform->isSqlite()
+            ? 'DISTINCT user_name COLLATE BINARY AS user_name'
+            : 'DISTINCT BINARY user_name AS user_name')
             ->from('play_history')
             ->where('user_name IS NOT NULL')
             ->orderBy('user_name')
             ->fetchPairs(null, 'user_name');
 
-        return array_values(array_map('strval', $pairs));
+        $users = array_values(array_map('strval', $pairs));
+
+        return $includeExcluded
+            ? $users
+            : array_values(array_filter($users, fn (string $name): bool => !$this->exclusions()->excludes($name)));
     }
 
     /**
@@ -939,14 +1003,41 @@ final class PlayHistoryRepository implements LibraryHistorySource
      */
     public function libraries(): array
     {
-        $pairs = $this->db->select('DISTINCT library')
+        $pairs = $this->db->select($this->platform->isSqlite()
+            ? 'DISTINCT library COLLATE BINARY AS library'
+            : 'DISTINCT BINARY library AS library')
             ->from('play_history')
             ->where('library IS NOT NULL')
             ->where('library <> %s', '')
-            ->orderBy('library')
-            ->fetchPairs(null, 'library');
+            ->orderBy('library');
+        $this->excludeConfiguredUsers($pairs);
+        $values = $pairs->fetchPairs(null, 'library');
 
-        return array_values(array_map('strval', $pairs));
+        return array_values(array_map('strval', $values));
+    }
+
+    /**
+     * Client names use the same raw, case-sensitive grouping as Statistics.
+     * Missing names and a literal "Unknown client" share one visible option.
+     *
+     * @return array<int, string>
+     */
+    public function clients(): array
+    {
+        $selection = $this->db->select($this->platform->isSqlite()
+            ? 'DISTINCT client COLLATE BINARY AS client'
+            : 'DISTINCT BINARY client AS client')
+            ->from('play_history');
+        $this->excludeConfiguredUsers($selection);
+
+        $clients = [];
+        foreach ($selection->fetchAll() as $row) {
+            $name = (string) ($row['client'] ?? '');
+            $clients[$name !== '' ? $name : 'Unknown client'] = true;
+        }
+        ksort($clients, SORT_STRING);
+
+        return array_keys($clients);
     }
 
     private function ensureSchema(): void
@@ -1129,20 +1220,43 @@ final class PlayHistoryRepository implements LibraryHistorySource
     private function filteredSelection(HistoryFilters $filters, ?\DateTimeImmutable $now, string $columns = '*'): \Dibi\Fluent
     {
         $selection = $this->db->select($columns)->from('play_history');
+        $this->excludeConfiguredUsers($selection);
 
-        $rangeDays = $filters->rangeDays();
-        if ($rangeDays !== null) {
+        if ($filters->hasExactPeriod() && $filters->start !== null && $filters->end !== null) {
+            $selection->where('started_at >= %s', $filters->start->format('Y-m-d H:i:s'));
+            $selection->where('started_at < %s', $filters->end->format('Y-m-d H:i:s'));
+        } elseif (($rangeDays = $filters->rangeDays()) !== null) {
             $now ??= new \DateTimeImmutable('now');
             $since = $now->modify('-' . $rangeDays . ' days')->format('Y-m-d H:i:s');
             $selection->where('started_at >= %s', $since);
         }
 
         if ($filters->user !== '') {
-            $selection->where('user_name = %s', $filters->user);
+            $selection->where($this->platform->isSqlite()
+                ? 'user_name COLLATE BINARY = %s'
+                : 'BINARY user_name = %s', $filters->user);
         }
 
         if ($filters->library !== '') {
-            $selection->where('library = %s', $filters->library);
+            $selection->where($this->platform->isSqlite()
+                ? 'library COLLATE BINARY = %s'
+                : 'BINARY library = %s', $filters->library);
+        }
+
+        if ($filters->client !== '') {
+            if ($filters->client === 'Unknown client') {
+                $selection->where($this->platform->isSqlite()
+                    ? '(client IS NULL OR client COLLATE BINARY = %s OR client COLLATE BINARY = %s)'
+                    : '(client IS NULL OR BINARY client = %s OR BINARY client = %s)', '', 'Unknown client');
+            } else {
+                $selection->where($this->platform->isSqlite()
+                    ? 'client COLLATE BINARY = %s'
+                    : 'BINARY client = %s', $filters->client);
+            }
+        }
+
+        if ($filters->method !== '') {
+            $this->applyMethodFilter($selection, $filters->method);
         }
 
         if ($filters->search !== '') {
@@ -1158,5 +1272,77 @@ final class PlayHistoryRepository implements LibraryHistorySource
         }
 
         return $selection;
+    }
+
+    private function applyMethodFilter(\Dibi\Fluent $selection, string $method): void
+    {
+        $exact = fn (string $value): string => $this->db->translate(
+            $this->platform->isSqlite()
+                ? 'play_method COLLATE BINARY = %s'
+                : 'BINARY play_method = %s',
+            $value,
+        );
+        $notExact = fn (string $value): string => $this->db->translate(
+            $this->platform->isSqlite()
+                ? 'play_method COLLATE BINARY <> %s'
+                : 'BINARY play_method <> %s',
+            $value,
+        );
+
+        if ($method === 'transcode') {
+            $selection->where($exact('Transcode'));
+        } elseif ($method === 'direct-stream') {
+            $selection->where($exact('DirectStream'));
+        } elseif ($method === 'direct') {
+            $selection->where('(play_method IS NULL OR ' . $notExact('Transcode') . ')');
+        } elseif ($method === 'direct-play') {
+            $selection->where('(play_method IS NULL OR ('
+                . $notExact('Transcode') . ' AND ' . $notExact('DirectStream') . '))');
+        }
+    }
+
+    private function exclusions(): MonitoringExclusions
+    {
+        return $this->monitoringExclusions ??= new MonitoringExclusions();
+    }
+
+    /** @return list<string> */
+    private function excludedStoredUserNames(): array
+    {
+        if ($this->exclusions()->names() === []) {
+            return [];
+        }
+        $names = $this->db->select($this->platform->isSqlite()
+            ? 'DISTINCT user_name COLLATE BINARY AS user_name'
+            : 'DISTINCT BINARY user_name AS user_name')->from('play_history')
+            ->where('user_name IS NOT NULL')->fetchPairs(null, 'user_name');
+
+        return array_values(array_filter(
+            array_map('strval', $names),
+            fn (string $name): bool => $this->exclusions()->excludes($name),
+        ));
+    }
+
+    private function excludeConfiguredUsers(\Dibi\Fluent $selection): void
+    {
+        foreach ($this->excludedStoredUserNames() as $name) {
+            $selection->where($this->platform->isSqlite()
+                ? '(user_name IS NULL OR user_name COLLATE BINARY <> %s)'
+                : '(user_name IS NULL OR BINARY user_name <> %s)', $name);
+        }
+    }
+
+    /** @param list<string> $names */
+    private function exactUserExclusionSql(array $names): string
+    {
+        $parts = [];
+        foreach ($names as $name) {
+            $expression = $this->platform->isSqlite()
+                ? '(user_name IS NULL OR user_name COLLATE BINARY <> %s)'
+                : '(user_name IS NULL OR BINARY user_name <> %s)';
+            $parts[] = $this->db->translate($expression, $name);
+        }
+
+        return implode(' AND ', $parts);
     }
 }

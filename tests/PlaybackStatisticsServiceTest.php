@@ -58,6 +58,178 @@ final class PlaybackStatisticsServiceTest extends TestCase
         $this->assertSame('2025-04-01 00:00:00', $previous['end']->format('Y-m-d H:i:s'));
     }
 
+    public function testHistoryDrilldownsUseExactSelectedPeriodBounds(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $repository = new \Mk\Framework\Jellyfin\PlayHistoryRepository($database);
+        $service = new PlaybackStatisticsService($repository);
+        $now = new DateTimeImmutable('2026-03-31 17:45:00');
+
+        $repository->logActiveStreams([[
+            'id' => 'drilldown-row',
+            'itemId' => 'drilldown-channel',
+            'itemType' => 'TvChannel',
+            'itemName' => 'Drilldown channel',
+            'user' => 'Maya & Co',
+            'client' => 'Client',
+            'playMethod' => 'DirectPlay',
+            'watchedSec' => 120,
+            'runtimeSec' => 0,
+        ], [
+            'id' => 'drilldown-title-row',
+            'itemId' => 'drilldown-title',
+            'itemType' => 'Movie',
+            'itemName' => 'Tosh.0 & Friends',
+            'user' => 'Maya & Co',
+            'client' => 'Client',
+            'playMethod' => 'DirectPlay',
+            'watchedSec' => 120,
+            'runtimeSec' => 0,
+        ]], $now);
+
+        $stats = $service->data('month', $now);
+
+        $this->assertSame('/history?range=custom&start=2026-03-02&end=2026-04-01', $stats['kpis'][1]['href']);
+        $this->assertSame(
+            '/history?user=Maya%20%26%20Co&range=custom&start=2026-03-02&end=2026-04-01',
+            $stats['topUsers'][0]['href'],
+        );
+        $this->assertSame($stats['topUsers'][0]['href'], $stats['usersTable'][0]['href']);
+        $this->assertSame(
+            '/history?search=Tosh.0%20%26%20Friends&range=custom&start=2026-03-02&end=2026-04-01',
+            $stats['trending'][0]['href'],
+        );
+        $this->assertSame(
+            '/history?search=Tosh.0%20%26%20Friends&range=all',
+            $stats['mostWatched']['movies'][0]['href'],
+        );
+
+        $all = $service->data('all', $now);
+        $this->assertSame('/history?range=all', $all['kpis'][1]['href']);
+        $this->assertSame('/history?user=Maya%20%26%20Co&range=all', $all['usersTable'][0]['href']);
+        $this->assertSame(
+            '/history?search=Tosh.0%20%26%20Friends&range=all',
+            $all['trending'][0]['href'],
+        );
+    }
+
+    public function testUnknownUserDoesNotLinkToAHistoryFilterThatCannotMatchIt(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $repository = new \Mk\Framework\Jellyfin\PlayHistoryRepository($database);
+        $now = new DateTimeImmutable('2026-03-31 17:45:00');
+
+        $repository->logActiveStreams([[
+            'id' => 'unknown-user-row',
+            'itemId' => 'unknown-user-channel',
+            'itemType' => 'TvChannel',
+            'itemName' => 'Unknown user channel',
+            'user' => '',
+            'client' => 'Client',
+            'playMethod' => 'DirectPlay',
+            'watchedSec' => 120,
+            'runtimeSec' => 0,
+        ]], $now);
+
+        $stats = (new PlaybackStatisticsService($repository))->data('week', $now);
+
+        $this->assertSame('Unknown user', $stats['usersTable'][0]['user']);
+        $this->assertArrayNotHasKey('href', $stats['topUsers'][0]);
+        $this->assertArrayNotHasKey('href', $stats['usersTable'][0]);
+    }
+
+    public function testRealUserNamedUnknownUserKeepsItsDrilldownLink(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $repository = new \Mk\Framework\Jellyfin\PlayHistoryRepository($database);
+        $now = new DateTimeImmutable('2026-03-31 17:45:00');
+
+        $repository->logActiveStreams([[
+            'id' => 'named-unknown-user-row',
+            'itemId' => 'named-unknown-user-channel',
+            'itemType' => 'TvChannel',
+            'itemName' => 'Named Unknown user channel',
+            'user' => 'Unknown user',
+            'client' => 'Client',
+            'playMethod' => 'DirectPlay',
+            'watchedSec' => 120,
+            'runtimeSec' => 0,
+        ]], $now);
+
+        $stats = (new PlaybackStatisticsService($repository))->data('week', $now);
+
+        $this->assertSame(
+            '/history?user=Unknown%20user&range=custom&start=2026-03-25&end=2026-04-01',
+            $stats['usersTable'][0]['href'],
+        );
+    }
+
+    public function testAnonymousActivityAndNamedUnknownUserRemainSeparateGroups(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $users = new ReflectionMethod($service, 'users');
+        $rows = [
+            $this->statisticsRow('', 'Client', 60),
+            $this->statisticsRow('Unknown user', 'Client', 180),
+        ];
+
+        $result = $users->invoke($service, $rows);
+
+        $this->assertIsArray($result);
+        $this->assertCount(2, $result);
+        $this->assertSame(['Unknown user', 'Unknown user'], array_column($result, 'user'));
+        $this->assertSame(['75%', '25%'], array_column($result, 'share'));
+        $this->assertTrue($result[0]['filterable']);
+        $this->assertFalse($result[1]['filterable']);
+    }
+
+    public function testClientAndPlaybackMethodDrilldownsCarryTypedFiltersAndPeriod(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $repository = new \Mk\Framework\Jellyfin\PlayHistoryRepository($database);
+        $now = new DateTimeImmutable('2026-03-31 17:45:00');
+
+        foreach ([
+            ['direct-play', 'DirectPlay'],
+            ['direct-stream', 'DirectStream'],
+            ['transcode', 'Transcode'],
+            ['legacy-direct', 'LegacyMethod'],
+        ] as [$id, $method]) {
+            $repository->logActiveStreams([[
+                'id' => 'client-method-' . $id,
+                'itemId' => 'client-method-item-' . $id,
+                'itemType' => 'Movie',
+                'itemName' => 'Client method ' . $id,
+                'user' => 'Client viewer',
+                'client' => 'Client & One',
+                'playMethod' => $method,
+                'watchedSec' => 120,
+                'runtimeSec' => 0,
+            ]], $now);
+        }
+
+        $stats = (new PlaybackStatisticsService($repository))->data('month', $now);
+        $period = '&range=custom&start=2026-03-02&end=2026-04-01';
+        $client = '/history?client=Client%20%26%20One' . $period;
+
+        $this->assertSame('/history?method=transcode' . $period, $stats['kpis'][3]['href']);
+        $this->assertSame('/history?method=direct-play' . $period, $stats['directnessLegend'][0]['href']);
+        $this->assertSame('/history?method=direct-stream' . $period, $stats['directnessLegend'][1]['href']);
+        $this->assertSame('/history?method=transcode' . $period, $stats['directnessLegend'][2]['href']);
+        $this->assertSame($client, $stats['clientBreakdown'][0]['href']);
+        $this->assertSame($client, $stats['clientsRanked'][0]['href']);
+        $this->assertSame($client, $stats['clientsUsage'][0]['href']);
+        $this->assertSame($client, $stats['clientsTranscode'][0]['href']);
+        $this->assertSame(
+            '/history?client=Client%20%26%20One&method=direct' . $period,
+            $stats['clientsTranscode'][0]['directHref'],
+        );
+        $this->assertSame(
+            '/history?client=Client%20%26%20One&method=transcode' . $period,
+            $stats['clientsTranscode'][0]['transcodeHref'],
+        );
+    }
+
     public function testUserAndClientWatchTimeKeepsExactSecondsUntilFormatting(): void
     {
         $service = new PlaybackStatisticsService();
@@ -136,6 +308,32 @@ final class PlaybackStatisticsServiceTest extends TestCase
             static fn (array $row): int => (int) rtrim($row['share'], '%'),
             $userMix,
         )));
+    }
+
+    public function testStandaloneTranscodeRateUsesNormalRoundingWhileChartTotalsStayAtOneHundred(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $repository = new \Mk\Framework\Jellyfin\PlayHistoryRepository($database);
+        $now = new DateTimeImmutable('2026-08-22 12:00:00');
+
+        foreach ([...array_fill(0, 7, 'DirectPlay'), 'Transcode'] as $index => $method) {
+            $repository->logActiveStreams([[
+                'id' => 'rounding-' . $index,
+                'itemId' => 'rounding-item-' . $index,
+                'itemType' => 'TvChannel',
+                'itemName' => 'Rounding fixture ' . $index,
+                'user' => 'Viewer',
+                'client' => 'Client',
+                'playMethod' => $method,
+                'watchedSec' => 60,
+                'runtimeSec' => 0,
+            ]], $now);
+        }
+
+        $stats = (new PlaybackStatisticsService($repository))->data('week', $now);
+
+        $this->assertSame('13%', $stats['kpis'][3]['value']);
+        $this->assertSame(['88%', '0%', '12%'], array_column($stats['directnessLegend'], 'pct'));
     }
 
     public function testTrendBarsRenderZeroHonestlyAndExposeTheirValues(): void
@@ -389,6 +587,40 @@ final class PlaybackStatisticsServiceTest extends TestCase
         $this->assertSame(['included'], array_column($rows, 'item_id'));
         $this->assertSame(1, $locationCalls);
         $this->assertSame(['excluded', 'deleted', 'included'], $pathCalls);
+    }
+
+    public function testUnresolvedLibraryMetadataMatchesNormalizedGuidAndNumericKeys(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $filter = new ReflectionMethod($service, 'withoutExcludedLibraryRows');
+        $rawGuid = 'AABBCCDD-1122-3344-5566-778899AABBCC';
+        $undashedGuid = 'ffeeddccbbaa99887766554433221100';
+        $numericId = '12345';
+        $requested = [];
+
+        $rows = $filter->invoke(
+            $service,
+            [
+                $this->titleRow('2026-08-20 10:00:00', $rawGuid, '', ''),
+                $this->titleRow('2026-08-20 10:01:00', $undashedGuid, '', ''),
+                $this->titleRow('2026-08-20 10:02:00', $numericId, '', ''),
+                $this->titleRow('2026-08-20 10:03:00', 'deleted-item', '', ''),
+            ],
+            ['blocked'],
+            static function (array $ids) use (&$requested): array {
+                $requested = $ids;
+
+                return [
+                    'aabbccdd112233445566778899aabbcc' => ['runtime_sec' => 3600, 'library' => 'Movies'],
+                    'FFEEDDCC-BBAA-9988-7766-554433221100' => ['runtime_sec' => 3600, 'library' => 'Blocked'],
+                    '12345' => ['runtime_sec' => 3600, 'library' => 'Movies'],
+                ];
+            },
+        );
+
+        $this->assertIsArray($rows);
+        $this->assertSame([$rawGuid, $numericId], array_column($rows, 'item_id'));
+        $this->assertSame([$rawGuid, $undashedGuid, $numericId, 'deleted-item'], $requested);
     }
 
     public function testUnresolvedLibraryLookupStillFailsOpen(): void

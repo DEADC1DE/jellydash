@@ -2,6 +2,7 @@
 
 use Mk\Framework\Container;
 use Mk\Framework\Jellyfin\HistoryFilters;
+use Mk\Framework\Jellyfin\MonitoringExclusions;
 use Mk\Framework\Jellyfin\PlaybackReportingParser;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use PHPUnit\Framework\TestCase;
@@ -226,6 +227,148 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame('Middle', $pageTwo[0]['item_name']);
     }
 
+    public function testFreeTextSearchKeepsTheDocumentedBackendAccentContract(): void
+    {
+        $this->insertPlay([
+            'session_key' => 'phpunit-accent-search',
+            'item_id' => 'phpunit-accent-search-item',
+            'item_name' => 'CAFÉ audit contract',
+        ]);
+
+        $rows = $this->repository->historyRows(new HistoryFilters(
+            search: 'cafe',
+            range: 'all',
+        ));
+
+        if (\Mk\Framework\DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
+            $this->assertCount(0, $rows, 'SQLite free-text LIKE does not fold accents.');
+        } else {
+            $this->assertCount(1, $rows, 'MariaDB utf8mb4_unicode_ci folds case and accents.');
+        }
+    }
+
+    public function testCustomPeriodUsesInclusiveStartExclusiveEndAcrossRowsAndAggregates(): void
+    {
+        $user = 'PHPUnit Exact History Period';
+        foreach ([
+            ['before', '2026-03-01 23:59:59', 60],
+            ['start', '2026-03-02 00:00:00', 120],
+            ['middle', '2026-03-15 12:00:00', 180],
+            ['end', '2026-04-01 00:00:00', 240],
+        ] as [$suffix, $startedAt, $watchSec]) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-exact-period-' . $suffix,
+                'user_name' => $user,
+                'item_name' => ucfirst($suffix),
+                'watched_sec' => $watchSec,
+                'started_at' => $startedAt,
+            ]);
+        }
+
+        $filters = HistoryFilters::fromQuery([
+            'user' => $user,
+            'range' => 'custom',
+            'start' => '2026-03-02',
+            'end' => '2026-04-01',
+        ]);
+        $pageTwo = new HistoryFilters(
+            user: $filters->user,
+            range: $filters->range,
+            limit: 1,
+            offset: 1,
+            start: $filters->start,
+            end: $filters->end,
+        );
+
+        $this->assertSame(2, $this->repository->historyTotal($filters));
+        $this->assertSame(['Middle', 'Start'], array_map(
+            static fn (\Dibi\Row $row): string => (string) $row['item_name'],
+            $this->repository->historyRows($filters),
+        ));
+        $this->assertSame('Start', (string) $this->repository->historyRows($pageTwo)[0]['item_name']);
+
+        $aggregate = $this->repository->historyAggregate($pageTwo);
+        $this->assertSame(2, $aggregate['plays']);
+        $this->assertSame(300, $aggregate['watch_sec']);
+    }
+
+    public function testClientAndPlaybackMethodFiltersShareStatisticsGroupingSemantics(): void
+    {
+        $user = 'PHPUnit Client Method Filters';
+        foreach ([
+            ['web-transcode', 'Web', 'Transcode', 100, '12:09:00'],
+            ['web-stream', 'Web', 'DirectStream', 200, '12:08:00'],
+            ['web-play', 'Web', 'DirectPlay', 300, '12:07:00'],
+            ['web-legacy', 'Web', 'LegacyMethod', 400, '12:06:00'],
+            ['web-lower-transcode', 'Web', 'transcode', 500, '12:05:00'],
+            ['lower-web-transcode', 'web', 'Transcode', 600, '12:04:00'],
+            ['missing-client', null, 'DirectPlay', 700, '12:03:00'],
+            ['empty-client', '', 'DirectStream', 800, '12:02:00'],
+            ['named-unknown', 'Unknown client', 'Transcode', 900, '12:01:00'],
+        ] as [$key, $client, $method, $watchSec, $time]) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-client-method-' . $key,
+                'user_name' => $user,
+                'client' => $client,
+                'play_method' => $method,
+                'watched_sec' => $watchSec,
+                'started_at' => '2026-09-09 ' . $time,
+                'updated_at' => '2026-09-09 ' . $time,
+            ]);
+        }
+
+        $webDirect = new HistoryFilters(
+            user: $user,
+            client: 'Web',
+            method: 'direct',
+            range: 'all',
+            limit: 1,
+            offset: 1,
+        );
+        $this->assertSame(4, $this->repository->historyTotal($webDirect));
+        $this->assertSame(
+            'phpunit-client-method-web-play',
+            (string) $this->repository->historyRows($webDirect)[0]['session_key'],
+        );
+        $this->assertCount(4, iterator_to_array($this->repository->historyExportRows($webDirect)));
+        $this->assertSame(0, $this->repository->historyAggregate($webDirect)['transcodes']);
+
+        $this->assertSame(3, $this->repository->historyTotal(new HistoryFilters(
+            user: $user,
+            client: 'Unknown client',
+            range: 'all',
+        )));
+        $this->assertSame(3, $this->repository->historyTotal(new HistoryFilters(
+            user: $user,
+            method: 'transcode',
+            range: 'all',
+        )));
+        $this->assertSame(2, $this->repository->historyTotal(new HistoryFilters(
+            user: $user,
+            method: 'direct-stream',
+            range: 'all',
+        )));
+        $this->assertSame(4, $this->repository->historyTotal(new HistoryFilters(
+            user: $user,
+            method: 'direct-play',
+            range: 'all',
+        )));
+        $this->assertSame(6, $this->repository->historyTotal(new HistoryFilters(
+            user: $user,
+            method: 'direct',
+            range: 'all',
+        )));
+
+        $clients = $this->repository->clients();
+        $this->assertContains('Web', $clients);
+        $this->assertContains('web', $clients);
+        $this->assertSame(1, count(array_keys($clients, 'Unknown client', true)));
+
+        $excluded = new PlayHistoryRepository(Container::db(), new MonitoringExclusions([$user]));
+        $this->assertNotContains('Web', $excluded->clients());
+        $this->assertNotContains('web', $excluded->clients());
+    }
+
     public function testHistoryAggregateCoversTheFullFilteredResultNotOnePage(): void
     {
         $user = 'PHPUnit History Aggregate';
@@ -250,6 +393,67 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame(1, $aggregate['unique_users']);
         $this->assertSame(1800, $aggregate['watch_sec']);
         $this->assertSame(1, $aggregate['transcodes']);
+    }
+
+    public function testExactUserAndLibraryFiltersPreserveCaseAcrossRowsAggregatesAndExport(): void
+    {
+        foreach ([
+            ['upper', 'Maya', 'Movies', 60],
+            ['lower-user', 'maya', 'Movies', 120],
+            ['lower-library', 'Maya', 'movies', 180],
+            ['accented', 'Máya', 'Movies', 240],
+        ] as [$suffix, $user, $library, $watchSec]) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-exact-text-' . $suffix,
+                'user_name' => $user,
+                'library' => $library,
+                'watched_sec' => $watchSec,
+                'started_at' => '2026-09-10 12:00:00',
+            ]);
+        }
+
+        $filters = new HistoryFilters(user: 'Maya', library: 'Movies', range: 'all', limit: 1);
+        $rows = $this->repository->historyRows($filters);
+        $aggregate = $this->repository->historyAggregate($filters);
+        $export = iterator_to_array($this->repository->historyExportRows($filters));
+
+        $this->assertCount(1, $rows);
+        $this->assertSame('phpunit-exact-text-upper', (string) $rows[0]['session_key']);
+        $this->assertSame(1, $this->repository->historyTotal($filters));
+        $this->assertSame(1, $aggregate['plays']);
+        $this->assertSame(1, $aggregate['unique_users']);
+        $this->assertSame(60, $aggregate['watch_sec']);
+        $this->assertCount(1, $export);
+        $this->assertSame('phpunit-exact-text-upper', (string) $export[0]['session_key']);
+        $this->assertContains('Maya', $this->repository->users());
+        $this->assertContains('maya', $this->repository->users());
+        $this->assertContains('Máya', $this->repository->users());
+        $this->assertContains('Movies', $this->repository->libraries());
+        $this->assertContains('movies', $this->repository->libraries());
+    }
+
+    public function testUniqueUserAggregateSeparatesAnonymousNamedUnknownAndCaseVariants(): void
+    {
+        foreach ([
+            ['null', null],
+            ['empty', ''],
+            ['named', 'Unknown user'],
+            ['upper', 'Maya'],
+            ['lower', 'maya'],
+        ] as [$suffix, $user]) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-unique-viewer-' . $suffix,
+                'user_name' => $user,
+                'started_at' => '2026-09-10 12:00:00',
+            ]);
+        }
+
+        $aggregate = $this->repository->historyAggregate(new HistoryFilters(
+            search: 'Arrival',
+            range: 'all',
+        ));
+
+        $this->assertSame(4, $aggregate['unique_users']);
     }
 
     public function testUniqueConflictFallbackDoesNotResetAnAlreadyClaimedNotification(): void
@@ -562,16 +766,19 @@ final class PlayHistoryRepositoryTest extends TestCase
         );
     }
 
-    public function testImportReportsProgressAsRowsAreWritten(): void
+    public function testImportReportsProgressAfterTheBatchCommits(): void
     {
         $parser = new PlaybackReportingParser();
         $rows = $parser->parseTsv(
             "2024-01-08 12:00:00.1234567\t0e394f8a9bc64abeba29f63cdc7a12a0\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tMovie\tDune\tDirectPlay\tWeb\tChrome\t120"
         );
         $calls = [];
+        $visibleRows = [];
 
-        $this->repository->importHistoricalPlays($rows, false, static function (array $payload) use (&$calls): void {
+        $this->repository->importHistoricalPlays($rows, false, function (array $payload) use (&$calls, &$visibleRows): void {
             $calls[] = $payload;
+            $visibleRows[] = (int) $this->dibi->select('COUNT(*)')->from('play_history')
+                ->where('item_id = %s', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa')->fetchSingle();
         });
 
         $this->assertNotEmpty($calls);
@@ -580,6 +787,34 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame(1, $last['processed']);
         $this->assertSame(1, $last['total']);
         $this->assertSame(1, $last['inserted']);
+        $this->assertSame([1], $visibleRows);
+    }
+
+    public function testPlaybackReportingBatchRollsBackWhenALaterRowFails(): void
+    {
+        $parser = new PlaybackReportingParser();
+        $rows = array_merge(
+            $parser->parseTsv("2024-01-08 12:00:00.0000000\t0e394f8a9bc64abeba29f63cdc7a12a0\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tMovie\tFirst\tDirectPlay\tWeb\tChrome\t120"),
+            $parser->parseTsv("2024-01-08 13:00:00.0000000\t0e394f8a9bc64abeba29f63cdc7a12a0\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\tMovie\tSecond\tDirectPlay\tWeb\tChrome\t120"),
+        );
+        $writes = 0;
+        $repository = new PlayHistoryRepository(Container::db(), null, static function () use (&$writes): void {
+            ++$writes;
+            if ($writes === 2) {
+                throw new RuntimeException('Injected second-row failure.');
+            }
+        });
+
+        try {
+            $repository->importHistoricalPlays($rows);
+            self::fail('The injected write failure should escape the batch.');
+        } catch (RuntimeException $error) {
+            self::assertSame('Injected second-row failure.', $error->getMessage());
+        }
+
+        self::assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('play_history')
+            ->where('item_id IN %in', ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'])
+            ->fetchSingle());
     }
 
     public function testItemPlaySummariesGroupsPlaysByItemAndKeepsLatest(): void

@@ -7,6 +7,7 @@ namespace Mk\Framework\Pages;
 use Mk\Framework\Controller;
 use Mk\Framework\Jellyfin\HistoryFilters;
 use Mk\Framework\Jellyfin\JellyfinUserAvatars;
+use Mk\Framework\Jellyfin\PlaybackStatisticsService;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Main;
 
@@ -23,9 +24,13 @@ final class HistoryController extends Controller
             search: $filters->search,
             user: $filters->user,
             library: $filters->library,
+            client: $filters->client,
+            method: $filters->method,
             range: $filters->range,
             limit: $filters->limit,
             offset: ($page - 1) * $filters->limit,
+            start: $filters->start,
+            end: $filters->end,
         );
         $rows = $repository->historyRows($filters);
         $pages = max(1, (int) ceil($totalFiltered / max(1, $filters->limit)));
@@ -40,11 +45,18 @@ final class HistoryController extends Controller
             'pager' => $this->pager($page, $pages, $filters),
             'users' => $repository->users(),
             'libraries' => $repository->libraries(),
+            'clients' => $repository->clients(),
             'filters' => [
                 'search' => $filters->search,
                 'user' => $filters->user,
                 'library' => $filters->library,
+                'client' => $filters->client,
+                'method' => $filters->method,
                 'range' => $filters->range,
+                'is_exact' => $filters->hasExactPeriod(),
+                'period_label' => $this->periodLabel($filters),
+                'start' => $filters->start?->format('Y-m-d') ?? '',
+                'end' => $filters->end?->format('Y-m-d') ?? '',
             ],
         ]);
     }
@@ -88,6 +100,33 @@ final class HistoryController extends Controller
         }
 
         return '/history' . ($query === [] ? '' : '?' . http_build_query($query));
+    }
+
+    private function periodLabel(HistoryFilters $filters): string
+    {
+        if (!$filters->hasExactPeriod()) {
+            return '';
+        }
+
+        $start = $filters->start;
+        $inclusiveEnd = $filters->end?->modify('-1 day');
+        if ($start === null || $inclusiveEnd === null) {
+            return '';
+        }
+
+        if ($start->format('Y-m-d') === $inclusiveEnd->format('Y-m-d')) {
+            return $start->format('M j, Y');
+        }
+
+        if ($start->format('Y') !== $inclusiveEnd->format('Y')) {
+            return $start->format('M j, Y') . ' - ' . $inclusiveEnd->format('M j, Y');
+        }
+
+        if ($start->format('m') === $inclusiveEnd->format('m')) {
+            return $start->format('M j') . ' - ' . $inclusiveEnd->format('j, Y');
+        }
+
+        return $start->format('M j') . ' - ' . $inclusiveEnd->format('M j, Y');
     }
 
     /**
@@ -154,7 +193,10 @@ final class HistoryController extends Controller
         $completion = $runtimeSec > 0 ? min(100, (int) round(($watchedSec / $runtimeSec) * 100)) : 0;
         $seriesName = (string) ($row['series_name'] ?? '');
         $itemName = (string) ($row['item_name'] ?? 'Unknown title');
-        $user = (string) ($row['user_name'] ?? 'Unknown user');
+        $user = (string) ($row['user_name'] ?? '');
+        if (trim($user) === '') {
+            $user = 'Unknown user';
+        }
         $userId = (string) ($row['user_id'] ?? '');
         $library = trim((string) ($row['library'] ?? ''));
 
@@ -213,23 +255,16 @@ final class HistoryController extends Controller
             'unique_users' => $aggregate['unique_users'],
             'watch_time' => $this->durationLabel($aggregate['watch_sec']),
             'watch_time_estimated' => $aggregate['estimated_plays'] > 0,
-            'transcoded_pct' => ($totalFiltered > 0
-                ? (int) round(($aggregate['transcodes'] / $totalFiltered) * 100)
-                : 0) . '%',
+            'transcoded_pct' => PlaybackStatisticsService::standalonePercentage(
+                $aggregate['transcodes'],
+                $totalFiltered,
+            ) . '%',
         ];
     }
 
     private function durationLabel(int $seconds): string
     {
-        $minutes = (int) floor($seconds / 60);
-        if ($minutes <= 0) {
-            return '0m';
-        }
-
-        $hours = intdiv($minutes, 60);
-        $remainingMinutes = $minutes % 60;
-
-        return $hours > 0 ? $hours . 'h ' . $remainingMinutes . 'm' : $remainingMinutes . 'm';
+        return PlaybackStatisticsService::formatDuration($seconds);
     }
 
     private function initials(string $name): string
