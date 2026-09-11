@@ -3,7 +3,7 @@
 {% block dashboard_header %}
     <div class="header-copy">
         <h1>Activity</h1>
-        <p>Page {{ page }} of {{ totalPages }}</p>
+        <p>{{ total }} entr{{ total == 1 ? 'y' : 'ies' }}{% if query %} · filtered{% endif %} · page {{ page }} of {{ totalPages }}</p>
     </div>
     {% if isAdmin %}
         <button type="button" class="activity-resolve-btn" data-activity-resolve>Resolve unknown users</button>
@@ -11,6 +11,23 @@
 {% endblock %}
 
 {% block dashboard_content %}
+    <form class="activity-filters" method="get">
+        <input class="activity-search" type="search" name="q" value="{{ query }}" placeholder="Search activity (e.g. login, playback, user name)…">
+        <select class="activity-range" name="range">
+            {% for key, label in ranges %}
+                <option value="{{ key }}"{{ range == key ? ' selected' : '' }}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <button class="activity-apply" type="submit">Apply</button>
+        {% if query or range %}
+            <a class="activity-reset" href="/activity">Reset</a>
+        {% endif %}
+    </form>
+
+    {% if truncated %}
+        <p class="activity-truncated">Search covered the most recent {{ searchWindow }} entries of the selected period — narrow the period for deeper results.</p>
+    {% endif %}
+
     <div class="activity-list">
         {% for entry in entries %}
             <div class="activity-row">
@@ -18,22 +35,21 @@
                 <span class="activity-text">{{ entry.name }}</span>
             </div>
         {% else %}
-            <div class="activity-empty">No activity log entries.</div>
+            <div class="activity-empty">No activity log entries{{ query ? ' matching “' ~ query ~ '”' : '' }}.</div>
         {% endfor %}
     </div>
 
     <nav class="activity-pager">
         {% if page > 1 %}
-            <a class="activity-pager-btn" href="?p={{ page - 1 }}">&larr; Newer</a>
+            <a class="activity-pager-btn" href="?{{ filterQuery }}{{ filterQuery ? '&' : '' }}p={{ page - 1 }}">&larr; Newer</a>
         {% else %}
             <span class="activity-pager-btn is-disabled">&larr; Newer</span>
         {% endif %}
         <span class="activity-pager-status">Page {{ page }} of {{ totalPages }}</span>
         {% if page < totalPages %}
-            <a class="activity-pager-btn" href="?p={{ page + 1 }}">Older &rarr;</a>
+            <a class="activity-pager-btn" href="?{{ filterQuery }}{{ filterQuery ? '&' : '' }}p={{ page + 1 }}">Older &rarr;</a>
         {% else %}
             <span class="activity-pager-btn is-disabled">Older &rarr;</span>
         {% endif %}
     </nav>
 {% endblock %}
-

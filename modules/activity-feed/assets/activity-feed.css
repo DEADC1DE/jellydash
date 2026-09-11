@@ -1,3 +1,60 @@
+.activity-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.activity-search {
+    flex: 1 1 280px;
+    max-width: 480px;
+    padding: 9px 14px;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 13px;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .04);
+}
+
+.activity-search:focus {
+    outline: none;
+    border-color: var(--color-purple);
+}
+
+.activity-range {
+    padding: 9px 12px;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 13px;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .04);
+}
+
+.activity-apply {
+    padding: 9px 16px;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    border: 1px solid rgba(124, 92, 255, .4);
+    border-radius: 9px;
+    background: rgba(124, 92, 255, .14);
+}
+
+.activity-reset {
+    color: var(--color-low);
+    font-size: 12px;
+}
+
+.activity-truncated {
+    margin: 0 0 12px;
+    color: var(--color-low);
+    font-size: 12px;
+}
+
 .activity-list {
     overflow: hidden;
     border: 1px solid var(--color-border);
