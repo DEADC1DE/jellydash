@@ -51,6 +51,61 @@
     text-align: center;
 }
 
+/* Overview variant of the Statistics page's stats-user-table: denser rows and
+   content-hugging columns so it reads like the History/Devices tables instead
+   of stretching the user cell across the full page width. The only other
+   addition is the clickable user cell linking to the profile. */
+.users-overview-table {
+    max-width: 880px;
+}
+
+.users-overview-table .stats-user-head,
+.users-overview-table .stats-user-table-row {
+    grid-template-columns: minmax(140px, 1.5fr) 90px 70px 90px minmax(110px, 1fr);
+    gap: 14px;
+    padding: 0 16px;
+}
+
+.users-overview-table .stats-user-head {
+    height: 34px;
+}
+
+.users-overview-table .stats-user-table-row {
+    min-height: 42px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.users-overview-table .stats-user-name strong {
+    font-size: 12.5px;
+}
+
+.users-overview-table .watcher-avatar {
+    flex-basis: 24px;
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+}
+
+.users-overview-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+}
+
+.users-overview-name:hover strong {
+    color: var(--color-purple);
+}
+
+.users-overview-name strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .users-profile-stats {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

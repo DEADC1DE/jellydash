@@ -5,19 +5,88 @@
         <h1>Users</h1>
         <p>{{ rows|length }} Jellyfin {{ rows|length == 1 ? 'user' : 'users' }}</p>
     </div>
+    <div class="header-actions statistics-header-actions">
+        <div class="statistics-range-picker">
+            <div class="statistics-range-meta">
+                <span class="statistics-range-label">
+                    <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                        <path d="M16 2a1 1 0 0 1 .993 .883l.007 .117v1h1a3 3 0 0 1 2.995 2.824l.005 .176v12a3 3 0 0 1 -2.824 2.995l-.176 .005h-12a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-12a3 3 0 0 1 2.824 -2.995l.176 -.005h1v-1a1 1 0 0 1 1.993 -.117l.007 .117v1h6v-1a1 1 0 0 1 1 -1m3 8h-14v8.625c0 .705 .386 1.286 .883 1.366l.117 .009h12c.513 0 .936 -.53 .993 -1.215l.007 -.16zm-9 4a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1z"></path>
+                    </svg>
+                    Viewing period
+                </span>
+            </div>
+            <div class="segmented-control statistics-range-control" aria-label="Users range">
+                {% for range in overview.ranges %}
+                    <a class="{{ range.active ? 'is-active' : '' }}" href="{{ range.href }}"{{ range.active ? ' aria-current="page"' : '' }}>{{ range.label }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block dashboard_content %}
-    <div class="users-grid">
-        {% for row in rows %}
-            <a class="users-card" href="/users?user={{ row.name|url_encode }}">
-                <strong class="users-card-name">{{ row.name }}</strong>
-                <span class="users-card-stat">{{ row.plays }} plays</span>
-                <span class="users-card-stat">{{ (row.watchSec / 3600)|round(1) }}h watched</span>
-                <small class="users-card-lastseen">{{ row.lastSeen ? 'Last seen ' ~ row.lastSeen|date('Y-m-d') : 'No plays recorded' }}</small>
-            </a>
-        {% else %}
-            <div class="users-empty">No Jellyfin users found.</div>
-        {% endfor %}
+    <div class="stats-page">
+        <header class="stats-section-header">
+            <strong>Overview</strong>
+            <span>Watch time - plays - share per user · {{ overview.subLabel }}</span>
+            <i></i>
+        </header>
+
+        <section class="stats-kpi-grid" aria-label="Key user metrics">
+            {% for kpi in overview.kpis %}
+                <article class="stats-kpi">
+                    <span><i style="background: {{ kpi.color }}"></i>{{ kpi.label }}</span>
+                    <strong>{{ kpi.value }}</strong>
+                    <small style="color: {{ kpi.deltaColor }}">{{ kpi.delta }}</small>
+                </article>
+            {% endfor %}
+        </section>
+
+        <section class="stats-user-table users-overview-table" aria-label="User statistics for this period">
+            <div class="stats-user-head">
+                <span>User</span>
+                <span>Watch Time</span>
+                <span>Plays</span>
+                <span>Avg / Play</span>
+                <span>Share</span>
+            </div>
+            {% for user in overview.users %}
+                <article class="stats-user-table-row">
+                    <div class="stats-user-name">
+                        <a class="users-overview-name" href="/users?user={{ user.user|url_encode }}">
+                            {% include "_avatar.twig" with { initials: user.initials, bg: user.avatarBg, url: user.avatarUrl } only %}
+                            <strong>{{ user.user }}</strong>
+                        </a>
+                    </div>
+                    <span class="history-mono">{{ user.watch }}</span>
+                    <span class="history-mono">{{ user.plays }}</span>
+                    <span class="history-mono">{{ user.avg }}</span>
+                    <span class="stats-track" aria-label="{{ user.share }} of total watch time"><i style="width: {{ user.w }}; background: {{ user.color }}"></i></span>
+                </article>
+            {% else %}
+                <article class="stats-user-table-row is-empty">
+                    <span>No user activity in this period.</span>
+                </article>
+            {% endfor %}
+        </section>
+
+        <header class="stats-section-header">
+            <strong>All Users</strong>
+            <span>All-time stats - open for profile</span>
+            <i></i>
+        </header>
+
+        <div class="users-grid">
+            {% for row in rows %}
+                <a class="users-card" href="/users?user={{ row.name|url_encode }}">
+                    <strong class="users-card-name">{{ row.name }}</strong>
+                    <span class="users-card-stat">{{ row.plays }} plays</span>
+                    <span class="users-card-stat">{{ (row.watchSec / 3600)|round(1) }}h watched</span>
+                    <small class="users-card-lastseen">{{ row.lastSeen ? 'Last seen ' ~ row.lastSeen|date('Y-m-d') : 'No plays recorded' }}</small>
+                </a>
+            {% else %}
+                <div class="users-empty">No Jellyfin users found.</div>
+            {% endfor %}
+        </div>
     </div>
 {% endblock %}

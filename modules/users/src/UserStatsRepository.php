@@ -54,6 +54,66 @@ final class UserStatsRepository
         ];
     }
 
+    /**
+     * Per-user playback aggregates for a period, ranked-ready: one grouped
+     * query so the range overview stays a single round trip. Watch seconds
+     * prefer the sampled watch_duration_sec, falling back to watched_sec —
+     * the same rule the core Statistics page applies.
+     *
+     * @return array<string, array{userId: string, plays: int, watchSec: int}> keyed by user name
+     */
+    public function rangeSummaries(?\DateTimeImmutable $start): array
+    {
+        $selection = $this->dibi
+            ->select('user_name, MAX(user_id) AS user_id, COUNT(*) AS plays, COALESCE(SUM(COALESCE(watch_duration_sec, watched_sec)), 0) AS watch_sec')
+            ->from('play_history');
+
+        if ($start !== null) {
+            $selection->where('started_at >= %s', $start->format('Y-m-d H:i:s'));
+        }
+
+        $summaries = [];
+        foreach ($selection->groupBy('user_name')->fetchAll() as $row) {
+            $name = trim((string) ($row['user_name'] ?? ''));
+            $summaries[$name !== '' ? $name : 'Unknown user'] = [
+                'userId' => trim((string) ($row['user_id'] ?? '')),
+                'plays' => (int) $row['plays'],
+                'watchSec' => (int) $row['watch_sec'],
+            ];
+        }
+
+        return $summaries;
+    }
+
+    /**
+     * Whole-period totals for a range — used for the overview KPIs and their
+     * comparison against the preceding period ($end is exclusive).
+     *
+     * @return array{plays: int, watchSec: int, users: int}
+     */
+    public function rangeTotals(?\DateTimeImmutable $start, ?\DateTimeImmutable $end): array
+    {
+        $selection = $this->dibi
+            ->select('COUNT(*) AS plays, COALESCE(SUM(COALESCE(watch_duration_sec, watched_sec)), 0) AS watch_sec, COUNT(DISTINCT user_name) AS users')
+            ->from('play_history');
+
+        if ($start !== null) {
+            $selection->where('started_at >= %s', $start->format('Y-m-d H:i:s'));
+        }
+
+        if ($end !== null) {
+            $selection->where('started_at < %s', $end->format('Y-m-d H:i:s'));
+        }
+
+        $totals = $selection->fetch();
+
+        return [
+            'plays' => (int) ($totals['plays'] ?? 0),
+            'watchSec' => (int) ($totals['watch_sec'] ?? 0),
+            'users' => (int) ($totals['users'] ?? 0),
+        ];
+    }
+
     public function recentPlaysCount(string $userName): int
     {
         return (int) $this->dibi->select('COUNT(*)')
