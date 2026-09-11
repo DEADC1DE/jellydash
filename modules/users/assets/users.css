@@ -120,12 +120,13 @@
 }
 
 /* Top Titles rows show a small cover (the controller serves real Jellyfin
-   art over a gradient fallback) next to a two-line title cell: series /
-   movie label with the episode code + title below. */
+   art over a gradient fallback) next to a two-line title cell. Size and
+   inline background-image handling mirror the History page's poster so the
+   class-level center/cover cropping keeps working. */
 .users-overview-title-poster {
-    flex: 0 0 28px;
-    width: 28px;
-    height: 40px;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 60px;
     overflow: hidden;
     background-position: center;
     background-repeat: no-repeat;
@@ -144,15 +145,16 @@
 
 .users-overview-title-copy strong {
     overflow: hidden;
+    color: #f4f2fb;
+    font-size: 13.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
 }
 
 .users-overview-title-copy small {
     overflow: hidden;
     color: rgba(255, 255, 255, .45);
-    font-size: 10.5px;
+    font-size: 11.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }

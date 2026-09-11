@@ -95,7 +95,7 @@
                     {% for title in overview.titles %}
                         <article class="stats-user-table-row">
                             <div class="stats-user-name">
-                                <span class="users-overview-title-poster" style="background: {{ title.poster }}"></span>
+                                <span class="users-overview-title-poster" style="background-image: {{ title.poster }}"></span>
                                 <div class="users-overview-title-copy">
                                     <strong>{{ title.name }}</strong>
                                     {% if title.sub %}<small>{{ title.sub }}</small>{% endif %}
