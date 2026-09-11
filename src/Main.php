@@ -6,7 +6,6 @@ namespace Mk\Framework;
 
 class Main
 {
-
     public static function isPostSet($post): bool
     {
         return isset($_POST[$post]);
@@ -33,7 +32,8 @@ class Main
     }
 
     // Check if array items are not empty -> primarily for POSTs
-    public static function arrayItemsNotEmpty(array $array): bool {
+    public static function arrayItemsNotEmpty(array $array): bool
+    {
         foreach ($array as $item) {
             if (empty(trim($item))) {
                 return false;

@@ -11,7 +11,7 @@ final class DevicesDeviceServiceTest extends TestCase
 {
     public function testListMapsJellyfinDevicePayload(): void
     {
-        $client = new class {
+        $client = new class () {
             public function getJson(string $path): mixed
             {
                 self::assertSameStatic('/Devices', $path);
@@ -43,7 +43,7 @@ final class DevicesDeviceServiceTest extends TestCase
 
     public function testListSkipsEntriesWithoutId(): void
     {
-        $client = new class {
+        $client = new class () {
             public function getJson(string $path): mixed
             {
                 return ['Items' => [['Name' => 'no id here']]];

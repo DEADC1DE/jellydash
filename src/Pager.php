@@ -6,7 +6,6 @@ namespace Mk\Framework;
 
 class Pager
 {
-
     public static function getPage(): ?string
     {
         return Main::captureGetString('page') ?? null;

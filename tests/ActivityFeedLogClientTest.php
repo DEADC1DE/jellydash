@@ -11,7 +11,7 @@ final class ActivityFeedLogClientTest extends TestCase
 {
     public function testPagePassesStartIndexAndLimitAndMapsItems(): void
     {
-        $client = new class {
+        $client = new class () {
             public ?string $lastPath = null;
             public function getJson(string $path): mixed
             {
@@ -19,7 +19,7 @@ final class ActivityFeedLogClientTest extends TestCase
                 return [
                     'Items' => [[
                         'Date' => '2026-08-27T18:59:46.4877177Z',
-                        'Name' => "jf_test_user_1 hat die Wiedergabe gestartet",
+                        'Name' => 'jf_test_user_1 hat die Wiedergabe gestartet',
                         'UserId' => '570852392c8f4e7e86006fa586ef9bf6',
                     ]],
                     'TotalRecordCount' => 78611,

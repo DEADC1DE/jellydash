@@ -37,8 +37,8 @@ final class UsersUserStatsRepositoryTest extends TestCase
     public function testSummaryForUserAggregatesPlaysAndTopLibrary(): void
     {
         $dibi = $this->db->getDibi();
-        $dibi->insert('play_history', ['user_name' => 'jf_test_user_1', 'library' => 'Movies', 'client' => 'Jellyfin Web', 'device' => "Test Fire TV Device", 'watched_sec' => 1800, 'started_at' => '2026-08-20 20:00:00'])->execute();
-        $dibi->insert('play_history', ['user_name' => 'jf_test_user_1', 'library' => 'Movies', 'client' => 'Jellyfin Web', 'device' => "Test Fire TV Device", 'watched_sec' => 3600, 'started_at' => '2026-08-21 21:00:00'])->execute();
+        $dibi->insert('play_history', ['user_name' => 'jf_test_user_1', 'library' => 'Movies', 'client' => 'Jellyfin Web', 'device' => 'Test Fire TV Device', 'watched_sec' => 1800, 'started_at' => '2026-08-20 20:00:00'])->execute();
+        $dibi->insert('play_history', ['user_name' => 'jf_test_user_1', 'library' => 'Movies', 'client' => 'Jellyfin Web', 'device' => 'Test Fire TV Device', 'watched_sec' => 3600, 'started_at' => '2026-08-21 21:00:00'])->execute();
         $dibi->insert('play_history', ['user_name' => 'jf_test_user_1', 'library' => 'TV Shows', 'client' => 'Jellyfin Android TV', 'device' => 'Other device', 'watched_sec' => 900, 'started_at' => '2026-08-22 22:00:00'])->execute();
 
         $summary = (new UserStatsRepository($this->db))->summaryForUser('jf_test_user_1');
@@ -47,7 +47,7 @@ final class UsersUserStatsRepositoryTest extends TestCase
         $this->assertSame(6300, $summary['watchSec']);
         $this->assertSame('2026-08-22 22:00:00', $summary['lastSeen']);
         $this->assertSame('Movies', $summary['topLibrary']);
-        $this->assertSame("Test Fire TV Device", $summary['topDevice']);
+        $this->assertSame('Test Fire TV Device', $summary['topDevice']);
         $this->assertSame(3600, $summary['longestSessionSec']);
     }
 
