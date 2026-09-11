@@ -81,7 +81,7 @@ final class UserRangeOverview
     {
         $titles = [];
         foreach ($rows as $row) {
-            $isEpisode = ($row['itemType'] ?? '') === 'episode'
+            $isEpisode = $row['itemType'] === 'episode'
                 || (trim($row['series']) !== '' && trim($row['seasonEp']) !== '');
 
             if ($isEpisode) {

@@ -11,7 +11,7 @@ final class ServerHealthServiceTest extends TestCase
 {
     public function testSystemInfoMapsFields(): void
     {
-        $client = new class {
+        $client = new class () {
             public function getJson(string $path): mixed
             {
                 return match ($path) {
@@ -34,7 +34,7 @@ final class ServerHealthServiceTest extends TestCase
 
     public function testTasksMapsProgressAndLastRunStatus(): void
     {
-        $client = new class {
+        $client = new class () {
             public function getJson(string $path): mixed
             {
                 return [[
@@ -58,7 +58,7 @@ final class ServerHealthServiceTest extends TestCase
 
     public function testTasksParsesLastRunTimestampFromRealJellyfinFormat(): void
     {
-        $client = new class {
+        $client = new class () {
             public function getJson(string $path): mixed
             {
                 return [[

@@ -24,7 +24,7 @@ final class ActivityFeedGhostUserResolverTest extends TestCase
         // needs one page here, matching "manual, on-demand button" from the
         // spec (no full 78k-row scan on every run in real use, but the
         // resolver's own paging loop is exercised in the next test).
-        $logClient = new class {
+        $logClient = new class () {
             public function page(int $startIndex, int $limit): array
             {
                 if ($startIndex > 0) {
@@ -61,7 +61,7 @@ final class ActivityFeedGhostUserResolverTest extends TestCase
         $db->getDibi()->query('CREATE TABLE play_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_name TEXT)');
         $db->getDibi()->insert('play_history', ['user_id' => 'known-user', 'user_name' => 'AlreadyKnown'])->execute();
 
-        $logClient = new class {
+        $logClient = new class () {
             public function page(int $startIndex, int $limit): array
             {
                 return ['items' => [], 'total' => 0];
@@ -87,7 +87,7 @@ final class ActivityFeedGhostUserResolverTest extends TestCase
         $dibi->insert('play_history', ['user_id' => 'ghost-user-1', 'user_name' => ''])->execute();
         $dibi->insert('play_history', ['user_id' => 'ghost-user-2', 'user_name' => ''])->execute();
 
-        $logClient = new class {
+        $logClient = new class () {
             public function page(int $startIndex, int $limit): array
             {
                 if ($startIndex > 0) {
@@ -124,7 +124,7 @@ final class ActivityFeedGhostUserResolverTest extends TestCase
         $dibi->query('CREATE TABLE play_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_name TEXT)');
         $dibi->insert('play_history', ['user_id' => 'ghost-user-1', 'user_name' => ''])->execute();
 
-        $logClient = new class {
+        $logClient = new class () {
             public function page(int $startIndex, int $limit): array
             {
                 if ($startIndex > 0) {
@@ -159,7 +159,7 @@ final class ActivityFeedGhostUserResolverTest extends TestCase
         $dibi->query('CREATE TABLE play_history (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, user_name TEXT)');
         $dibi->insert('play_history', ['user_id' => 'ghost-user-1', 'user_name' => ''])->execute();
 
-        $logClient = new class {
+        $logClient = new class () {
             /** @var array<int, int> */
             public array $requestedStartIndexes = [];
 
