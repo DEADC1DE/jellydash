@@ -6,17 +6,20 @@
             <h1>Settings</h1>
             <p>Preferences stored in the database; infrastructure stays in <code>.env</code></p>
         </div>
-        <button type="submit" class="settings-save-btn settings-header-save" form="settings-form">Save settings</button>
+        {% if can_manage_global %}
+            <button type="submit" class="settings-save-btn settings-header-save" form="settings-form">Save settings</button>
+        {% endif %}
     </div>
 {% endblock %}
 
 {% block dashboard_content %}
     <div class="settings-page">
-        {% if saved %}
+        {% if saved and can_manage_global %}
             <div class="settings-saved" role="status">Settings saved.</div>
         {% endif %}
 
         <div class="settings-layout">
+            {% if can_manage_global %}
             <form class="settings-form" id="settings-form" action="?req=settings" method="post" data-settings-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
@@ -56,13 +59,66 @@
         <section class="settings-card">
             <header class="settings-card-head">
                 <span class="settings-card-mark" aria-hidden="true">
-                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M9.883 2.207a1.9 1.9 0 0 1 2.087 1.522l.025 .167l.005 .104v7a1 1 0 0 0 .883 .993l.117 .007h6.8a2 2 0 0 1 2 2a1 1 0 0 1 -.026 .226a10 10 0 1 1 -12.27 -11.933l.27 -.067l.11 -.02z"></path><path d="M14 3.5v5.5a1 1 0 0 0 1 1h5.5a1 1 0 0 0 .943 -1.332a10 10 0 0 0 -6.11 -6.111a1 1 0 0 0 -1.333 .943z"></path></svg>
+                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M12 2a10 10 0 1 1 -7.071 2.929a10 10 0 0 1 7.071 -2.929zm0 2a8 8 0 0 0 -5.657 13.657l11.314 -11.314a7.963 7.963 0 0 0 -5.657 -2.343zm7.071 3.757l-11.314 11.314a8 8 0 0 0 11.314 -11.314z"></path></svg>
                 </span>
                 <span class="settings-card-copy">
-                    <strong>Statistics exclusions</strong>
-                    <span>Selected libraries are hidden from Trending and Most Watched.</span>
+                    <strong>Exclusions</strong>
+                    <span>Choose which users and libraries to exclude from activity views and alerts.</span>
                 </span>
             </header>
+            <fieldset class="settings-exclusion-group">
+                <legend>Monitoring</legend>
+            <p class="settings-note">Excluded users are hidden from Now Playing, History, Statistics, and history exports.</p>
+            {% if users is not empty %}
+                <div class="settings-checks">
+                    {% for user in users %}
+                        <label class="settings-check">
+                            <input type="checkbox" name="monitoring_ignore[]" value="{{ user }}"
+                                {{ user|lower in monitoring_ignored_users|map(u => u|lower) ? 'checked' : '' }}>
+                            <span>{{ user }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <label class="settings-field">
+                    <span>Additional excluded users (comma-separated)</span>
+                    <input type="text" name="monitoring_ignore_extra" value="{{ extra_monitoring_ignored }}" placeholder="Optional">
+                </label>
+            {% else %}
+                <label class="settings-field">
+                    <span>Users to exclude (comma-separated)</span>
+                    <input type="text" name="monitoring_ignore_extra" value="{{ monitoring_ignored_users|join(', ') }}" placeholder="e.g. a private profile">
+                </label>
+            {% endif %}
+            <small class="settings-note">Existing rows stay in the database. Removing an exclusion restores that earlier activity, but activity skipped while excluded cannot be reconstructed. Names match exactly and are case-insensitive.</small>
+            </fieldset>
+            <fieldset class="settings-exclusion-group">
+                <legend>Notifications</legend>
+                <p class="settings-note">Selected users never trigger playback alerts. Their activity is still recorded unless they are also excluded from monitoring.</p>
+            {% if users is not empty %}
+                <div class="settings-checks">
+                    {% for user in users %}
+                        <label class="settings-check">
+                            <input type="checkbox" name="push_ignore[]" value="{{ user }}"
+                                {{ user|lower in ignored_users|map(u => u|lower) ? 'checked' : '' }}>
+                            <span>{{ user }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <label class="settings-field">
+                    <span>Additional ignored users (comma-separated)</span>
+                    <input type="text" name="push_ignore_extra" value="{{ extra_ignored }}" placeholder="Optional">
+                </label>
+                <small class="settings-note">Users appear here once they show up in play history. Typically you exclude yourself.</small>
+            {% else %}
+                <label class="settings-field">
+                    <span>Users to ignore (comma-separated)</span>
+                    <input type="text" name="push_ignore_extra" value="{{ ignored_users|join(', ') }}" placeholder="e.g. your own username">
+                </label>
+            {% endif %}
+            </fieldset>
+            <fieldset class="settings-exclusion-group">
+                <legend>Statistics</legend>
+                <p class="settings-note">Selected libraries are hidden from Trending and Most Watched.</p>
             {% if libraries is not null and libraries is not empty %}
                 <div class="settings-checks">
                     {% for library in libraries %}
@@ -85,42 +141,20 @@
                     <small>Jellyfin didn't report its libraries. Enter names manually.</small>
                 </label>
             {% endif %}
-        </section>
-
-        <section class="settings-card">
-            <header class="settings-card-head">
-                <span class="settings-card-mark" aria-hidden="true">
-                    <svg class="icon-filled" viewBox="0 0 24 24" focusable="false"><path d="M14.235 19c.865 0 1.322 1.024 .745 1.668a3.992 3.992 0 0 1 -2.98 1.332a3.992 3.992 0 0 1 -2.98 -1.332c-.552 -.616 -.158 -1.579 .634 -1.661l.11 -.006h4.471z"></path><path d="M12 2c1.358 0 2.506 .903 2.875 2.141l.046 .171l.008 .043a8.013 8.013 0 0 1 4.024 6.069l.028 .287l.019 .289v2.931l.021 .136a3 3 0 0 0 1.143 1.847l.167 .117l.162 .099c.86 .487 .56 1.766 -.377 1.864l-.116 .006h-16c-1.028 0 -1.387 -1.364 -.493 -1.87a3 3 0 0 0 1.472 -2.063l.021 -.143l.001 -2.97a8 8 0 0 1 3.821 -6.454l.248 -.146l.01 -.043a3.003 3.003 0 0 1 2.562 -2.29l.182 -.017l.176 -.004z"></path></svg>
-                </span>
-                <span class="settings-card-copy">
-                    <strong>Notification exclusions</strong>
-                    <span>Selected users never trigger playback alerts.</span>
-                </span>
-            </header>
-            {% if users is not empty %}
-                <div class="settings-checks">
-                    {% for user in users %}
-                        <label class="settings-check">
-                            <input type="checkbox" name="push_ignore[]" value="{{ user }}"
-                                {{ user|lower in ignored_users|map(u => u|lower) ? 'checked' : '' }}>
-                            <span>{{ user }}</span>
-                        </label>
-                    {% endfor %}
-                </div>
-                <label class="settings-field">
-                    <span>Additional ignored users (comma-separated)</span>
-                    <input type="text" name="push_ignore_extra" value="{{ extra_ignored }}" placeholder="Optional">
-                </label>
-                <small class="settings-note">Users appear here once they show up in play history. Typically you exclude yourself.</small>
-            {% else %}
-                <label class="settings-field">
-                    <span>Users to ignore (comma-separated)</span>
-                    <input type="text" name="push_ignore_extra" value="{{ ignored_users|join(', ') }}" placeholder="e.g. your own username">
-                </label>
-            {% endif %}
+            </fieldset>
         </section>
 
             </form>
+            {% else %}
+                <section class="settings-card">
+                    <header class="settings-card-head">
+                        <span class="settings-card-copy">
+                            <strong>Read-only settings</strong>
+                            <span>An owner or administrator manages global dashboard settings and imports.</span>
+                        </span>
+                    </header>
+                </section>
+            {% endif %}
 
     {% if auth_enabled and layout.user %}
         <section class="settings-card settings-account">
@@ -154,6 +188,61 @@
         </section>
     {% endif %}
 
+            <section class="settings-card system-status-card" id="system-status" data-system-status aria-labelledby="system-status-title">
+                <header class="settings-card-head system-status-head">
+                    <span class="settings-card-mark" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false"><path d="M3 12h4l2 -7l4 14l2 -7h6"></path></svg>
+                    </span>
+                    <span class="settings-card-copy">
+                        <strong id="system-status-title">System status</strong>
+                        <span data-system-status-summary>Checking system status...</span>
+                    </span>
+                    <button class="settings-save-btn system-status-copy" type="button" data-system-status-copy disabled>Copy diagnostics</button>
+                </header>
+                <div class="system-status-components" data-system-status-components aria-live="polite">
+                    <div class="system-status-row is-checking">
+                        <span class="system-status-state">Checking</span>
+                        <span><strong>Loading checks</strong><small>Please wait.</small></span>
+                    </div>
+                </div>
+                <p class="system-status-feedback" data-system-status-feedback role="status" aria-live="polite"></p>
+                <div class="system-status-manual" data-system-status-manual hidden>
+                    <label for="system-status-diagnostics">Copy the diagnostics below manually:</label>
+                    <textarea id="system-status-diagnostics" data-system-status-text readonly></textarea>
+                </div>
+            </section>
+
+            {% if can_manage_push %}
+                <section class="settings-card" id="notification-devices" aria-labelledby="notification-devices-title">
+                    <header class="settings-card-head">
+                        <span class="settings-card-copy">
+                            <strong id="notification-devices-title">Notification devices</strong>
+                            <span>{{ can_manage_all_push ? 'Registered browsers for this Jellydash installation.' : 'Browsers registered to your account.' }}</span>
+                        </span>
+                    </header>
+                    {% for device in push_devices %}
+                        <div class="system-status-row">
+                            <span class="system-status-state">{{ device.state == 'needs_reenrollment' ? 'Re-enroll' : device.state|capitalize }}</span>
+                            <span>
+                                <strong>{{ device.current ? 'Current browser' : device.label }}</strong>
+                                <small>{% if device.owner %}{{ device.owner }} · {% endif %}Added {{ device.created_at }}{% if device.last_success_at %} · Last delivery {{ device.last_success_at }}{% endif %}</small>
+                            </span>
+                            <form action="?req=push-revoke" method="post">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="device_id" value="{{ device.id }}">
+                                <button class="settings-secondary-btn" type="submit">Remove</button>
+                            </form>
+                        </div>
+                    {% else %}
+                        <p class="settings-note">No notification devices are registered here yet.</p>
+                    {% endfor %}
+                    {% if can_manage_all_push and push_devices|filter(device => device.state == 'needs_reenrollment') is not empty %}
+                        <p class="settings-note">Devices marked Re-enroll were registered before account ownership was available. They stay paused while login is enabled until the same browser enrolls again.</p>
+                    {% endif %}
+                </section>
+            {% endif %}
+
+            {% if can_manage_global %}
             <section class="settings-card settings-import" id="import-history">
         <header class="settings-card-head">
             <span class="settings-card-mark" aria-hidden="true">
@@ -216,17 +305,22 @@
         <small class="settings-note" data-import-plugin-broken-note hidden>Playback Reporting v17 crashes on Jellyfin 10.11.9+. Catalog v18 is still unpublished (<a href="https://github.com/jellyfin/jellyfin-plugin-playbackreporting/pull/131" target="_blank" rel="noopener noreferrer">PR #131</a>). Drop a TSV backup instead.</small>
         <small class="settings-note" data-import-plugin-ok-note>Re-importing skips plays already in Jellydash. Imported plays never trigger notifications. Uploads must be 20 MB or smaller.</small>
             </section>
+            {% endif %}
         </div>
 
+        {% if can_manage_global %}
         <div class="settings-dirty-bar" data-settings-dirty-bar hidden>
             <span aria-live="polite"><i aria-hidden="true"></i>Unsaved changes</span>
             <button type="submit" class="settings-save-btn" form="settings-form">Save changes</button>
         </div>
+        {% endif %}
     </div>
 {% endblock %}
 
 {% block page_scripts %}
-    {% include "_import_history_dialog.twig" %}
-    <script src="/assets/js/settings-dirty.js?v=20260818"></script>
-    <script src="/assets/js/history-import.js?v=20260908-stream-completion"></script>
+    {% if can_manage_global %}
+        {% include "_import_history_dialog.twig" %}
+        <script src="/assets/js/settings-dirty.js?v=20260818"></script>
+        <script src="/assets/js/history-import.js?v={{ asset_revision }}"></script>
+    {% endif %}
 {% endblock %}

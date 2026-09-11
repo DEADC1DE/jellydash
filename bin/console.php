@@ -98,6 +98,17 @@ try {
                 : "No user found: {$username}\n";
             break;
 
+        case 'user:role':
+            $username = $argv[2] ?? null;
+            $role = isset($argv[3]) ? (int) $argv[3] : 0;
+            if (!$username || !Authorization::isValidRole($role)) {
+                exit("Usage: php bin/console.php user:role <username> <role 1-4>\n");
+            }
+            echo $db->setUserRole($username, $role)
+                ? "Role updated for {$username}: {$role}\n"
+                : "No user found: {$username}\n";
+            break;
+
         case 'user:list':
             $rows = $db->getDibi()->select('id, username, name, role')->from('users')->fetchAll();
             foreach ($rows as $u) {
@@ -106,6 +117,7 @@ try {
             break;
 
         case 'history:poll':
+            $monitor = new Health\WorkerMonitor();
             // Once a browser has introduced the one-time library repair, keep
             // advancing it in the background so closing the page cannot lose
             // progress. A missing task is deliberately not started here: the
@@ -122,8 +134,17 @@ try {
             // Alert subscribed devices about plays that just started (skips the
             // users in PUSH_IGNORE_USERS). No-op unless VAPID keys are set.
             (new Console\HistoryPoll(
-                static fn (): int => (new Jellyfin\NowPlayingService())->recordActivePlays(),
-                static fn (): int => (new Push\PlaybackNotifier())->dispatch(),
+                static fn (): int => $monitor->run('history', static fn (): int => (new Jellyfin\NowPlayingService())->recordActivePlays()),
+                static function () use ($monitor): int {
+                    if (!Config::bool('PUSH_ENABLED', true)) {
+                        return 0;
+                    }
+                    $dispatcher = new Notifications\NotificationDispatcher();
+
+                    return $dispatcher->hasAnyChannel()
+                        ? $monitor->run('playback_notifications', static fn (): int => (new Push\PlaybackNotifier(null, $dispatcher))->dispatch())
+                        : 0;
+                },
                 static function (\Throwable $error): void {
                     Log::logException($error);
                 },
@@ -138,14 +159,40 @@ try {
             // a detail lookup only for requests we've never seen) and alert
             // subscribed devices about new ones. The page reads the mirror, so
             // it never waits on Jellyseerr.
-            $added = (new Jellyseerr\RequestSyncService())->sync();
-            if ($added > 0) {
-                echo date('c') . " seerr:poll - stored {$added} new request(s)\n";
+            $monitor = new Health\WorkerMonitor();
+            $client = new Jellyseerr\JellyseerrClient();
+            $syncError = null;
+            try {
+                $added = $client->isConfigured()
+                    ? $monitor->run('jellyseerr', static fn (): int => (new Jellyseerr\RequestSyncService($client))->sync())
+                    : 0;
+                if ($added > 0) {
+                    echo date('c') . " seerr:poll - stored {$added} new request(s)\n";
+                }
+            } catch (\Throwable $error) {
+                $syncError = $error;
             }
 
-            $announced = (new Jellyseerr\RequestNotifier())->dispatch();
-            if ($announced > 0) {
-                echo date('c') . " seerr:poll - sent {$announced} request alert(s)\n";
+            try {
+                $announced = 0;
+                if (Config::bool('PUSH_ENABLED', true) && Config::bool('SEERR_NOTIFY_ENABLED', true)) {
+                    $dispatcher = new Notifications\NotificationDispatcher();
+                    if ($dispatcher->hasAnyChannel()) {
+                        $announced = $monitor->run('request_notifications', static fn (): int => (new Jellyseerr\RequestNotifier(null, $dispatcher))->dispatch());
+                    }
+                }
+                if ($announced > 0) {
+                    echo date('c') . " seerr:poll - sent {$announced} request alert(s)\n";
+                }
+            } catch (\Throwable $error) {
+                if ($syncError === null) {
+                    $syncError = $error;
+                } else {
+                    Log::logException($error);
+                }
+            }
+            if ($syncError !== null) {
+                throw $syncError;
             }
             break;
 
@@ -175,13 +222,40 @@ try {
             }
             break;
 
+        case 'push:devices':
+            $devices = (new Push\PushSubscriptionRepository($db))->devices(
+                null,
+                true,
+                Config::bool('AUTH_ENABLED', false),
+                null,
+            );
+            if ($devices === []) {
+                echo "No notification devices are registered.\n";
+                break;
+            }
+            foreach ($devices as $device) {
+                $owner = $device['owner'] !== null ? " owner={$device['owner']}" : '';
+                echo "#{$device['id']}\t{$device['label']}\tstate={$device['state']}{$owner}\tcreated={$device['created_at']}\n";
+            }
+            break;
+
+        case 'push:revoke':
+            $deviceId = isset($argv[2]) ? (int) $argv[2] : 0;
+            if ($deviceId < 1) {
+                exit("Usage: php bin/console.php push:revoke <device-id>\n");
+            }
+            echo (new Push\PushSubscriptionRepository($db))->revokeById($deviceId, null, true, false)
+                ? "Revoked notification device #{$deviceId}.\n"
+                : "No notification device found: #{$deviceId}\n";
+            break;
+
         case 'libraries:warm':
             // Refresh the cached library overview so the Libraries page never
             // triggers a cold multi-second scan inside a visitor's request.
             // Run on a timer by the entrypoint. Leaves the cache intact if
             // Jellyfin is unavailable.
             try {
-                (new Jellyfin\LibraryOverviewService())->refreshCache();
+                (new Health\WorkerMonitor())->run('libraries', static fn () => (new Jellyfin\LibraryOverviewService())->refreshCache());
                 echo date('c') . " libraries:warm - cache refreshed\n";
             } catch (\Throwable $e) {
                 fwrite(STDERR, date('c') . ' libraries:warm skipped: ' . $e->getMessage() . "\n");
@@ -259,6 +333,7 @@ try {
             echo "Usage:\n";
             echo "  php bin/console.php user:add <username> <password> <name> [role]\n";
             echo "  php bin/console.php user:password <username> <new-password>\n";
+            echo "  php bin/console.php user:role <username> <role 1-4>\n";
             echo "  php bin/console.php user:list\n";
             echo "  php bin/console.php history:poll   (record currently-playing sessions)\n";
             echo "  php bin/console.php libraries:warm (refresh the cached library overview)\n";
@@ -266,8 +341,10 @@ try {
             echo "  php bin/console.php seerr:poll     (sync Jellyseerr requests + alert on new ones)\n";
             echo "  php bin/console.php push:vapid     (generate a Web Push VAPID keypair)\n";
             echo "  php bin/console.php push:test      (send a test notification to subscribers)\n\n";
+            echo "  php bin/console.php push:devices   (list safe notification device metadata)\n";
+            echo "  php bin/console.php push:revoke <device-id>\n\n";
             echo "Roles: 1 owner, 2 admin, 3 user, 4 guest.\n";
-            echo "Targets the database in .env (DB_NAME=" . DATABASE_NAME . ").\n";
+            echo 'Targets the database in .env (DB_NAME=' . DATABASE_NAME . ").\n";
     }
 } catch (\Throwable $e) {
     fwrite(STDERR, 'Error: ' . $e->getMessage() . "\n");

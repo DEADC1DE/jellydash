@@ -41,10 +41,19 @@
 
 {% block dashboard_content %}
     <div class="stats-page">
+        <p class="stats-history-hint">
+            <svg viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3 -6.7l-3 2.7"></path>
+                <path d="M3 3v5h5"></path>
+                <path d="M12 7v5l3 2"></path>
+            </svg>
+            <span>Select a title, user, client or playback type to view matching plays in History.</span>
+        </p>
+
         {% if stats.hasTrending %}
             <section class="trending-section" aria-label="Trending media">
                 <header class="stats-section-header">
-                    <strong>Trending</strong>
+                    <h2>Trending</h2>
                     <span>Most-watched this period</span>
                     <i></i>
                 </header>
@@ -103,16 +112,22 @@
 
         <section class="stats-kpi-grid" aria-label="Key playback metrics">
             {% for kpi in stats.kpis %}
-                <article class="stats-kpi">
-                    <span><i style="background: {{ kpi.color }}"></i>{{ kpi.label }}</span>
+                <article class="stats-kpi{{ kpi.href is defined ? ' has-link' : '' }}">
+                    {% if kpi.href is defined %}
+                        <a class="stats-kpi-link" href="{{ kpi.href }}" aria-label="{{ kpi.label == 'Transcode Rate' ? 'View transcoded plays in History' : 'View plays in History' }}">
+                    {% endif %}
+                    <span class="stats-kpi-label"><i style="background: {{ kpi.color }}"></i>{{ kpi.label }}</span>
                     <strong>{{ kpi.value }}</strong>
                     <small style="color: {{ kpi.deltaColor }}">{{ kpi.delta }}</small>
+                    {% if kpi.href is defined %}
+                        </a>
+                    {% endif %}
                 </article>
             {% endfor %}
         </section>
 
         <header class="stats-section-header">
-            <strong>General</strong>
+            <h2>General</h2>
             <span>Total watch time - top users</span>
             <i></i>
         </header>
@@ -130,6 +145,7 @@
                 <div class="stats-trend-bars" aria-label="Watch time trend">
                     {% for bar in stats.trend %}
                         <span aria-label="{{ bar.label }}: {{ bar.value }}">
+                            <span class="visually-hidden">{{ bar.label }}: {{ bar.value }}</span>
                             <i style="height: {{ bar.h }}" title="{{ bar.value }}"></i>
                             <b>{{ bar.label }}</b>
                         </span>
@@ -144,13 +160,17 @@
                 </div>
                 <div class="stats-user-list">
                     {% for user in stats.topUsers %}
-                        <div class="stats-user-row">
+                        {% if user.href is defined %}
+                            <a class="stats-user-row stats-user-link" href="{{ user.href }}" aria-label="View plays by {{ user.user }} in History">
+                        {% else %}
+                            <div class="stats-user-row">
+                        {% endif %}
                             {% include "_avatar.twig" with { initials: user.initials, bg: user.avatarBg, url: user.avatarUrl } only %}
                             <div>
                                 <p><strong>{{ user.user }}</strong><small>{{ user.watch }}</small></p>
                                 <span class="stats-track"><i style="width: {{ user.w }}; background: {{ user.color }}"></i></span>
                             </div>
-                        </div>
+                        {% if user.href is defined %}</a>{% else %}</div>{% endif %}
                     {% else %}
                         <p class="stats-empty-note">No user history in this range.</p>
                     {% endfor %}
@@ -159,7 +179,7 @@
         </section>
 
         <header class="stats-section-header">
-            <strong>Transcoding</strong>
+            <h2>Transcoding</h2>
             <span>Directness - codecs - reasons</span>
             <i></i>
         </header>
@@ -176,7 +196,7 @@
                     </div>
                     <div class="stats-legend">
                         {% for item in stats.directnessLegend %}
-                            <p><i style="background: {{ item.color }}"></i><span>{{ item.label }}</span><b>{{ item.pct }}</b></p>
+                            <a class="stats-legend-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.label }} sessions in History"><i style="background: {{ item.color }}"></i><span>{{ item.label }}</span><b>{{ item.pct }}</b></a>
                         {% endfor %}
                     </div>
                 </div>
@@ -222,7 +242,7 @@
         </section>
 
         <header class="stats-section-header">
-            <strong>Clients</strong>
+            <h2>Clients</h2>
             <span>Breakdown - popularity - transcoding - usage</span>
             <i></i>
         </header>
@@ -239,7 +259,7 @@
                     </div>
                     <div class="stats-legend">
                         {% for item in stats.clientBreakdown %}
-                            <p><i style="background: {{ item.color }}"></i><span>{{ item.name }}</span><b>{{ item.pct }}</b></p>
+                            <a class="stats-legend-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.name }} sessions in History"><i style="background: {{ item.color }}"></i><span>{{ item.name }}</span><b>{{ item.pct }}</b></a>
                         {% else %}
                             <p class="stats-empty-note">No clients in this range.</p>
                         {% endfor %}
@@ -254,13 +274,13 @@
                 </div>
                 <div class="stats-bars">
                     {% for item in stats.clientsRanked %}
-                        <div class="stats-ranked-row">
+                        <a class="stats-ranked-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.name }} sessions in History">
                             <b>{{ item.rank }}</b>
                             <div>
                                 <p><span>{{ item.name }}</span><small>{{ item.sessions }} sessions</small></p>
                                 <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
                             </div>
-                        </div>
+                        </a>
                     {% else %}
                         <p class="stats-empty-note">No client sessions in this range.</p>
                     {% endfor %}
@@ -278,10 +298,14 @@
                 <div class="stats-bars">
                     {% for item in stats.clientsTranscode %}
                         <div class="stats-stack-row">
-                            <p><span>{{ item.name }}</span><b>{{ item.transcodeVal }}</b></p>
+                            <p><a class="stats-client-name-link" href="{{ item.href }}" aria-label="View all {{ item.name }} sessions in History">{{ item.name }}</a><b>{{ item.transcodeVal }}</b></p>
                             <span class="stats-stack-track">
                                 <i style="width: {{ item.directPct }}"></i>
                                 <b style="width: {{ item.transcodePctStr }}"></b>
+                            </span>
+                            <span class="stats-stack-filter-links">
+                                <a href="{{ item.directHref }}" aria-label="View direct playback from {{ item.name }} in History">Direct {{ item.directPct }}</a>
+                                <a href="{{ item.transcodeHref }}" aria-label="View transcoded playback from {{ item.name }} in History">Transcode {{ item.transcodePctStr }}</a>
                             </span>
                         </div>
                     {% else %}
@@ -297,10 +321,10 @@
                 </div>
                 <div class="stats-bars">
                     {% for item in stats.clientsUsage %}
-                        <div class="stats-bar-row">
+                        <a class="stats-bar-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.name }} sessions in History">
                             <p><span>{{ item.name }}</span><b>{{ item.watch }}</b></p>
                             <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
-                        </div>
+                        </a>
                     {% else %}
                         <p class="stats-empty-note">No client usage in this range.</p>
                     {% endfor %}
@@ -311,7 +335,7 @@
         <div class="stats-devices-section" data-statistics-devices data-range="{{ stats.range }}" hidden>
             {% include "statistics/_device_icons.twig" %}
             <header class="stats-section-header">
-                <strong>Devices</strong>
+                <h2>Devices</h2>
                 <span>Registered Jellyfin clients - last activity</span>
                 <i></i>
                 <a class="stats-devices-manage" data-device-manage href="#" target="_blank" rel="noopener noreferrer" aria-label="Manage devices in Jellyfin" hidden>
@@ -337,7 +361,7 @@
         </div>
 
         <header class="stats-section-header">
-            <strong>Users</strong>
+            <h2>Users</h2>
             <span>Watch time - plays - average per play</span>
             <i></i>
         </header>
@@ -351,7 +375,11 @@
                 <span>Share</span>
             </div>
             {% for user in stats.usersTable %}
-                <article class="stats-user-table-row">
+                {% if user.href is defined %}
+                    <a class="stats-user-table-row stats-user-table-link" href="{{ user.href }}" aria-label="View plays by {{ user.user }} in History">
+                {% else %}
+                    <article class="stats-user-table-row">
+                {% endif %}
                     <div class="stats-user-name">
                         {% include "_avatar.twig" with { initials: user.initials, bg: user.avatarBg, url: user.avatarUrl } only %}
                         <strong>{{ user.user }}</strong>
@@ -359,8 +387,8 @@
                     <span class="history-mono">{{ user.watch }}</span>
                     <span class="history-mono">{{ user.plays }}</span>
                     <span class="history-mono">{{ user.avg }}</span>
-                    <span class="stats-track" aria-label="{{ user.share }} of total watch time"><i style="width: {{ user.share }}"></i></span>
-                </article>
+                    <span class="stats-track"><i style="width: {{ user.share }}"></i><span class="visually-hidden">{{ user.share }} of total watch time</span></span>
+                {% if user.href is defined %}</a>{% else %}</article>{% endif %}
             {% else %}
                 <article class="stats-user-table-row is-empty">
                     <span>No user statistics in this range.</span>
@@ -372,5 +400,5 @@
 
 {% block page_scripts %}
     <script src="/assets/js/statistics-most-watched.js?v=20260901-disclosure"></script>
-    <script src="/assets/js/statistics-devices.js?v=20260819-device-icons"></script>
+    <script src="/assets/js/statistics-devices.js?v={{ asset_revision }}"></script>
 {% endblock %}

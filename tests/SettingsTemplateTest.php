@@ -27,7 +27,7 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString('data-import-alt', $template);
         $this->assertStringContainsString('checks the file before anything is written', $template);
         $this->assertStringContainsString('data-import-plugin-broken-note', $template);
-        $this->assertStringContainsString('history-import.js?v=20260908-stream-completion', $template);
+        $this->assertStringContainsString('history-import.js?v={{ asset_revision }}', $template);
         $this->assertStringContainsString('https://github.com/jellyfin/jellyfin-plugin-playbackreporting/pull/131', $template);
         $this->assertStringContainsString('value="plugin"', $template);
         $this->assertStringNotContainsString('Import file', $template);
@@ -54,6 +54,39 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString("form.addEventListener('change', sync)", $script);
         $this->assertStringContainsString("window.addEventListener('beforeunload'", $script);
         $this->assertStringContainsString('.settings-dirty-bar[hidden]', $stylesheet);
+    }
+
+    public function testMonitoringAndNotificationExclusionsStaySeparate(): void
+    {
+        $template = file_get_contents(TEMPLATES_DIR . '/settings/index.twig');
+
+        $this->assertIsString($template);
+        $this->assertStringContainsString('<strong>Exclusions</strong>', $template);
+        $this->assertStringContainsString('<legend>Monitoring</legend>', $template);
+        $this->assertStringContainsString('name="monitoring_ignore[]"', $template);
+        $this->assertStringContainsString('name="monitoring_ignore_extra"', $template);
+        $this->assertStringContainsString('Existing rows stay in the database.', $template);
+        $this->assertStringContainsString('activity skipped while excluded cannot be reconstructed.', $template);
+        $this->assertStringContainsString('Names match exactly and are case-insensitive.', $template);
+        $this->assertStringContainsString('<legend>Notifications</legend>', $template);
+        $this->assertStringContainsString('name="push_ignore[]"', $template);
+        $this->assertStringContainsString('name="push_ignore_extra"', $template);
+    }
+
+    public function testMonitoringExclusionSettingUsesEnvironmentFallbackAndSavesEmptySelections(): void
+    {
+        $controller = file_get_contents(ROOT_DIR . '/src/Pages/SettingsController.php');
+        $request = file_get_contents(ROOT_DIR . '/operations/@request.php');
+        $environment = file_get_contents(ROOT_DIR . '/.env.example');
+
+        $this->assertIsString($controller);
+        $this->assertIsString($request);
+        $this->assertIsString($environment);
+        $this->assertStringContainsString("AppSettings::get('ignore_users')", $controller);
+        $this->assertStringContainsString("Config::get('IGNORE_USERS', '')", $controller);
+        $this->assertStringContainsString('users(true)', $controller);
+        $this->assertStringContainsString("AppSettings::set('ignore_users', \$csv(\$monitoringIgnore, 'monitoring_ignore_extra'))", $request);
+        $this->assertStringContainsString('IGNORE_USERS=', $environment);
     }
 
     public function testSettingsUseOneResponsiveWorkspace(): void
