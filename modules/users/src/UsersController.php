@@ -6,6 +6,8 @@ namespace Mk\Modules\Users;
 
 use Mk\Framework\Controller;
 use Mk\Framework\Jellyfin\JellyfinClient;
+use Mk\Framework\Jellyfin\StatisticsPeriod;
+use Mk\Framework\Main;
 use Mk\Modules\Devices\DeviceService;
 
 final class UsersController extends Controller
@@ -58,9 +60,15 @@ final class UsersController extends Controller
             $jellyfinUsers
         );
 
+        $overview = (new UserRangeOverview())->build(
+            StatisticsPeriod::normalizeRange(Main::captureGetString('range')),
+            $jellyfinUsers
+        );
+
         $this->render('@users/index', [
             'layout' => $this->layout(['title' => 'Users', 'page' => 'users']),
             'rows' => $rows,
+            'overview' => $overview,
         ]);
     }
 
