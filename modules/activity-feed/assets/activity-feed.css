@@ -28,9 +28,17 @@
     color: var(--color-text);
     font: inherit;
     font-size: 13px;
+    color-scheme: dark;
     border: 1px solid var(--color-border);
     border-radius: 9px;
     background: rgba(255, 255, 255, .04);
+}
+
+/* Native option popups do not always inherit the app's dark color scheme —
+   paint them explicitly (same values as the History page's filter selects). */
+.activity-range option {
+    color: #e9e7f3;
+    background: #14131c;
 }
 
 .activity-apply {
