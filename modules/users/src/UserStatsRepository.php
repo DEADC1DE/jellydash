@@ -114,6 +114,66 @@ final class UserStatsRepository
         ];
     }
 
+    /**
+     * Most-watched titles for a period, Tautulli "Top Movies / TV Shows"
+     * style: one row per item with play count, watch seconds and the user
+     * who watched it most. Watch seconds prefer the sampled
+     * watch_duration_sec, falling back to watched_sec — the same rule the
+     * rest of the overview applies.
+     *
+     * @return array<int, array{itemId: string, itemType: string, name: string, series: string, seasonEp: string, topUser: string, plays: int, watchSec: int}>
+     */
+    public function rangeTopTitles(?\DateTimeImmutable $start, int $limit = 10): array
+    {
+        $sql = 'SELECT item_id, item_type, item_name, series_name, season_ep, top_user, item_plays AS plays, item_watch_sec AS watch_sec
+            FROM (
+                SELECT per_user.*,
+                    ROW_NUMBER() OVER (PARTITION BY item_id ORDER BY user_plays DESC, user_watch_sec DESC, top_user ASC) AS user_rank
+                FROM (
+                    SELECT item_id,
+                        MAX(item_type) AS item_type,
+                        MAX(item_name) AS item_name,
+                        MAX(series_name) AS series_name,
+                        MAX(season_ep) AS season_ep,
+                        user_name AS top_user,
+                        COUNT(*) AS user_plays,
+                        SUM(COALESCE(watch_duration_sec, watched_sec)) AS user_watch_sec,
+                        SUM(COUNT(*)) OVER (PARTITION BY item_id) AS item_plays,
+                        SUM(SUM(COALESCE(watch_duration_sec, watched_sec))) OVER (PARTITION BY item_id) AS item_watch_sec
+                    FROM play_history';
+
+        $args = [];
+        if ($start !== null) {
+            $sql .= ' WHERE started_at >= %s';
+            $args[] = $start->format('Y-m-d H:i:s');
+        }
+
+        $sql .= ' GROUP BY item_id, user_name
+                ) AS per_user
+            ) AS ranked
+            WHERE user_rank = 1
+            ORDER BY COALESCE(watch_sec, 0) DESC, plays DESC, item_name ASC
+            LIMIT ' . max(1, $limit);
+
+        $rows = $this->dibi->query($sql, ...$args)->fetchAll();
+
+        $titles = [];
+        foreach ($rows as $row) {
+            $titles[] = [
+                'itemId' => trim((string) ($row['item_id'] ?? '')),
+                'itemType' => strtolower(trim((string) ($row['item_type'] ?? ''))),
+                'name' => trim((string) ($row['item_name'] ?? '')),
+                'series' => trim((string) ($row['series_name'] ?? '')),
+                'seasonEp' => trim((string) ($row['season_ep'] ?? '')),
+                'topUser' => trim((string) ($row['top_user'] ?? '')),
+                'plays' => (int) $row['plays'],
+                'watchSec' => (int) $row['watch_sec'],
+            ];
+        }
+
+        return $titles;
+    }
+
     public function recentPlaysCount(string $userName): int
     {
         return (int) $this->dibi->select('COUNT(*)')
