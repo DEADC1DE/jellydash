@@ -237,14 +237,16 @@ final class UsersRangeOverviewTest extends TestCase
 
         $this->assertCount(2, $titles);
 
-        // Movie first (watch time ranking), badge M, top viewer as context line.
-        $this->assertSame('M', $titles[0]['badge']);
+        // Movie first (watch time ranking), no viewer context line.
+        $this->assertSame('itm_movie', $titles[0]['itemId']);
+        $this->assertFalse($titles[0]['isEpisode']);
         $this->assertSame('Test Movie', $titles[0]['name']);
-        $this->assertSame('top: Beta Two', $titles[0]['sub']);
+        $this->assertSame('', $titles[0]['sub']);
         $this->assertSame('1h 30m', $titles[0]['watch']);
 
         // Episode second: series carries the label, episode code + title the context line.
-        $this->assertSame('S', $titles[1]['badge']);
+        $this->assertSame('itm_series', $titles[1]['itemId']);
+        $this->assertTrue($titles[1]['isEpisode']);
         $this->assertSame('Test Series', $titles[1]['name']);
         $this->assertSame('S1 E1 · Pilot', $titles[1]['sub']);
         $this->assertSame('30m', $titles[1]['watch']);
