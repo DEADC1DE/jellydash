@@ -55,6 +55,13 @@
 /public/uploads/images/*
 !/public/uploads/images/.gitkeep
 
-# Modules are deployment-specific read-only mounts; keep the empty scaffold
+# Modules are deployment-specific read-only mounts; keep the empty scaffold.
+# Fork exception: our admin-tools modules ship inside the image — this
+# checkout is the build context (see AGENTS.md), nothing bind-mounts them.
 /modules/*
 !/modules/.gitkeep
+!/modules/activity-feed
+!/modules/devices
+!/modules/server-health
+!/modules/session-control
+!/modules/users
