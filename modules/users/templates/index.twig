@@ -28,7 +28,7 @@
     <div class="stats-page">
         <header class="stats-section-header">
             <strong>Overview</strong>
-            <span>Watch time - plays - share per user · {{ overview.subLabel }}</span>
+            <span>Totals - top users - top titles · {{ overview.subLabel }}</span>
             <i></i>
         </header>
 
@@ -42,33 +42,76 @@
             {% endfor %}
         </section>
 
-        <section class="stats-user-table users-overview-table" aria-label="User statistics for this period">
-            <div class="stats-user-head">
-                <span>User</span>
-                <span>Watch Time</span>
-                <span>Plays</span>
-                <span>Avg / Play</span>
-                <span>Share</span>
-            </div>
-            {% for user in overview.users %}
-                <article class="stats-user-table-row">
-                    <div class="stats-user-name">
-                        <a class="users-overview-name" href="/users?user={{ user.user|url_encode }}">
-                            {% include "_avatar.twig" with { initials: user.initials, bg: user.avatarBg, url: user.avatarUrl } only %}
-                            <strong>{{ user.user }}</strong>
-                        </a>
+        <div class="users-overview-columns">
+            <div class="users-overview-column">
+                <header class="stats-section-header">
+                    <strong>Top Users</strong>
+                    <span>Watch time - plays - share per user</span>
+                    <i></i>
+                </header>
+
+                <section class="stats-user-table users-overview-table" aria-label="User statistics for this period">
+                    <div class="stats-user-head">
+                        <span>User</span>
+                        <span>Watch Time</span>
+                        <span>Plays</span>
+                        <span>Avg / Play</span>
+                        <span>Share</span>
                     </div>
-                    <span class="history-mono">{{ user.watch }}</span>
-                    <span class="history-mono">{{ user.plays }}</span>
-                    <span class="history-mono">{{ user.avg }}</span>
-                    <span class="stats-track" aria-label="{{ user.share }} of total watch time"><i style="width: {{ user.w }}; background: {{ user.color }}"></i></span>
-                </article>
-            {% else %}
-                <article class="stats-user-table-row is-empty">
-                    <span>No user activity in this period.</span>
-                </article>
-            {% endfor %}
-        </section>
+                    {% for user in overview.users %}
+                        <article class="stats-user-table-row">
+                            <div class="stats-user-name">
+                                <a class="users-overview-name" href="/users?user={{ user.user|url_encode }}">
+                                    {% include "_avatar.twig" with { initials: user.initials, bg: user.avatarBg, url: user.avatarUrl } only %}
+                                    <strong>{{ user.user }}</strong>
+                                </a>
+                            </div>
+                            <span class="history-mono">{{ user.watch }}</span>
+                            <span class="history-mono">{{ user.plays }}</span>
+                            <span class="history-mono">{{ user.avg }}</span>
+                            <span class="stats-track" aria-label="{{ user.share }} of total watch time"><i style="width: {{ user.w }}; background: {{ user.color }}"></i></span>
+                        </article>
+                    {% else %}
+                        <article class="stats-user-table-row is-empty">
+                            <span>No user activity in this period.</span>
+                        </article>
+                    {% endfor %}
+                </section>
+            </div>
+
+            <div class="users-overview-column">
+                <header class="stats-section-header">
+                    <strong>Top Titles</strong>
+                    <span>Most watched this period</span>
+                    <i></i>
+                </header>
+
+                <section class="stats-user-table users-overview-table users-overview-titles" aria-label="Most watched titles for this period">
+                    <div class="stats-user-head">
+                        <span>Title</span>
+                        <span>Watch Time</span>
+                        <span>Plays</span>
+                    </div>
+                    {% for title in overview.titles %}
+                        <article class="stats-user-table-row">
+                            <div class="stats-user-name">
+                                <span class="watcher-avatar" style="background: {{ title.badgeBg }}">{{ title.badge }}</span>
+                                <div class="users-overview-title-copy">
+                                    <strong>{{ title.name }}</strong>
+                                    {% if title.sub %}<small>{{ title.sub }}</small>{% endif %}
+                                </div>
+                            </div>
+                            <span class="history-mono">{{ title.watch }}</span>
+                            <span class="history-mono">{{ title.plays }}</span>
+                        </article>
+                    {% else %}
+                        <article class="stats-user-table-row is-empty">
+                            <span>No plays in this period.</span>
+                        </article>
+                    {% endfor %}
+                </section>
+            </div>
+        </div>
 
         <header class="stats-section-header">
             <strong>All Users</strong>
