@@ -119,9 +119,22 @@
     white-space: nowrap;
 }
 
-/* Top Titles rows use the same badge slot as the user avatar (the scoped
-   .users-overview-table .watcher-avatar rule sizes it), plus a two-line
-   title cell: series / movie label with episode code or top viewer below. */
+/* Top Titles rows show a small cover (the controller serves real Jellyfin
+   art over a gradient fallback) next to a two-line title cell: series /
+   movie label with the episode code + title below. */
+.users-overview-title-poster {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 40px;
+    overflow: hidden;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 6px;
+    box-shadow: 0 6px 16px -10px rgba(0, 0, 0, .8);
+}
+
 .users-overview-title-copy {
     display: flex;
     flex-direction: column;

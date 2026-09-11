@@ -23,9 +23,6 @@ final class UserRangeOverview
 
     private const COLORS = ['#7c5cff', '#34d8a6', '#3b9eff', '#f7b955', '#ff6b9d', '#f0913a', '#6f7bff', '#c44fff'];
 
-    private const SERIES_BADGE_BG = 'linear-gradient(135deg,#3b9eff,#7c5cff)';
-    private const MOVIE_BADGE_BG = 'linear-gradient(135deg,#7c5cff,#b06bff)';
-
     private const MUTED = 'rgba(255,255,255,0.42)';
     private const POSITIVE = '#46e0b0';
     private const NEGATIVE = '#f7b955';
@@ -69,13 +66,13 @@ final class UserRangeOverview
     }
 
     /**
-     * Shapes the repository's top titles for the overview table: badge letter
-     * and color (S = series episode, M = movie), a primary label that carries
-     * the series for episodes, and a context line — episode code + title for
-     * episodes, the user who watched it most for movies.
+     * Shapes the repository's top titles for the overview table: a primary
+     * label that carries the series for episodes, an episode code + title
+     * context line for episodes, and the item id + kind so the controller
+     * can attach cover art (same recipe as the profile's recent plays).
      *
      * @param array<int, array{itemId: string, itemType: string, name: string, series: string, seasonEp: string, topUser: string, plays: int, watchSec: int}> $rows
-     * @return array<int, array{badge: string, badgeBg: string, name: string, sub: string, watch: string, plays: string}>
+     * @return array<int, array{itemId: string, isEpisode: bool, name: string, sub: string, watch: string, plays: string}>
      */
     private function titleRows(array $rows): array
     {
@@ -92,12 +89,12 @@ final class UserRangeOverview
                 }
             } else {
                 $label = $row['name'] !== '' ? $row['name'] : 'Unknown title';
-                $sub = trim($row['topUser']) !== '' ? 'top: ' . $row['topUser'] : '';
+                $sub = '';
             }
 
             $titles[] = [
-                'badge' => $isEpisode ? 'S' : 'M',
-                'badgeBg' => $isEpisode ? self::SERIES_BADGE_BG : self::MOVIE_BADGE_BG,
+                'itemId' => $row['itemId'],
+                'isEpisode' => $isEpisode,
                 'name' => $label,
                 'sub' => $sub,
                 'watch' => $this->duration((int) $row['watchSec']),

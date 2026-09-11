@@ -65,6 +65,16 @@ final class UsersController extends Controller
             $jellyfinUsers
         );
 
+        // Cover art for the Top Titles table, same recipe as the profile's
+        // recent plays: real Jellyfin art over a gradient fallback, series
+        // artwork for episodes.
+        $overview['titles'] = array_map(
+            fn (array $title): array => array_merge($title, [
+                'poster' => $this->poster($title['itemId'], $title['isEpisode'] ? 'Episode' : 'Movie'),
+            ]),
+            $overview['titles']
+        );
+
         $this->render('@users/index', [
             'layout' => $this->layout(['title' => 'Users', 'page' => 'users']),
             'rows' => $rows,
