@@ -21,6 +21,8 @@
         <button class="activity-apply" type="submit">Apply</button>
         {% if query or range %}
             <a class="activity-reset" href="/activity">Reset</a>
+        {% else %}
+            <a class="activity-reset" href="/activity" hidden>Reset</a>
         {% endif %}
     </form>
 
