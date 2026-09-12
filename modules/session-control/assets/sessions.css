@@ -42,3 +42,198 @@
     cursor: default;
     pointer-events: none;
 }
+
+/* Stream Rules editor */
+.stream-rules-list {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .02);
+    margin-bottom: 28px;
+}
+
+.stream-rule {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 14px 18px;
+    border-top: 1px solid rgba(255, 255, 255, .05);
+}
+
+.stream-rule:first-of-type {
+    border-top: 0;
+}
+
+.stream-rule.is-disabled .stream-rule-name,
+.stream-rule.is-disabled .stream-rule-condition {
+    opacity: .45;
+}
+
+.stream-rule-name {
+    color: var(--color-text);
+    font-size: 13.5px;
+}
+
+.stream-rule-conditions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin-top: 6px;
+}
+
+.stream-rule-logic {
+    padding: 2px 7px;
+    color: var(--color-purple-soft);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    border: 1px solid rgba(124, 92, 255, .18);
+    border-radius: 999px;
+    background: rgba(124, 92, 255, .065);
+}
+
+.stream-rule-condition b {
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.stream-rule-condition i {
+    color: var(--color-green-text);
+    font-style: normal;
+}
+
+.stream-rule-side {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 12px;
+}
+
+.stream-rule-action {
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.stream-rule-kills {
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.stream-rule-toggle,
+.stream-rule-delete,
+.stream-rule-save {
+    padding: 6px 12px;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .05);
+}
+
+.stream-rule-save {
+    color: #fff;
+    border-color: rgba(124, 92, 255, .4);
+    background: rgba(124, 92, 255, .18);
+}
+
+.stream-rule-delete {
+    color: #ff8f8f;
+}
+
+.stream-rule-toggle:hover,
+.stream-rule-delete:hover,
+.stream-rule-save:hover {
+    border-color: rgba(255, 255, 255, .2);
+}
+
+.stream-rule-editor {
+    padding: 18px;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-card);
+}
+
+.stream-rule-editor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(140px, .7fr);
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.stream-rule-editor-grid.stream-rule-condition-row {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr);
+}
+
+.stream-rule-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.stream-rule-field span {
+    color: var(--color-low);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+}
+
+.stream-rule-field input,
+.stream-rule-field select {
+    padding: 9px 12px;
+    color: var(--color-text);
+    font: inherit;
+    font-size: 13px;
+    color-scheme: dark;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, .04);
+}
+
+.stream-rule-field input:focus,
+.stream-rule-field select:focus {
+    outline: none;
+    border-color: var(--color-purple);
+}
+
+.stream-rule-field select option {
+    color: #e9e7f3;
+    background: #14131c;
+}
+
+.stream-rule-editor-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 6px;
+}
+
+.stream-rule-cancel {
+    color: var(--color-low);
+    font-size: 12px;
+}
+
+.stream-rule-empty {
+    padding: 32px 18px;
+    color: var(--color-low);
+    text-align: center;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .02);
+    margin-bottom: 28px;
+}
+
+@media (max-width: 900px) {
+    .stream-rule {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .stream-rule-editor-grid,
+    .stream-rule-editor-grid.stream-rule-condition-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
