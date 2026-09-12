@@ -125,12 +125,14 @@ final class UserStatsRepository
      */
     public function rangeTopTitles(?\DateTimeImmutable $start, int $limit = 10): array
     {
-        $sql = 'SELECT item_id, item_type, item_name, series_name, season_ep, top_user, item_plays AS plays, item_watch_sec AS watch_sec
+        // Item ids from Playback Reporting imports may carry GUID dashes while
+        // live polls store plain hex — normalize so both merge into one item.
+        $sql = "SELECT item_id, item_type, item_name, series_name, season_ep, top_user, item_plays AS plays, item_watch_sec AS watch_sec
             FROM (
                 SELECT per_user.*,
                     ROW_NUMBER() OVER (PARTITION BY item_id ORDER BY user_plays DESC, user_watch_sec DESC, top_user ASC) AS user_rank
                 FROM (
-                    SELECT item_id,
+                    SELECT REPLACE(item_id, '-', '') AS item_id,
                         MAX(item_type) AS item_type,
                         MAX(item_name) AS item_name,
                         MAX(series_name) AS series_name,
@@ -138,9 +140,9 @@ final class UserStatsRepository
                         user_name AS top_user,
                         COUNT(*) AS user_plays,
                         SUM(COALESCE(watch_duration_sec, watched_sec)) AS user_watch_sec,
-                        SUM(COUNT(*)) OVER (PARTITION BY item_id) AS item_plays,
-                        SUM(SUM(COALESCE(watch_duration_sec, watched_sec))) OVER (PARTITION BY item_id) AS item_watch_sec
-                    FROM play_history';
+                        SUM(COUNT(*)) OVER (PARTITION BY REPLACE(item_id, '-', '')) AS item_plays,
+                        SUM(SUM(COALESCE(watch_duration_sec, watched_sec))) OVER (PARTITION BY REPLACE(item_id, '-', '')) AS item_watch_sec
+                    FROM play_history";
 
         $args = [];
         if ($start !== null) {

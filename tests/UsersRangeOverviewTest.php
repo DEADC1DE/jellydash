@@ -227,6 +227,28 @@ final class UsersRangeOverviewTest extends TestCase
         $this->assertSame('Beta Two', $series['topUser']);
     }
 
+    public function testRangeTopTitlesMergesDashedLegacyItemIds(): void
+    {
+        // Playback Reporting imports stored GUIDs with dashes; live polls
+        // store plain hex. Both must aggregate into one item.
+        $this->db->getDibi()->insert('play_history', [
+            'user_id' => 'jf_test_id_a',
+            'user_name' => 'Alpha One',
+            'watched_sec' => 600,
+            'started_at' => '2026-09-03 20:00:00',
+            'item_id' => '697b908f-e922-607a-bc34-b12b91c06100',
+            'item_type' => 'Movie',
+            'item_name' => 'Legacy Movie',
+        ])->execute();
+        $this->itemPlay('697b908fe922607abc34b12b91c06100', 'Movie', 'Legacy Movie', 'Beta Two', '2026-09-04 20:00:00', 600);
+
+        $titles = $this->repository->rangeTopTitles(new DateTimeImmutable('2026-09-02 00:00:00'));
+
+        $this->assertCount(1, $titles);
+        $this->assertSame(2, $titles[0]['plays']);
+        $this->assertSame('697b908fe922607abc34b12b91c06100', $titles[0]['itemId']);
+    }
+
     public function testRangeTopTitlesLimitsAndMapsEpisodesAndMovies(): void
     {
         $this->itemPlay('itm_series', 'Episode', 'Pilot', 'Alpha One', '2026-09-03 20:00:00', 1800, 'Test Series', 'S1 E1');
