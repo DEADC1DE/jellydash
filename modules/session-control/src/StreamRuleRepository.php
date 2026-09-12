@@ -16,6 +16,7 @@ use Mk\Framework\DatabasePlatform;
 final class StreamRuleRepository
 {
     private const KILL_GUARD_SECONDS = 900;
+    private const IP_MEMORY_SECONDS = 7 * 86400;
 
     private static ?\WeakMap $schemaConnections = null;
 
@@ -67,6 +68,14 @@ final class StreamRuleRepository
             `rule_id` int NOT NULL,
             `at` int NOT NULL,
             PRIMARY KEY (`session_id`, `rule_id`)
+        )');
+
+        $db->query('CREATE TABLE IF NOT EXISTS `stream_rule_ips` (
+            `username` varchar(190) NOT NULL,
+            `ip` varchar(64) NOT NULL,
+            `first_seen` int NOT NULL,
+            `last_seen` int NOT NULL,
+            PRIMARY KEY (`username`, `ip`)
         )');
 
         self::$schemaConnections[$db] = true;
@@ -164,6 +173,61 @@ final class StreamRuleRepository
 
         $this->dibi->update('stream_rules', ['kill_count' => new \Dibi\Literal('`kill_count` + 1'), 'last_matched_at' => $now])
             ->where('id = %i', $ruleId)->execute();
+    }
+
+    /**
+     * Registers the (user, ip) pairs of the current session snapshot and
+     * returns each pair's 1-based rank by first-seen order — the slot the IP
+     * occupies for that user. Slot 1-2 = established, 3+ = newer additions.
+     * IPs unseen for a week lose their slot, so departed viewers do not
+     * block the limit forever.
+     *
+     * @param array<int, array{user: string, ip: string}> $pairs
+     * @return array<string, int> "user\0ip" => rank (1-based)
+     */
+    public function refreshIpRanks(array $pairs, int $now): array
+    {
+        $seen = [];
+        foreach ($pairs as $pair) {
+            $user = trim($pair['user']);
+            $ip = trim($pair['ip']);
+            if ($user === '' || $ip === '') {
+                continue;
+            }
+
+            $key = $user . "\0" . $ip;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $row = $this->dibi->select('first_seen')
+                ->from('stream_rule_ips')
+                ->where('username = %s', $user)
+                ->where('ip = %s', $ip)
+                ->fetch();
+
+            if ($row === null) {
+                $this->dibi->insert('stream_rule_ips', ['username' => $user, 'ip' => $ip, 'first_seen' => $now, 'last_seen' => $now])->execute();
+            } else {
+                $this->dibi->update('stream_rule_ips', ['last_seen' => $now])
+                    ->where('username = %s', $user)
+                    ->where('ip = %s', $ip)
+                    ->execute();
+            }
+        }
+
+        $this->dibi->delete('stream_rule_ips')->where('last_seen < %i', $now - self::IP_MEMORY_SECONDS)->execute();
+
+        $ranks = [];
+        $counts = [];
+        foreach ($this->dibi->select('username, ip')->from('stream_rule_ips')->orderBy('first_seen')->asc()->orderBy('ip')->asc()->fetchAll() as $row) {
+            $user = (string) $row['username'];
+            $counts[$user] ??= 0;
+            $ranks[$user . "\0" . (string) $row['ip']] = ++$counts[$user];
+        }
+
+        return $ranks;
     }
 
     private function decode(\Dibi\Row|array $row): array

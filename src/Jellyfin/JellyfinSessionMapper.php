@@ -90,6 +90,7 @@ final class JellyfinSessionMapper
         $itemName = (string) ($item['Name'] ?? 'Unknown title');
         $seriesName = (string) ($item['SeriesName'] ?? '');
         $user = (string) ($session['UserName'] ?? 'Unknown user');
+        $remoteIp = trim((string) ($session['RemoteEndPoint'] ?? ''));
         $positionTicks = $this->intValue($playState['PositionTicks'] ?? 0);
         $runtimeTicks = $this->intValue($item['RunTimeTicks'] ?? 0);
         $playMethod = (string) ($playState['PlayMethod'] ?? '');
@@ -128,6 +129,7 @@ final class JellyfinSessionMapper
 
         $stream = [
             'id' => $streamId,
+            'ip' => $remoteIp,
             'diagnosticsId' => 'stream-diagnostics-' . substr(hash('sha256', $streamId), 0, 12),
             'itemId' => $itemId,
             'itemType' => $type,

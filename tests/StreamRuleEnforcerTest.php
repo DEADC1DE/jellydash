@@ -107,4 +107,65 @@ final class StreamRuleEnforcerTest extends TestCase
         $this->assertSame(1, $this->enforcer([self::STREAM], 1000)->run(1000));
         $this->assertSame([['kick', 'session-1']], $this->actions);
     }
+
+    public function testThirdIpPerUserGetsKilledFirstTwoStay(): void
+    {
+        $this->repository->save('Max 2 IPs', [
+            ['parameter' => 'ipIndex', 'operator' => 'is greater than', 'value' => '2', 'type' => 'int'],
+        ], '', 'stop', true);
+
+        $streams = [
+            ['id' => 's1', 'user' => 'Shared', 'ip' => '10.0.0.1', 'title' => 'Movie A', 'watchedSec' => 0],
+            ['id' => 's2', 'user' => 'Shared', 'ip' => '10.0.0.2', 'title' => 'Movie B', 'watchedSec' => 0],
+            ['id' => 's3', 'user' => 'Shared', 'ip' => '10.0.0.3', 'title' => 'Movie C', 'watchedSec' => 0],
+            // Second user with their own first IP: untouched.
+            ['id' => 's4', 'user' => 'Other', 'ip' => '10.0.0.9', 'title' => 'Movie D', 'watchedSec' => 0],
+        ];
+
+        $this->assertSame(1, $this->enforcer($streams, 1000)->run(1000));
+        $this->assertSame([['stop', 's3']], $this->actions);
+    }
+
+    public function testIpRanksFollowFirstSeenOrderAndExpire(): void
+    {
+        $this->repository->save('Max 2 IPs', [
+            ['parameter' => 'ipIndex', 'operator' => 'is greater than', 'value' => '2', 'type' => 'int'],
+        ], '', 'stop', true);
+
+        $streams = fn (string $thirdIp): array => [
+            ['id' => 'a1', 'user' => 'Shared', 'ip' => '10.0.0.1', 'watchedSec' => 0],
+            ['id' => 'a2', 'user' => 'Shared', 'ip' => '10.0.0.2', 'watchedSec' => 0],
+            ['id' => 'a3', 'user' => 'Shared', 'ip' => $thirdIp, 'watchedSec' => 0],
+        ];
+
+        $this->assertSame(1, $this->enforcer($streams('10.0.0.3'), 1000)->run(1000));
+
+        // The same third IP stays killed on later polls (rank remembered).
+        $this->assertSame(0, $this->enforcer($streams('10.0.0.3'), 1100)->run(1100));
+
+        // After a week away, 10.0.0.2's slot is recycled: 10.0.0.3 comes back
+        // as the user's second IP and is allowed.
+        $streams2 = [
+            ['id' => 'b1', 'user' => 'Shared', 'ip' => '10.0.0.1', 'watchedSec' => 0],
+            ['id' => 'b2', 'user' => 'Shared', 'ip' => '10.0.0.3', 'watchedSec' => 0],
+        ];
+        $this->assertSame(0, $this->enforcer($streams2, 1000 + 8 * 86400)->run(1000 + 8 * 86400));
+    }
+
+    public function testSameIpOnTwoDevicesCountsOnce(): void
+    {
+        $this->repository->save('Max 2 IPs', [
+            ['parameter' => 'ipIndex', 'operator' => 'is greater than', 'value' => '2', 'type' => 'int'],
+        ], '', 'stop', true);
+
+        $streams = [
+            ['id' => 's1', 'user' => 'Shared', 'ip' => '10.0.0.1', 'watchedSec' => 0],
+            ['id' => 's2', 'user' => 'Shared', 'ip' => '10.0.0.1', 'watchedSec' => 0],
+            ['id' => 's3', 'user' => 'Shared', 'ip' => '10.0.0.2', 'watchedSec' => 0],
+            ['id' => 's4', 'user' => 'Shared', 'ip' => '10.0.0.2', 'watchedSec' => 0],
+        ];
+
+        // Two distinct IPs, four streams — all within the limit.
+        $this->assertSame(0, $this->enforcer($streams, 1000)->run(1000));
+    }
 }

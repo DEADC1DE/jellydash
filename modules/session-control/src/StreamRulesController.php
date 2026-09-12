@@ -32,6 +32,10 @@ final class StreamRulesController extends Controller
         'bitrate' => ['Bitrate (kbps)', 'int'],
         'progressPct' => ['Progress (%)', 'float'],
         'watchedMin' => ['Watched (minutes)', 'int'],
+        'ip' => ['IP address', 'str'],
+        'ipIndex' => ['IP slot of user (1 = oldest IP)', 'int'],
+        'userIpCount' => ['Active IPs of user', 'int'],
+        'userStreams' => ['Active streams of user', 'int'],
     ];
 
     public function handle(): void
