@@ -154,6 +154,21 @@ try {
             ))->run();
             break;
 
+        case 'stream-control:enforce':
+            // Evaluate the enabled stream rules against the live sessions and
+            // stop/kick every match. Runs inside the same poll loop as
+            // history:poll; guarded kills keep this idempotent per session.
+            $monitor = new Health\WorkerMonitor();
+            try {
+                $killed = $monitor->run('stream_rules', static fn (): int => (new \Mk\Modules\SessionControl\StreamRuleEnforcer())->run());
+                if ($killed > 0) {
+                    echo date('c') . " stream-control:enforce - terminated {$killed} session(s)\n";
+                }
+            } catch (\Throwable $e) {
+                Log::logException($e);
+            }
+            break;
+
         case 'seerr:poll':
             // Mirror the latest Jellyseerr requests locally (one list call, plus
             // a detail lookup only for requests we've never seen) and alert
