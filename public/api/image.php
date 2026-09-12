@@ -30,6 +30,13 @@ $maxWidth = (int) ($_GET['maxWidth'] ?? 1280);
 // kind=series resolves an episode to its parent series so we can show the
 // series poster instead of the per-episode still.
 $kind = (string) ($_GET['kind'] ?? '');
+// title= enables a last-resort fallback: when the item id no longer exists
+// in Jellyfin (legacy imports keep ids of since-deleted items), the current
+// item is looked up by title so its artwork can be served.
+$title = trim((string) ($_GET['title'] ?? ''));
+if ($title !== '') {
+    $title = mb_substr($title, 0, 200);
+}
 
 $baseUrl = rtrim((string) Config::get('JELLYFIN_URL', ''), '/');
 $token = (string) Config::get('JELLYFIN_API_TOKEN', Config::get('JELLYFIN_API_KEY', ''));
@@ -129,7 +136,91 @@ foreach ($fallbackTypes as $imageType) {
     exit;
 }
 
+// The item id is unknown to Jellyfin (removed/re-added item). Look the title
+// up against the current library and serve the live item's artwork instead.
+if ($title !== '') {
+    $resolvedId = resolveItemIdByTitle($baseUrl, $token, $verifySsl, $title);
+    if ($resolvedId !== null) {
+        foreach ($fallbackTypes as $imageType) {
+            $url = $baseUrl . '/Items/' . rawurlencode($resolvedId) . '/Images/' . $imageType
+                . '?maxWidth=' . max(100, min(2000, $maxWidth));
+
+            $image = fetchJellyfinImage($url, $token, $verifySsl);
+            if ($image === null) {
+                continue;
+            }
+
+            header('Content-Type: ' . $image['contentType']);
+            header('Cache-Control: public, max-age=300');
+            echo $image['body'];
+            exit;
+        }
+    }
+}
+
 http_response_code(404);
+
+/**
+ * Finds the current Jellyfin item whose normalized name matches the given
+ * title. Only exact or containment matches of the normalized strings count,
+ * so unrelated fuzzy hits are rejected.
+ */
+function resolveItemIdByTitle(string $baseUrl, string $token, bool $verifySsl, string $title): ?string
+{
+    $handle = curl_init($baseUrl . '/Items?Recursive=true&Limit=8&SearchTerm=' . rawurlencode($title));
+    if ($handle === false) {
+        return null;
+    }
+
+    curl_setopt_array($handle, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Accept: application/json',
+            'Authorization: MediaBrowser Token="' . $token . '"',
+        ],
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_TIMEOUT => 8,
+        CURLOPT_SSL_VERIFYPEER => $verifySsl,
+        CURLOPT_SSL_VERIFYHOST => $verifySsl ? 2 : 0,
+    ]);
+
+    $body = curl_exec($handle);
+    $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+    curl_close($handle);
+
+    if ($body === false || $status < 200 || $status >= 300) {
+        return null;
+    }
+
+    $decoded = json_decode((string) $body, true);
+    $items = is_array($decoded) && is_array($decoded['Items'] ?? null) ? $decoded['Items'] : [];
+
+    $needle = normalizeTitle($title);
+    if (mb_strlen($needle) < 3) {
+        return null;
+    }
+
+    foreach ($items as $item) {
+        if (!is_array($item) || !isset($item['Id'])) {
+            continue;
+        }
+
+        $candidate = normalizeTitle((string) ($item['Name'] ?? ''));
+        if ($candidate === '' || ($candidate === $needle || str_contains($candidate, $needle) || str_contains($needle, $candidate))) {
+            return (string) $item['Id'];
+        }
+    }
+
+    return null;
+}
+
+function normalizeTitle(string $title): string
+{
+    $normalized = mb_strtolower($title);
+    $normalized = preg_replace('/[^a-z0-9\x{00c0}-\x{02af}]+/u', '', $normalized) ?? '';
+
+    return $normalized;
+}
 
 /**
  * @return array{body: string, contentType: string}|null

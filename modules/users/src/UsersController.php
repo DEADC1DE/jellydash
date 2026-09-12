@@ -33,7 +33,11 @@ final class UsersController extends Controller
 
             $recentPlays = array_map(
                 function (array $play): array {
-                    $play['poster'] = $this->poster((string) ($play['itemId'] ?? ''), (string) ($play['itemType'] ?? ''));
+                    $play['poster'] = $this->poster(
+                        (string) ($play['itemId'] ?? ''),
+                        (string) ($play['itemType'] ?? ''),
+                        (string) ($play['itemName'] ?? '')
+                    );
                     return $play;
                 },
                 $repository->recentPlays($selected, self::PAGE_SIZE, ($playsPage - 1) * self::PAGE_SIZE)
@@ -70,7 +74,7 @@ final class UsersController extends Controller
         // artwork for episodes.
         $overview['titles'] = array_map(
             fn (array $title): array => array_merge($title, [
-                'poster' => $this->poster($title['itemId'], $title['isEpisode'] ? 'Episode' : 'Movie'),
+                'poster' => $this->poster($title['itemId'], $title['isEpisode'] ? 'Episode' : 'Movie', $title['name']),
             ]),
             $overview['titles']
         );
@@ -86,8 +90,9 @@ final class UsersController extends Controller
      * Real Jellyfin poster art layered over a colored gradient (shows through
      * while the image loads, or if the item has no artwork) — same recipe as
      * the core History page's poster() so covers look consistent app-wide.
+     * The title enables image.php's search fallback for legacy item ids.
      */
-    private function poster(string $itemId, string $itemType): string
+    private function poster(string $itemId, string $itemType, string $title = ''): string
     {
         $gradient = $this->posterGradient($itemId !== '' ? $itemId : $itemType);
 
@@ -98,6 +103,9 @@ final class UsersController extends Controller
         $url = '/api/image.php?item=' . rawurlencode($itemId) . '&type=Primary&maxWidth=240';
         if ($itemType === 'Episode') {
             $url .= '&kind=series';
+        }
+        if ($title !== '') {
+            $url .= '&title=' . rawurlencode($title);
         }
 
         return 'url("' . $url . '"), ' . $gradient;

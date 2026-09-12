@@ -217,7 +217,7 @@ final class HistoryController extends Controller
             'watchedLabel' => $this->durationLabel($viewingSec) . ($watchDuration === null ? ' estimated' : ' watched'),
             'completionPct' => $completion,
             'finished' => (bool) $row['is_finished'] || $completion >= 95,
-            'poster' => $this->poster((string) $row['item_id'], $itemType),
+            'poster' => $this->poster((string) $row['item_id'], $itemType, $itemName),
         ];
     }
 
@@ -297,7 +297,7 @@ final class HistoryController extends Controller
      * Real Jellyfin poster art layered over a colored gradient, so the gradient
      * shows through while the image loads (or if the item has no artwork).
      */
-    private function poster(string $itemId, string $itemType): string
+    private function poster(string $itemId, string $itemType, string $title = ''): string
     {
         $gradient = $this->posterGradient($itemId);
 
@@ -306,9 +306,13 @@ final class HistoryController extends Controller
         }
 
         // Episodes resolve to their series poster; movies use their own poster.
+        // The title enables image.php's search fallback for legacy item ids.
         $url = '/api/image.php?item=' . rawurlencode($itemId) . '&type=Primary&maxWidth=240';
         if ($itemType === 'Episode') {
             $url .= '&kind=series';
+        }
+        if ($title !== '') {
+            $url .= '&title=' . rawurlencode($title);
         }
 
         return 'url("' . $url . '"), ' . $gradient;
