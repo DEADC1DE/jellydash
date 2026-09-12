@@ -57,6 +57,7 @@ final class StreamRuleEnforcer
             : $actions;
 
         $killed = 0;
+        $perUser = $this->perUserAggregates($repository, $streams, $now);
         foreach ($rules as $rule) {
             foreach ($streams as $stream) {
                 $sessionId = (string) ($stream['id'] ?? '');
@@ -64,7 +65,7 @@ final class StreamRuleEnforcer
                     continue;
                 }
 
-                if (!$engine->evaluate($rule['conditions'], (string) $rule['logic'], $this->parameters($stream))) {
+                if (!$engine->evaluate($rule['conditions'], (string) $rule['logic'], $this->parameters($stream, $perUser))) {
                     continue;
                 }
 
@@ -115,16 +116,60 @@ final class StreamRuleEnforcer
     }
 
     /**
-     * Rule parameters are the mapped stream fields; watched minutes is a
-     * friendlier unit for "kill anything playing longer than X" rules.
+     * Per-user aggregates over the current session snapshot (active stream
+     * count, distinct IPs, and each IP's 1-based slot by first-seen order)
+     * turn cross-session questions like "3rd IP for this user" into
+     * per-session rule parameters.
+     *
+     * @param array<int, array<string, mixed>> $streams
+     * @return array<string, array<string, mixed>> keyed by "user\0sessionId"
+     */
+    private function perUserAggregates(StreamRuleRepository $repository, array $streams, int $now): array
+    {
+        $ipRanks = $repository->refreshIpRanks(array_map(static fn (array $stream): array => [
+            'user' => (string) ($stream['user'] ?? ''),
+            'ip' => (string) ($stream['ip'] ?? ''),
+        ], $streams), $now);
+
+        $stats = [];
+        $aggregate = [];
+        foreach ($streams as $stream) {
+            $user = (string) ($stream['user'] ?? '');
+            $ip = (string) ($stream['ip'] ?? '');
+            $stats[$user] ??= ['streams' => 0, 'ips' => []];
+            $stats[$user]['streams']++;
+            if ($ip !== '') {
+                $stats[$user]['ips'][$ip] = true;
+            }
+        }
+
+        foreach ($streams as $stream) {
+            $user = (string) ($stream['user'] ?? '');
+            $ip = (string) ($stream['ip'] ?? '');
+            $aggregate[$user . "\0" . (string) ($stream['id'] ?? '')] = [
+                'userStreams' => $stats[$user]['streams'],
+                'userIpCount' => count($stats[$user]['ips']),
+                'ipIndex' => $ip !== '' ? ($ipRanks[$user . "\0" . $ip] ?? 0) : 0,
+            ];
+        }
+
+        return $aggregate;
+    }
+
+    /**
+     * Rule parameters are the mapped stream fields plus the per-user
+     * aggregates; watched minutes is a friendlier unit for "kill anything
+     * playing longer than X" rules.
      *
      * @param array<string, mixed> $stream
+     * @param array<string, array<string, mixed>> $perUser
      * @return array<string, mixed>
      */
-    private function parameters(array $stream): array
+    private function parameters(array $stream, array $perUser = []): array
     {
         $parameters = $stream;
         $parameters['watchedMin'] = (int) floor(((int) ($stream['watchedSec'] ?? 0)) / 60);
+        $parameters += $perUser[$stream['user'] . "\0" . $stream['id']] ?? [];
 
         return $parameters;
     }
