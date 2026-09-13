@@ -26,7 +26,7 @@ Jellydash is a monitoring dashboard for [Jellyfin](https://jellyfin.org). If you
 
 It's supposed to be lightweight, without too much bloat and (hopefully) nice looking!
 
-It also works as a PWA, so you can install it on your phone like a real app. With notifications turned on, your phone buzzes the moment someone hits play. Alerts can go through Telegram, Pushover, Discord or Web Push, whatever you already use.
+It also works as a PWA, so you can install it on your phone like a real app. With notifications turned on, your phone buzzes the moment someone hits play. Alerts can go through Telegram, Pushover, Discord, ntfy, Gotify or Web Push, whatever you already use.
 I may work on open-source Android app in the future.
 
 The project is very young and in very active development.
@@ -77,7 +77,7 @@ The project is very young and in very active development.
 
 - **Jellyseerr requests** (optional). The latest requests with their current status, plus a push notification when a new request comes in. The page only appears once you connect your Jellyseerr instance.
 
-- **Notifications** (optional). "Anna started watching The Office" straight to your phone or desktop, even with the app closed. Delivered through Telegram, Pushover, a Discord webhook, Web Push, or any combination of them.
+- **Notifications** (optional). "Anna started watching The Office" straight to your phone or desktop, even with the app closed. Delivered through Telegram, Pushover, a Discord webhook, ntfy, Gotify, Web Push, or any combination of them.
 
 - **Optional login.** Off by default, because on a trusted home network it just gets in the way. One env var turns it on. Recommended if you expose Jellydash to the internet. I recommend using Tailscale for exposing.
 
@@ -196,7 +196,13 @@ Updating then means `git pull` and running the same command again. For a source-
 
 ## Notifications
 
-Jellydash can ping you when someone starts playing and when a new Jellyseerr request comes in. There are four ways to get the alerts, pick whatever you already use. Every configured channel gets every alert, and a channel is on as soon as its values are filled in `.env`.
+Jellydash can ping you when someone starts playing and when a new Jellyseerr request comes in. Pick whichever channels you already use. Jellydash attempts delivery through every configured channel. Once any channel accepts an alert, it is considered delivered; failed channels do not get separate retries. If all channels fail, the existing retry queue handles the alert.
+
+Configure Telegram, Pushover, Discord, ntfy and Gotify in `.env`. Each is optional and stays off until its required settings are filled in. Web Push uses `.env` for its server keys and browser permission for each receiving device.
+
+After changing channel settings in `.env`, recreate the app container with `docker compose up -d --force-recreate app`. If you run the separate SQLite file with `-f docker-compose.sqlite.yml`, keep that option in this command too. A plain container restart does not reload Compose environment values.
+
+If you are upgrading an existing MariaDB install, update its Compose file to include the new notification variables, preserving your custom settings and overrides. The current `docker-compose.yml` forwards them to the app; older copies do not. The SQLite Compose setup reads `.env` through `env_file`. Custom Compose setups must also pass the chosen channel's variables to the app container.
 
 Two things that apply to all channels:
 
@@ -236,6 +242,35 @@ Server Settings > Integrations > Webhooks > New Webhook, pick a channel, copy th
 ```bash
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
+
+### ntfy
+
+Use your own [ntfy server](https://docs.ntfy.sh/) or `https://ntfy.sh`. Subscribe to the same server and topic in your ntfy client.
+
+```bash
+NTFY_URL=https://ntfy.example.com
+NTFY_TOPIC=jellydash
+NTFY_TOKEN=your-access-token
+```
+
+`NTFY_URL` is the server base URL, without the topic. `NTFY_TOPIC` accepts 1-64 letters, digits, underscores or hyphens; ntfy's reserved route names are not valid topics. An access token needs permission to publish to that topic. Leave `NTFY_TOKEN` empty only if the server allows anonymous publishing. Username/password authentication is not supported by this channel.
+
+Use an access-controlled topic for viewing activity. A publishing token alone does not make a topic private: its read permissions must also restrict who can subscribe. Jellydash does not choose a server or topic for you.
+
+### Gotify
+
+Create an application in your [Gotify server](https://gotify.net/docs/) and copy its application token. Subscribe through the Gotify web interface or a compatible client.
+
+```bash
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_APP_TOKEN=your-application-token
+```
+
+`GOTIFY_URL` is the server base URL, without `/message`. Use an application token, not a client token. Alerts use priority 5 and plain text. Notification links open the dashboard on clients that support Gotify's click action.
+
+Both channels support custom ports and base-path prefixes. Use the final service URL: Jellydash does not follow redirects. HTTPS certificates must be valid and trusted by the app container. Explicit HTTP URLs are allowed for trusted private networks, but messages and tokens then travel unencrypted.
+
+For these two channels, Jellydash limits titles to 1,024 UTF-8 bytes and message text to 4,096 bytes, adding an ellipsis if shortened. This keeps ordinary alerts within ntfy's default text limits. A server can enforce lower limits or rate limits; failures appear in `var/log/app.log` without the token or message content. The test command reports server acceptance, so also check that the notification reaches your client.
 
 ### Web Push (browser and the installed app)
 

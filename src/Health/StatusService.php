@@ -6,6 +6,8 @@ namespace Mk\Framework\Health;
 
 use Mk\Framework\Config;
 use Mk\Framework\Notifications\DiscordChannel;
+use Mk\Framework\Notifications\GotifyChannel;
+use Mk\Framework\Notifications\NtfyChannel;
 use Mk\Framework\Notifications\PushoverChannel;
 use Mk\Framework\Notifications\TelegramChannel;
 use Mk\Framework\Push\PushSubscriptionRepository;
@@ -49,8 +51,13 @@ final class StatusService
         $httpChannel = (new TelegramChannel())->isConfigured()
             || (new PushoverChannel())->isConfigured() || (new DiscordChannel())->isConfigured();
         $webPush = (new WebPushSender())->isConfigured();
-        $notificationsConfigured = $httpChannel || $webPush;
         $incompleteNotifications = false;
+        foreach ([new NtfyChannel(), new GotifyChannel()] as $channel) {
+            $configured = $channel->isConfigured();
+            $httpChannel = $httpChannel || $configured;
+            $incompleteNotifications = $incompleteNotifications || ($channel->hasConfiguration() && !$configured);
+        }
+        $notificationsConfigured = $httpChannel || $webPush;
         foreach ([['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'], ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], ['PUSHOVER_APP_TOKEN', 'PUSHOVER_USER_KEY']] as [$first, $second]) {
             if ((Config::get($first) !== null) !== (Config::get($second) !== null)) {
                 $incompleteNotifications = true;
@@ -101,7 +108,7 @@ final class StatusService
             }
             if ($notificationsEnabled && $sourceEnabled && $incompleteNotifications) {
                 $component['state'] = 'failed';
-                $component['message'] = 'Some notification settings are incomplete. Check the credentials for each configured channel.';
+                $component['message'] = 'Some notification settings are incomplete or invalid. Check each configured channel.';
             }
             $components[] = $component;
         }
