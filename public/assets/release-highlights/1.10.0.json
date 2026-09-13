@@ -1,0 +1,21 @@
+{
+  "version": "1.10.0",
+  "auto_show": true,
+  "title": "ntfy and Gotify notifications",
+  "summary": "Send playback and Jellyseerr request alerts to ntfy or Gotify. Configure either provider in .env, alongside the existing notification channels.",
+  "highlights": [
+    "Use your own ntfy or Gotify server to receive alerts on your phone.",
+    "Connect with an ntfy access token or a Gotify application token. ntfy servers that allow publishing without authentication are also supported.",
+    "Both channels are optional and stay off until configured. The README includes setup examples and Docker configuration notes."
+  ],
+  "links": [
+    {
+      "label": "Notification setup",
+      "url": "https://github.com/themartz90/jellydash/#notifications"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.10.0"
+    }
+  ]
+}

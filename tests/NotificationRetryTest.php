@@ -11,8 +11,10 @@ use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyseerr\RequestNotifier;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
 use Mk\Framework\Notifications\ClaimedNotificationDelivery;
+use Mk\Framework\Notifications\GotifyChannel;
 use Mk\Framework\Notifications\NotificationChannel;
 use Mk\Framework\Notifications\NotificationDispatcher;
+use Mk\Framework\Notifications\NtfyChannel;
 use Mk\Framework\Push\PushSubscriptionRepository;
 use Mk\Framework\Push\WebPushSender;
 use Mk\Framework\Push\WebPushTransport;
@@ -138,6 +140,53 @@ final class NotificationRetryTest extends TestCase
         $this->assertSame(1, $report['sent']);
         $this->assertSame(0, $channel->calls);
         $this->assertSame([$subscription], $transport->subscriptions);
+    }
+
+    public function testSelfHostedRequestDeliveryPreservesAggregateRetryContract(): void
+    {
+        $values = ['NTFY_URL' => 'http://ntfy.invalid', 'NTFY_TOPIC' => 'test', 'NTFY_TOKEN' => '', 'GOTIFY_URL' => 'http://gotify.invalid', 'GOTIFY_APP_TOKEN' => 'test-token'];
+        $previous = [];
+        foreach ($values as $key => $value) {
+            $previous[$key] = getenv($key);
+            putenv($key . '=' . $value);
+        }
+        try {
+            $accepted = false;
+            $attempts = [];
+            $ntfy = new NtfyChannel(static function () use (&$attempts): array {
+                $attempts[] = 'ntfy';
+                return ['status' => 503, 'body' => '{}'];
+            });
+            $gotify = new GotifyChannel(static function ($url, $payload) use (&$attempts, &$accepted): array {
+                $attempts[] = 'gotify';
+                self::assertNotEmpty($payload['title']);
+                self::assertNotEmpty($payload['message']);
+                return $accepted ? ['status' => 200, 'body' => '{"id":1}'] : ['status' => 503, 'body' => '{}'];
+            });
+            $notifier = new RequestNotifier($this->repository, new NotificationDispatcher(
+                new WebPushSender(),
+                new PushSubscriptionRepository($this->database),
+                [$ntfy, $gotify],
+            ));
+            self::assertSame(0, $notifier->dispatch());
+            self::assertSame(['ntfy', 'gotify'], $attempts);
+            $row = $this->database->getDibi()->select('*')->from('seerr_requests')->fetch();
+            self::assertSame(0, (int) $row['notified']);
+            self::assertSame(1, (int) $row['notification_attempts']);
+            self::assertGreaterThan(time(), (int) $row['notification_next_attempt_at_epoch']);
+            $this->database->getDibi()->update('seerr_requests', ['notification_next_attempt_at_epoch' => 0])->execute();
+            $accepted = true;
+            self::assertSame(1, $notifier->dispatch());
+            $row = $this->database->getDibi()->select('*')->from('seerr_requests')->fetch();
+            self::assertSame(1, (int) $row['notified']);
+            self::assertSame(2, (int) $row['notification_attempts']);
+            self::assertSame(0, $notifier->dispatch());
+            self::assertSame(['ntfy', 'gotify', 'ntfy', 'gotify'], $attempts);
+        } finally {
+            foreach ($previous as $key => $value) {
+                putenv($value === false ? $key : $key . '=' . $value);
+            }
+        }
     }
 
     public function testDeliveryHealthPersistsAcrossIdleAndRecoversAfterSuccess(): void

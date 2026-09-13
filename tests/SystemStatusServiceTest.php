@@ -20,6 +20,8 @@ final class SystemStatusServiceTest extends TestCase
             'PUSHOVER_USER_KEY' => '', 'PUSH_ENABLED' => 'true', 'SEERR_NOTIFY_ENABLED' => 'true',
             'POLLER_ENABLED' => 'true', 'POLL_INTERVAL' => '30', 'SEERR_POLL_INTERVAL' => '120',
             'LIBRARIES_CACHE_TTL' => '300',
+            'NTFY_URL' => '', 'NTFY_TOPIC' => '', 'NTFY_TOKEN' => '',
+            'GOTIFY_URL' => '', 'GOTIFY_APP_TOKEN' => '',
         ] as $key => $value) {
             $this->environment[$key] = getenv($key);
             putenv($key . '=' . $value);
@@ -151,6 +153,35 @@ final class SystemStatusServiceTest extends TestCase
             self::assertStringNotContainsString($secret, $json);
         }
         self::assertSame(['id', 'state', 'last_attempt_at', 'last_success_at', 'interval_seconds'], array_keys($result['diagnostics']['components'][0]));
+    }
+
+    public function testSelfHostedChannelsAreRecognizedWithoutSubscriptionOrNetworkProbes(): void
+    {
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+            static function (): never {
+                throw new RuntimeException('No Web Push subscription read expected.');
+            },
+        );
+        putenv('NTFY_URL=https://private-notify.invalid');
+        self::assertSame('failed', $service->snapshot(1000)['components'][3]['state']);
+        putenv('NTFY_TOPIC=private-topic');
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+        putenv('NTFY_TOKEN=private-token');
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+        putenv('GOTIFY_APP_TOKEN=private-app-token');
+        self::assertSame('failed', $service->snapshot(1000)['components'][3]['state']);
+        putenv('GOTIFY_URL=http://gotify:80');
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+        foreach (['NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN'] as $key) {
+            putenv($key . '=');
+        }
+        $result = $service->snapshot(1000);
+        self::assertSame('healthy', $result['components'][3]['state']);
+        self::assertStringNotContainsString('private-', json_encode($result));
+        putenv('GOTIFY_URL=file:///tmp/no');
+        self::assertSame('failed', $service->snapshot(1000)['components'][3]['state']);
     }
 
     /** @return array<string, mixed> */

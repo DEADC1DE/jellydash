@@ -52,6 +52,19 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertStringContainsString('TZ: "${TZ:-}"', $compose);
     }
 
+    public function testSelfHostedNotificationSettingsReachBothComposeSetups(): void
+    {
+        $compose = file_get_contents(ROOT_DIR . '/docker-compose.yml');
+        $sqlite = file_get_contents(ROOT_DIR . '/docker-compose.sqlite.yml');
+        $example = file_get_contents(ROOT_DIR . '/.env.example');
+        self::assertMatchesRegularExpression('/env_file:\s*\n\s*- \.env/', $sqlite);
+        foreach (['NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN', 'GOTIFY_URL', 'GOTIFY_APP_TOKEN'] as $key) {
+            self::assertStringContainsString($key . ': "${' . $key . ':-}"', $compose);
+            self::assertStringContainsString($key . '=', $example);
+            self::assertStringNotContainsString($key . ':', $sqlite, 'SQLite must not shadow its env_file settings.');
+        }
+    }
+
     public function testReadmeMakesTheSelectedComposeSetupTheDefault(): void
     {
         $readme = file_get_contents(ROOT_DIR . '/README.md');
