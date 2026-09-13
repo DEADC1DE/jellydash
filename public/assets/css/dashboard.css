@@ -980,6 +980,39 @@ svg.icon-filled {
     min-width: 0;
 }
 
+#notification-devices .settings-card-head {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+#notification-devices .system-status-row {
+    grid-template-columns: 90px minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+#notification-devices .system-status-row + .system-status-row {
+    margin-top: 8px;
+}
+
+#notification-devices .system-status-row > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+#notification-devices form {
+    margin: 0;
+}
+
+@media (max-width: 620px) {
+    #notification-devices .system-status-row {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px 12px;
+    }
+
+    #notification-devices .system-status-state {
+        grid-column: 1 / -1;
+    }
+}
+
 .settings-card-copy > strong {
     font-size: 14px;
     font-weight: 800;
@@ -1300,6 +1333,7 @@ svg.icon-filled {
     .settings-layout > .settings-form { grid-column: 1; grid-row: 1; }
     .settings-layout > .settings-import { grid-column: 2; grid-row: 1; }
     .settings-layout > .system-status-card { grid-column: 1 / -1; grid-row: 2; }
+    .settings-layout > #notification-devices { grid-column: 1 / -1; }
 
     .settings-layout > .settings-import .settings-import-sources {
         grid-template-columns: 1fr;
