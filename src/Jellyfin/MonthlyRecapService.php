@@ -89,8 +89,8 @@ final class MonthlyRecapService
         if ($first !== null && $first <= $latest && $first > $minimum) {
             $minimum = $first;
         }
-        if ($first === null) {
-            $minimum = $latest->modify('-11 months');
+        if ($first === null || $first > $latest) {
+            $minimum = $latest;
         }
 
         $months = [];
@@ -342,12 +342,41 @@ final class MonthlyRecapService
      */
     private function titleGroups(array $rows): array
     {
+        $seriesLibraries = [];
+        $episodeLibraries = [];
+        foreach ($rows as $row) {
+            $library = trim((string) ($row['library'] ?? ''));
+            if (strcasecmp((string) ($row['item_type'] ?? ''), 'Episode') !== 0
+                || $library === '' || trim((string) ($row['library_resolved_at'] ?? '')) === '') {
+                continue;
+            }
+            $name = trim((string) ($row['series_name'] ?? ''));
+            $id = ThemePlaybackExclusions::canonicalItemId((string) ($row['item_id'] ?? ''));
+            if ($name !== '') {
+                $seriesLibraries[$name][$library] = $library;
+            }
+            if ($id !== '') {
+                $episodeLibraries[$id][$library] = $library;
+            }
+        }
+
         $groups = [];
         foreach ($rows as $row) {
             $isEpisode = strcasecmp((string) ($row['item_type'] ?? ''), 'Episode') === 0;
             $itemId = trim((string) ($row['item_id'] ?? ''));
             $library = trim((string) ($row['library'] ?? ''));
             $libraryConfirmed = $library !== '' && trim((string) ($row['library_resolved_at'] ?? '')) !== '';
+            if ($isEpisode && !$libraryConfirmed) {
+                // Use confirmed evidence only when it identifies one library.
+                // Same-named shows in different libraries must stay separate.
+                $id = ThemePlaybackExclusions::canonicalItemId($itemId);
+                $name = trim((string) ($row['series_name'] ?? ''));
+                $candidates = $episodeLibraries[$id] ?? $seriesLibraries[$name] ?? [];
+                if (count($candidates) === 1) {
+                    $library = array_values($candidates)[0];
+                    $libraryConfirmed = true;
+                }
+            }
             $title = trim((string) ($isEpisode ? ($row['series_name'] ?? '') : ($row['item_name'] ?? '')));
             $title = $title !== '' ? $title : ($isEpisode ? 'Unknown series' : 'Untitled movie');
             $key = $isEpisode

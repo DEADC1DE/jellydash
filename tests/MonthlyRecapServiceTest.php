@@ -230,6 +230,42 @@ final class MonthlyRecapServiceTest extends TestCase
         self::assertStringContainsString('excluded libraries', $recap['rankingNote']);
     }
 
+    public function testSeriesWithMixedLibraryResolutionStayTogether(): void
+    {
+        [$database, $repository] = $this->repository();
+        $this->insert($database, '2026-08-02 10:00:00', 'Viewer', 'Episode', 'Pilot', 'Example Show', 'episode-1', 600, 600, 'TV', false);
+        $this->insert($database, '2026-08-03 10:00:00', 'Viewer', 'Episode', 'Second', 'Example Show', 'episode-2', 900, 900, 'TV', true);
+        $recap = (new MonthlyRecapService($repository))->data('2026-08', '', new DateTimeImmutable('2026-09-14'))['recap'];
+        self::assertCount(1, $recap['series']);
+        self::assertSame(2, $recap['series'][0]['plays']);
+        self::assertSame('25m', $recap['series'][0]['duration']);
+        self::assertSame(1, $recap['titleCount']);
+    }
+
+    public function testSameNamedSeriesInDifferentLibrariesRemainSeparate(): void
+    {
+        [$database, $repository] = $this->repository();
+        foreach ([['episode-a', 'TV', true], ['episode-b', 'Other TV', true], ['episode-a', '', false], ['episode-c', '', false]] as $i => [$id, $library, $confirmed]) {
+            $this->insert($database, '2026-08-0' . ($i + 1) . ' 10:00:00', 'Viewer', 'Episode', 'Episode', 'Same name', $id, 600, 600, $library, $confirmed);
+        }
+        $recap = (new MonthlyRecapService($repository))->data('2026-08', '', new DateTimeImmutable('2026-09-14'))['recap'];
+        self::assertCount(3, $recap['series']);
+        self::assertSame([2, 1, 1], array_column($recap['series'], 'plays'));
+        self::assertStringContainsString('item=episode-a&', $recap['series'][0]['poster']);
+        self::assertSame('40m', $recap['watch']);
+    }
+
+    public function testNewHistoryHasOnlyOneEmptyCompletedMonthChoice(): void
+    {
+        [$database, $repository] = $this->repository();
+        $service = new MonthlyRecapService($repository);
+        $now = new DateTimeImmutable('2026-09-14');
+        self::assertSame(['2026-08' => 'August 2026'], $service->data(null, null, $now)['months']);
+        $this->insert($database, '2026-09-02 10:00:00', 'Viewer', 'Movie', 'New film', '', 'new-film', 600, 600, 'Movies', true);
+        self::assertSame(['2026-08' => 'August 2026'], $service->data(null, null, $now)['months']);
+        self::assertSame(['2026-08' => 'August 2026', '2026-06' => 'June 2026'], $service->data('2026-06', null, $now)['months']);
+    }
+
     /** @return array{Database, PlayHistoryRepository} */
     private function repository(): array
     {
