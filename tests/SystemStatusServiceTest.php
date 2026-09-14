@@ -144,6 +144,45 @@ final class SystemStatusServiceTest extends TestCase
         self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
     }
 
+    public function testConfigurationWarningNamesOnlyAffectedProvidersAndClearsWhenRemoved(): void
+    {
+        putenv('GOTIFY_URL=https://gotify.fixture.invalid');
+        putenv('GOTIFY_APP_TOKEN=private-gotify-token');
+        putenv('NTFY_TOKEN=leftover-private-token');
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success(), 'playback_delivery' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+        );
+        $component = $service->snapshot(1000)['components'][3];
+        self::assertSame('failed', $component['state']);
+        self::assertSame(990, $component['last_success_at']);
+        self::assertSame('Incomplete or invalid notification settings: ntfy. Complete these settings or clear them if unused.', $component['message']);
+
+        putenv('TELEGRAM_BOT_TOKEN=private-telegram-token');
+        putenv('PUSHOVER_USER_KEY=private-pushover-key');
+        putenv('VAPID_PUBLIC_KEY=private-public-key');
+        $result = $service->snapshot(1000);
+        self::assertStringContainsString('ntfy, Web Push, Telegram, Pushover.', $result['components'][3]['message']);
+        self::assertStringNotContainsString('private-', json_encode($result, JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('fixture.invalid', json_encode($result, JSON_THROW_ON_ERROR));
+        foreach (['NTFY_TOKEN', 'TELEGRAM_BOT_TOKEN', 'PUSHOVER_USER_KEY', 'VAPID_PUBLIC_KEY'] as $key) {
+            putenv($key . '=');
+        }
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+    }
+
+    public function testInvalidGotifySettingsAreNamedAlongsideWorkingNtfy(): void
+    {
+        putenv('NTFY_URL=https://ntfy.fixture.invalid');
+        putenv('NTFY_TOPIC=fixture-topic');
+        putenv('GOTIFY_APP_TOKEN=leftover-private-token');
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+        );
+        self::assertSame('Incomplete or invalid notification settings: Gotify. Complete these settings or clear them if unused.', $service->snapshot(1000)['components'][3]['message']);
+    }
+
     public function testExportUsesAnAllowlistAndDoesNotExposeSecretsOrRawErrors(): void
     {
         $row = $this->success() + ['token' => 'lease-secret', 'error_code' => 'https://private.invalid/token', 'username' => 'private-person', 'item_title' => 'private-title'];

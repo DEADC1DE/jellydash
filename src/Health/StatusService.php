@@ -51,16 +51,22 @@ final class StatusService
         $httpChannel = (new TelegramChannel())->isConfigured()
             || (new PushoverChannel())->isConfigured() || (new DiscordChannel())->isConfigured();
         $webPush = (new WebPushSender())->isConfigured();
-        $incompleteNotifications = false;
-        foreach ([new NtfyChannel(), new GotifyChannel()] as $channel) {
+        $incompleteNotifications = [];
+        foreach (['ntfy' => new NtfyChannel(), 'Gotify' => new GotifyChannel()] as $label => $channel) {
             $configured = $channel->isConfigured();
             $httpChannel = $httpChannel || $configured;
-            $incompleteNotifications = $incompleteNotifications || ($channel->hasConfiguration() && !$configured);
+            if ($channel->hasConfiguration() && !$configured) {
+                $incompleteNotifications[] = $label;
+            }
         }
         $notificationsConfigured = $httpChannel || $webPush;
-        foreach ([['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'], ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'], ['PUSHOVER_APP_TOKEN', 'PUSHOVER_USER_KEY']] as [$first, $second]) {
+        foreach ([
+            'Web Push' => ['VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY'],
+            'Telegram' => ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID'],
+            'Pushover' => ['PUSHOVER_APP_TOKEN', 'PUSHOVER_USER_KEY'],
+        ] as $label => [$first, $second]) {
             if ((Config::get($first) !== null) !== (Config::get($second) !== null)) {
-                $incompleteNotifications = true;
+                $incompleteNotifications[] = $label;
             }
         }
         $notificationsEnabled = Config::bool('PUSH_ENABLED', true);
@@ -106,9 +112,11 @@ final class StatusService
                 $component['stalled'] = max(0, $queue['stalled']);
                 $component['last_delivery_at'] = $this->epoch($delivery['last_finished_at'] ?? null);
             }
-            if ($notificationsEnabled && $sourceEnabled && $incompleteNotifications) {
+            if ($notificationsEnabled && $sourceEnabled && $incompleteNotifications !== []) {
                 $component['state'] = 'failed';
-                $component['message'] = 'Some notification settings are incomplete or invalid. Check each configured channel.';
+                $component['message'] = 'Incomplete or invalid notification settings: '
+                    . implode(', ', $incompleteNotifications)
+                    . '. Complete these settings or clear them if unused.';
             }
             $components[] = $component;
         }
