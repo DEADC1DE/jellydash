@@ -69,6 +69,8 @@ The project is very young and in very active development.
 
 - **Statistics.** Watch time trends, top users, device activity, clients, codecs and transcode reasons. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
 
+- **Monthly recap.** Open Monthly recap from Statistics to look back at a completed month, with watch time, favourite movies and series, daily activity and a viewer filter. Viewing time inferred from older history is labelled as an estimate.
+
 - **Libraries.** An overview of all your libraries with item counts and type breakdowns. New libraries are picked up automatically.
 
 - **System status.** Check background collection, library refreshes, optional request sync, and notification retries from Settings. Copy a diagnostic summary without service URLs, credentials, or viewing details. See [System status](docs/SYSTEM_STATUS.md) for what the checks mean.
@@ -312,7 +314,7 @@ Open **Settings > Exclusions** to manage these options:
 | --- | --- | --- |
 | Monitoring | Selected users from Now Playing, History, Statistics, library playback summaries and CSV exports. New plays and history imports for those users are skipped. | `IGNORE_USERS` |
 | Notifications | Playback alerts for selected users. Their activity is still recorded unless they are also excluded from monitoring. | `PUSH_IGNORE_USERS` |
-| Statistics | Selected libraries from Trending and Most Watched. Other statistics and History remain visible. | `TRENDING_EXCLUDE_LIBRARIES` |
+| Statistics | Selected libraries from Trending, Most Watched and Monthly recap title rankings. Viewing totals and History remain visible. | `TRENDING_EXCLUDE_LIBRARIES` |
 
 Environment values are comma-separated names, for example `IGNORE_USERS=Admin,Test`. Saved Settings values take priority over the environment, including an empty selection. To change a saved exclusion, use Settings. For Docker environment changes, recreate the app container so it receives the new values.
 

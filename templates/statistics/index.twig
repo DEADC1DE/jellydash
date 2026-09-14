@@ -1,9 +1,12 @@
 {% extends "_shell.twig" %}
 
+{% block page_styles %}<link rel="stylesheet" href="/assets/css/recap.css?v={{ asset_revision }}">{% endblock %}
+
 {% block dashboard_header %}
     <div class="header-copy">
         <h1>Statistics</h1>
         <p>{{ stats.subLabel }}</p>
+        {% include 'statistics/_navigation.twig' with {current_view: 'overview'} only %}
     </div>
     <div class="header-actions statistics-header-actions">
         <div class="statistics-range-picker">
@@ -142,15 +145,15 @@
                     </div>
                     <span class="stats-mono-chip">{{ stats.trendUnit }}</span>
                 </div>
-                <div class="stats-trend-bars" aria-label="Watch time trend">
+                <div class="stats-trend-bars" aria-label="Watch time trend" style="--trend-count: {{ stats.trend|length }}">
                     {% for bar in stats.trend %}
-                        <span aria-label="{{ bar.label }}: {{ bar.value }}">
-                            <span class="visually-hidden">{{ bar.label }}: {{ bar.value }}</span>
+                        <span role="img" tabindex="0" aria-label="{{ bar.label }}: {{ bar.value }}" title="{{ bar.label }}: {{ bar.value }}">
                             <i style="height: {{ bar.h }}" title="{{ bar.value }}"></i>
-                            <b>{{ bar.label }}</b>
+                            <b aria-hidden="true">{{ bar.label }}</b>
                         </span>
                     {% endfor %}
                 </div>
+                <p class="stats-trend-detail" aria-live="polite"></p>
             </article>
 
             <article class="stats-card">
@@ -399,6 +402,7 @@
 {% endblock %}
 
 {% block page_scripts %}
+    <script src="/assets/js/statistics-trend.js?v={{ asset_revision }}"></script>
     <script src="/assets/js/statistics-most-watched.js?v=20260901-disclosure"></script>
     <script src="/assets/js/statistics-devices.js?v={{ asset_revision }}"></script>
 {% endblock %}

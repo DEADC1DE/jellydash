@@ -2169,27 +2169,15 @@ svg.icon-filled {
 }
 
 .statistics-range-picker {
-    position: relative;
     width: 356px;
-    padding: 9px;
-    overflow: hidden;
-    border: 1px solid rgba(124, 92, 255, .3);
-    border-radius: 15px;
+    max-width: 100%;
+    padding: 10px;
+    border: 1px solid rgba(124, 92, 255, .26);
+    border-radius: 16px;
     background:
-        radial-gradient(circle at 12% 0%, rgba(124, 92, 255, .16), transparent 43%),
-        linear-gradient(135deg, rgba(25, 21, 43, .94), rgba(14, 17, 31, .94));
-    box-shadow: 0 12px 30px -22px rgba(59, 158, 255, .9), inset 0 1px rgba(255, 255, 255, .04);
-}
-
-.statistics-range-picker::before {
-    position: absolute;
-    top: 0;
-    right: 18px;
-    left: 18px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--color-purple), var(--color-blue), transparent);
-    content: "";
-    opacity: .85;
+        radial-gradient(circle at 0 50%, rgba(124, 92, 255, .13), transparent 55%),
+        rgba(17, 15, 27, .72);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
 }
 
 .statistics-range-meta {
@@ -2211,18 +2199,20 @@ svg.icon-filled {
 }
 
 .statistics-range-label {
-    color: rgba(255, 255, 255, .7);
-    font-family: var(--font-mono);
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: .08em;
-    text-transform: uppercase;
+    color: var(--color-text);
+    font-size: 11px;
+    font-weight: 600;
 }
 
 .statistics-range-label svg {
-    width: 14px;
-    height: 14px;
-    color: var(--color-purple-soft);
+    box-sizing: content-box;
+    width: 13px;
+    height: 13px;
+    padding: 5px;
+    color: #d6c9ff;
+    border: 1px solid rgba(124, 92, 255, .36);
+    border-radius: 7px;
+    background: rgba(124, 92, 255, .14);
 }
 
 .statistics-default-state,
@@ -2239,7 +2229,8 @@ svg.icon-filled {
 }
 
 .statistics-default-state {
-    color: var(--color-green-text);
+    color: var(--color-muted);
+    font-weight: 400;
 }
 
 .statistics-default-action {
@@ -2263,15 +2254,17 @@ svg.icon-filled {
 .statistics-range-control {
     width: 100%;
     gap: 4px;
-    padding: 3px;
-    border-color: rgba(255, 255, 255, .09);
-    background: rgba(6, 5, 12, .42);
+    padding: 0;
+    border: 0;
+    background: transparent;
 }
 
 .statistics-range-control a {
     flex: 1 1 0;
-    min-height: 32px;
-    padding-inline: 9px;
+    min-height: 38px;
+    padding-inline: 4px;
+    border: 1px solid transparent;
+    white-space: nowrap;
     color: rgba(255, 255, 255, .52);
 }
 
@@ -2281,9 +2274,9 @@ svg.icon-filled {
 }
 
 .statistics-range-control a.is-active {
-    color: #fff;
-    background: linear-gradient(135deg, #6e4ff1, #426fce);
-    box-shadow: 0 6px 14px -8px rgba(82, 119, 239, .95), inset 0 1px rgba(255, 255, 255, .18);
+    color: #eee8ff;
+    border-color: rgba(124, 92, 255, .4);
+    background: linear-gradient(120deg, rgba(124, 92, 255, .25), rgba(59, 158, 255, .15));
 }
 
 .dashboard-content {
@@ -4036,15 +4029,11 @@ a.history-pager-btn:hover {
     gap: 8px;
     width: fit-content;
     max-width: 100%;
-    min-height: 36px;
     margin: 0 0 18px;
-    padding: 7px 10px;
+    padding: 0;
     color: rgba(255, 255, 255, .56);
     font-size: 12px;
     line-height: 1.45;
-    border: 1px solid rgba(124, 92, 255, .16);
-    border-radius: 10px;
-    background: rgba(124, 92, 255, .055);
 }
 
 .stats-history-hint svg {
@@ -4056,7 +4045,7 @@ a.history-pager-btn:hover {
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
-    color: rgba(183, 166, 255, .86);
+    color: inherit;
 }
 
 .trending-section {
@@ -4194,10 +4183,6 @@ a.history-pager-btn:hover {
     padding: 18px 14px 2px;
 }
 
-.most-watched-content .trending-row:last-child {
-    padding-bottom: 0;
-}
-
 @media (hover: hover) and (pointer: fine) {
     .most-watched-summary:hover {
         border-color: rgba(124, 92, 255, .42);
@@ -4212,9 +4197,25 @@ a.history-pager-btn:hover {
     grid-auto-flow: column;
     grid-auto-columns: 134px;
     gap: 16px;
-    padding-bottom: 6px;
+    padding-bottom: 16px;
     overflow-x: auto;
     scrollbar-width: thin;
+    scrollbar-color: rgba(195, 178, 255, .3) transparent;
+}
+
+@supports selector(::-webkit-scrollbar) {
+    .trending-row {
+        scrollbar-width: auto;
+        scrollbar-color: auto;
+    }
+
+    .trending-row::-webkit-scrollbar { height: 6px; }
+    .trending-row::-webkit-scrollbar-track { background: transparent; }
+    .trending-row::-webkit-scrollbar-thumb {
+        border-radius: 999px;
+        background: rgba(195, 178, 255, .3);
+    }
+    .trending-row::-webkit-scrollbar-thumb:hover { background: rgba(195, 178, 255, .5); }
 }
 
 .trending-card {
@@ -4790,12 +4791,14 @@ a.trending-card:hover .trending-poster {
 .stats-trend-bars {
     display: flex;
     align-items: flex-end;
-    gap: 10px;
+    gap: clamp(1px, calc(24px / var(--trend-count, 1)), 10px);
     height: 156px;
     margin-top: 24px;
+    margin-bottom: 28px;
 }
 
 .stats-trend-bars > span {
+    position: relative;
     display: flex;
     flex: 1;
     align-items: center;
@@ -4804,6 +4807,7 @@ a.trending-card:hover .trending-poster {
     gap: 8px;
     min-width: 0;
     height: 100%;
+    cursor: pointer;
 }
 
 .stats-trend-bars i {
@@ -4814,11 +4818,23 @@ a.trending-card:hover .trending-poster {
 }
 
 .stats-trend-bars b {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
     color: rgba(255, 255, 255, .42);
     font-family: var(--font-mono);
     font-size: 10px;
     font-weight: 600;
 }
+
+.stats-trend-bars > span:first-child b { left: 0; transform: none; }
+.stats-trend-bars > span:last-child b { left: auto; right: 0; transform: none; }
+.stats-trend-bars b[hidden] { display: none; }
+.stats-trend-bars > span:focus-visible { outline: 2px solid var(--color-purple-soft); outline-offset: 2px; }
+.stats-trend-bars > span:is(:hover, :focus) i { background: var(--color-purple-soft); }
+.stats-trend-detail { min-height: 16px; margin: 0; font-size: 11px; color: var(--color-muted); }
 
 .stats-list-head,
 .stats-donut-card > div:first-child {
@@ -5106,6 +5122,7 @@ a.trending-card:hover .trending-poster {
 }
 
 .stats-user-table {
+    position: relative;
     overflow: hidden;
     border: 1px solid rgba(255, 255, 255, .07);
     border-radius: 14px;
@@ -5992,8 +6009,6 @@ a.trending-card:hover .trending-poster {
 
     .statistics-range-picker {
         width: 100%;
-        padding: 7px;
-        border-radius: 14px;
     }
 
     .statistics-range-meta {
@@ -6002,7 +6017,7 @@ a.trending-card:hover .trending-poster {
     }
 
     .statistics-range-control a {
-        min-height: 30px;
+        min-height: 44px;
     }
 
     .segmented-control {

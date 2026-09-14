@@ -659,6 +659,23 @@ final class PlayHistoryRepository implements LibraryHistorySource
         return $selection->orderBy('started_at')->asc()->fetchAll();
     }
 
+    public function firstStatisticsStartedAt(): ?\DateTimeImmutable
+    {
+        $selection = $this->db->select('MIN(started_at)')->from('play_history');
+        $this->excludeConfiguredUsers($selection);
+        $this->excludeThemePlayback($selection);
+        $value = trim((string) $selection->fetchSingle());
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($value, new \DateTimeZone(date_default_timezone_get()));
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
     public static function isPlayFinished(int $watchedSec, int $runtimeSec): bool
     {
         return $runtimeSec > 0 && $watchedSec >= (int) floor($runtimeSec * 0.95);
