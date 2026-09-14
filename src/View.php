@@ -13,7 +13,7 @@ use Twig\Loader\FilesystemLoader;
  */
 class View
 {
-    public const ASSET_REVISION = '20260913-notification-devices-layout';
+    public const ASSET_REVISION = '20260914-monthly-recap';
 
     private Environment $twig;
 

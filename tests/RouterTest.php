@@ -76,6 +76,7 @@ final class RouterTest extends TestCase
 
         $this->assertStringContainsString('Statistics', $output);
         $this->assertStringContainsString('stats-kpi-grid', $output);
+        $this->assertStringContainsString('href="/statistics/recap"', $output);
         $this->assertSame(200, http_response_code());
     }
 
@@ -88,6 +89,20 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('Libraries', $output);
         $this->assertStringContainsString('library-grid', $output);
         $this->assertSame(200, http_response_code());
+    }
+
+    public function testMonthlyRecapRouteRendersWithoutSampleActivity(): void
+    {
+        ob_start();
+        (new Router(new View()))->dispatch('recap', 'statistics');
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(200, http_response_code());
+        $this->assertStringContainsString('<h1>Monthly recap</h1>', $output);
+        $this->assertStringContainsString('action="/statistics/recap"', $output);
+        $this->assertStringContainsString('/assets/js/recap.js?v=' . View::ASSET_REVISION, $output);
+        $this->assertStringNotContainsString('Sample activity', $output);
+        $this->assertStringNotContainsString('Fictional', $output);
     }
 
     public function testSettingsRouteMakesExclusionsExplicit(): void
