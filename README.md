@@ -196,6 +196,10 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 Updating then means `git pull` and running the same command again. For a source-built SQLite install, replace `docker-compose.yml` with `docker-compose.sqlite.yml`.
 
+### Unraid
+
+The [Unraid template](unraid/jellydash.xml) uses the SQLite setup for a new, single-container install. See the [Unraid setup notes](unraid/README.md) for the required fields and persistent data paths. If you already run Jellydash through Compose on Unraid, keep that installation; adding the template does not move its data.
+
 ## Notifications
 
 Jellydash can ping you when someone starts playing and when a new Jellyseerr request comes in. Pick whichever channels you already use. Jellydash attempts delivery through every configured channel. Once any channel accepts an alert, it is considered delivered; failed channels do not get separate retries. If all channels fail, the existing retry queue handles the alert.
