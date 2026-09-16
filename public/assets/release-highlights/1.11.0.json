@@ -1,0 +1,17 @@
+{
+  "version": "1.11.0",
+  "auto_show": true,
+  "title": "Your monthly viewing recap",
+  "summary": "Open Monthly recap from Statistics to look back at a completed month, with watch time, favourite movies and series, daily activity and viewer totals.",
+  "highlights": [
+    "Choose a month and see everyone's viewing or filter to one viewer. Recaps use recorded History and label estimated watch time.",
+    "Statistics has shared Overview and Monthly recap tabs, a revised viewing-period selector, readable chart labels on smaller screens and better spacing around poster scrollbars.",
+    "Notification settings warnings now name the providers with incomplete or invalid settings. The notification-device list in Settings also uses the full available width."
+  ],
+  "links": [
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.11.0"
+    }
+  ]
+}

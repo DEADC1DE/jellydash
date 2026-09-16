@@ -17,6 +17,24 @@ final class PlaybackStatisticsServiceTest extends TestCase
         $this->assertSame('week', StatisticsPeriod::normalizeRange('decade', 'invalid'));
     }
 
+    public function testOverviewLabelsShowTheInclusiveRollingDates(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $service = new PlaybackStatisticsService(new \Mk\Framework\Jellyfin\PlayHistoryRepository($database));
+        $now = new DateTimeImmutable('2026-09-15 12:00:00');
+        foreach ([
+            'week' => ['7 days', '9 Sep 2026 to 15 Sep 2026'],
+            'month' => ['30 days', '17 Aug 2026 to 15 Sep 2026'],
+            'year' => ['12 months', '1 Oct 2025 to 15 Sep 2026'],
+            'all' => ['All time', 'All recorded history'],
+        ] as $range => [$label, $dates]) {
+            $data = $service->data($range, $now);
+            self::assertSame($label, $data['rangeLabel']);
+            self::assertSame($dates . ' - all libraries', $data['subLabel']);
+            self::assertSame(['7 days', '30 days', '12 months', 'All time'], array_column($data['ranges'], 'label'));
+        }
+    }
+
     public function testYearTrendAlwaysBuildsTwelveCalendarMonthsAtMonthEnd(): void
     {
         $service = new PlaybackStatisticsService();

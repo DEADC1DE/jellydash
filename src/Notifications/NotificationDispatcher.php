@@ -11,7 +11,7 @@ use Mk\Framework\Push\WebPushSender;
 
 /**
  * Fans one notification out to every configured delivery channel: Web Push
- * subscriptions plus the simple HTTP channels (Telegram, Pushover, Discord).
+ * subscriptions plus the configured HTTP channels.
  * Producers (playback and Jellyseerr alerts) only build the message; where it
  * goes is decided here, purely by which env config exists.
  */
@@ -37,6 +37,8 @@ final class NotificationDispatcher
             new TelegramChannel(),
             new PushoverChannel(),
             new DiscordChannel(),
+            new NtfyChannel(),
+            new GotifyChannel(),
         ];
     }
 

@@ -10,9 +10,9 @@ use Mk\Framework\Config;
 final class PlaybackStatisticsService
 {
     private const RANGES = [
-        'week' => ['label' => 'Week', 'sub' => 'Last 7 days'],
-        'month' => ['label' => 'Month', 'sub' => 'Last 30 days'],
-        'year' => ['label' => 'Year', 'sub' => 'Last 12 months'],
+        'week' => ['label' => '7 days', 'sub' => 'Last 7 days'],
+        'month' => ['label' => '30 days', 'sub' => 'Last 30 days'],
+        'year' => ['label' => '12 months', 'sub' => 'Last 12 months'],
         'all' => ['label' => 'All time', 'sub' => 'All recorded history'],
     ];
 
@@ -109,7 +109,9 @@ final class PlaybackStatisticsService
             'range' => $range,
             'rangeLabel' => self::RANGES[$range]['label'],
             'ranges' => $this->ranges($range),
-            'subLabel' => self::RANGES[$range]['sub'] . ' - all libraries',
+            'subLabel' => ($periodStart === null
+                ? self::RANGES[$range]['sub']
+                : $periodStart->format('j M Y') . ' to ' . $now->format('j M Y')) . ' - all libraries',
             'trending' => $trending,
             'hasTrending' => $trending !== [],
             'mostWatched' => $mostWatched,

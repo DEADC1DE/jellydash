@@ -1,0 +1,89 @@
+{% extends "_shell.twig" %}
+{% block page_styles %}<link rel="stylesheet" href="/assets/css/recap.css?v={{ asset_revision }}">{% endblock %}
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Monthly recap</h1><p>Your viewing, one month at a time.</p>
+        {% include 'statistics/_navigation.twig' with {current_view: 'recap'} only %}
+    </div>
+{% endblock %}
+{% block dashboard_content %}
+<div class="recap-page">
+    <form class="recap-controls" action="/statistics/recap" method="get">
+        <label><span>Month</span><select name="month">{% for value, label in months %}<option value="{{ value }}"{{ recap.month == value ? ' selected' : '' }}>{{ label }}</option>{% endfor %}</select></label>
+        <label><span>Viewing activity</span><select name="viewer">{% for value, label in viewerOptions %}<option value="{{ value }}"{{ viewer == value ? ' selected' : '' }}>{{ label }}</option>{% endfor %}</select></label>
+        <button class="recap-apply" type="submit">Show recap</button>
+        <span class="recap-completed">Completed month</span>
+    </form>
+    {% if recap.empty %}
+    <section class="recap-empty">
+        <span class="recap-kicker">{{ recap.year }} / Monthly recap</span>
+        <h2>{{ recap.monthName }}</h2>
+        <h3>No viewing history for this month</h3>
+        <p>There are no recorded plays{% if viewer != '' %} for {{ viewer }}{% endif %} in {{ recap.label }}. Choose another month to see a recap.</p>
+        <p class="recap-muted">An empty history does not tell us whether anything was watched.</p>
+    </section>
+    {% else %}
+    <section class="recap-cover{{ recap.featured is empty ? ' recap-cover-text-only' : '' }}" aria-labelledby="recap-month-title">
+        <div class="recap-cover-copy">
+            <span class="recap-kicker">{{ recap.year }} / Monthly recap</span>
+            <h2 id="recap-month-title">{{ recap.monthName }}<span>on screen.</span></h2>
+            <p class="recap-scope">{{ recap.scopeLabel }} · Recorded History</p>
+            <div class="recap-headline"><strong>{{ recap.watch }}</strong><span>watch time{% if recap.hasEstimates %}, including estimates{% endif %}</span></div>
+            <dl class="recap-numbers"><div><dt>Plays</dt><dd>{{ recap.plays }}</dd></div><div><dt>Movies &amp; series</dt><dd>{{ recap.titleCount }}</dd></div><div><dt>Active days</dt><dd>{{ recap.activeDays }}</dd></div></dl>
+        </div>
+        {% if recap.featured is not empty %}
+        <div class="recap-cover-media">
+            <div class="recap-poster-stack" aria-label="Most watched titles by viewing time">
+            {% for title in recap.featured %}
+                <div class="recap-cover-poster"><span class="recap-poster-fallback">{{ title.title }}</span>{% if title.poster %}<img src="{{ title.poster }}" alt="{{ title.title }} poster" width="220" height="330">{% endif %}</div>
+            {% endfor %}
+            </div>
+            <p><span class="recap-kicker">Most watched</span><strong>{{ recap.featured[0].title }}</strong><span>{{ recap.featured[0].duration }} · {{ recap.featured[0].plays }} plays</span></p>
+        </div>
+        {% endif %}
+    </section>
+    <p class="recap-coverage">{{ recap.coverageNote }}{% if recap.hasEstimates %} {{ recap.estimated }} of the total comes from estimated viewing time.{% endif %}</p>
+
+    <section class="recap-favourites" aria-labelledby="recap-favourites-title">
+        <div class="recap-section-heading"><h2 id="recap-favourites-title">The titles you spent time with</h2><span>Ranked by watch time</span></div>
+        <div class="recap-title-groups">
+        {% for group in [{label: 'Movies', titles: recap.movies}, {label: 'Series', titles: recap.series}] %}
+            <section class="recap-title-group" aria-label="{{ group.label }}">
+                <h3>{{ group.label }}<span>{{ group.titles|length }} titles</span></h3>
+                {% for title in group.titles|slice(0, 3) %}
+                <article class="recap-title-row">
+                    <span class="recap-rank">{{ loop.index }}</span>
+                    <div class="recap-small-poster"><span class="recap-poster-fallback">{{ title.title }}</span>{% if title.poster %}<img src="{{ title.poster }}" alt="" width="58" height="87" loading="lazy">{% endif %}</div>
+                    <div class="recap-title-copy"><h4>{{ title.title }}</h4><span>{% if title.year %}{{ title.year }} · {% endif %}{{ title.plays }} plays</span></div>
+                    <strong class="recap-title-duration">{{ title.duration }}</strong>
+                </article>
+                {% else %}<p class="recap-muted">No {{ group.label|lower }} to show for this month.</p>{% endfor %}
+            </section>
+        {% endfor %}
+        </div>
+    </section>
+
+    <div class="recap-bottom-grid">
+    <section class="recap-activity" aria-labelledby="recap-activity-title">
+        <div class="recap-section-heading"><h2 id="recap-activity-title">Viewing through the month</h2><span>Daily watch time</span></div>
+        <div class="recap-chart" role="group" aria-label="Daily viewing in {{ recap.label }}">
+        {% for day in recap.days %}
+            <button type="button" class="recap-day{{ not day.known ? ' is-unknown' : '' }}" aria-label="{{ day.day }} {{ recap.monthName }}: {{ day.known ? day.duration : 'no recorded viewing' }}" data-day-detail="{{ day.day }} {{ recap.monthName }} · {{ day.known ? day.duration : 'No recorded viewing' }}"><span class="recap-day-track"><i style="height:{{ day.height }}%"></i></span><span class="recap-day-label">{{ day.day in [1, 5, 10, 15, 20, 25, recap.days|length] ? day.day : '' }}</span></button>
+        {% endfor %}
+        </div>
+        <label class="recap-day-picker">Day details<select data-day-picker><option value="">Choose a day</option>{% for day in recap.days %}<option value="{{ loop.index0 }}">{{ day.day }} {{ recap.monthName }} · {{ day.known ? day.duration : 'No recorded viewing' }}</option>{% endfor %}</select></label>
+        <p class="recap-chart-detail" data-chart-detail aria-live="polite">Select a day to see its watch time.</p>
+        {% if recap.bestDay %}<div class="recap-busiest"><span>Busiest day</span><strong>{{ recap.bestDay }}</strong><span>{{ recap.bestDuration }} of viewing</span></div>{% endif %}
+    </section>
+    <section class="recap-viewers" aria-labelledby="recap-viewers-title">
+        <div class="recap-section-heading"><h2 id="recap-viewers-title">{{ viewer == '' ? 'Who was watching' : 'Your month' }}</h2></div>
+        {% for person in recap.viewers %}
+        <div class="recap-viewer"><span class="recap-avatar" aria-hidden="true">{{ person.name|slice(0,1) }}</span><div><div class="recap-viewer-line"><strong>{{ person.name }}</strong><span>{{ person.duration }}</span></div><span class="recap-viewer-track"><i style="width:{{ person.percent }}%"></i></span><small>{{ person.plays }} plays · {{ person.percent }}% of watch time</small></div></div>
+        {% endfor %}
+    </section>
+    </div>
+    {% endif %}
+    <footer class="recap-footnote"><p>Dates use {{ recap.timezone }}. Plays count towards the day they started, including repeat plays.</p>{% if recap.rankingNote %}<p>{{ recap.rankingNote }}</p>{% endif %}</footer>
+</div>
+{% endblock %}
+{% block page_scripts %}<script src="/assets/js/recap.js?v={{ asset_revision }}"></script>{% endblock %}

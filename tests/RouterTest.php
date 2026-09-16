@@ -76,6 +76,7 @@ final class RouterTest extends TestCase
 
         $this->assertStringContainsString('Statistics', $output);
         $this->assertStringContainsString('stats-kpi-grid', $output);
+        $this->assertStringContainsString('href="/statistics/recap"', $output);
         $this->assertSame(200, http_response_code());
     }
 
@@ -88,6 +89,20 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('Libraries', $output);
         $this->assertStringContainsString('library-grid', $output);
         $this->assertSame(200, http_response_code());
+    }
+
+    public function testMonthlyRecapRouteRendersWithoutSampleActivity(): void
+    {
+        ob_start();
+        (new Router(new View()))->dispatch('recap', 'statistics');
+        $output = (string) ob_get_clean();
+
+        $this->assertSame(200, http_response_code());
+        $this->assertStringContainsString('<h1>Monthly recap</h1>', $output);
+        $this->assertStringContainsString('action="/statistics/recap"', $output);
+        $this->assertStringContainsString('/assets/js/recap.js?v=' . View::ASSET_REVISION, $output);
+        $this->assertStringNotContainsString('Sample activity', $output);
+        $this->assertStringNotContainsString('Fictional', $output);
     }
 
     public function testSettingsRouteMakesExclusionsExplicit(): void
@@ -115,17 +130,17 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('Selected users never trigger playback alerts.', $output);
         $this->assertStringContainsString('<legend>Monitoring</legend>', $output);
         $this->assertStringContainsString('name="monitoring_ignore_extra"', $output);
-        $this->assertStringContainsString('/assets/js/server-stats.js?v=20260912-statistics-title-drilldowns', $output);
-        $this->assertStringContainsString('/assets/js/nav-count.js?v=20260912-statistics-title-drilldowns', $output);
+        $this->assertStringContainsString('/assets/js/server-stats.js?v=' . View::ASSET_REVISION, $output);
+        $this->assertStringContainsString('/assets/js/nav-count.js?v=' . View::ASSET_REVISION, $output);
         $this->assertStringContainsString('data-update-status', $output);
-        $this->assertStringContainsString('/assets/js/update-status.js?v=20260912-statistics-title-drilldowns', $output);
+        $this->assertStringContainsString('/assets/js/update-status.js?v=' . View::ASSET_REVISION, $output);
         $this->assertStringContainsString('data-release-changes', $output);
         $this->assertStringContainsString('data-release-dialog', $output);
         $this->assertStringContainsString('data-import-history-dialog', $output);
         $this->assertStringContainsString('id="import-history"', $output);
-        $this->assertStringContainsString('/assets/js/history-library-upgrade.js?v=20260912-statistics-title-drilldowns', $output);
+        $this->assertStringContainsString('/assets/js/history-library-upgrade.js?v=' . View::ASSET_REVISION, $output);
         $this->assertStringContainsString('/assets/js/release-highlights.js?v=20260822-history-upgrade', $output);
-        $this->assertStringContainsString('/assets/js/history-import.js?v=20260912-statistics-title-drilldowns', $output);
+        $this->assertStringContainsString('/assets/js/history-import.js?v=' . View::ASSET_REVISION, $output);
         $this->assertSame(200, http_response_code());
     }
 

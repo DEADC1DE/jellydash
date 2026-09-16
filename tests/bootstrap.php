@@ -63,6 +63,11 @@ foreach ([
     'PUSHOVER_APP_TOKEN',
     'PUSHOVER_USER_KEY',
     'DISCORD_WEBHOOK_URL',
+    'NTFY_URL',
+    'NTFY_TOPIC',
+    'NTFY_TOKEN',
+    'GOTIFY_URL',
+    'GOTIFY_APP_TOKEN',
     'IGNORE_USERS',
 ] as $key) {
     putenv($key . '=');

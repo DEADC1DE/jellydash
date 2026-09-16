@@ -50,6 +50,11 @@ services:
       PUSHOVER_APP_TOKEN: "${PUSHOVER_APP_TOKEN:-}"
       PUSHOVER_USER_KEY: "${PUSHOVER_USER_KEY:-}"
       DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      NTFY_URL: "${NTFY_URL:-}"
+      NTFY_TOPIC: "${NTFY_TOPIC:-}"
+      NTFY_TOKEN: "${NTFY_TOKEN:-}"
+      GOTIFY_URL: "${GOTIFY_URL:-}"
+      GOTIFY_APP_TOKEN: "${GOTIFY_APP_TOKEN:-}"
       # Libraries hidden from Trending/Most Watched (also editable in Settings)
       TRENDING_EXCLUDE_LIBRARIES: "${TRENDING_EXCLUDE_LIBRARIES:-}"
       # Optional login gate (recommended when internet-facing)

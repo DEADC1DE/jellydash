@@ -9,6 +9,7 @@ use Mk\Framework\Pages\HomeController;
 use Mk\Framework\Pages\JellyseerrController;
 use Mk\Framework\Pages\LibrariesController;
 use Mk\Framework\Pages\LoginController;
+use Mk\Framework\Pages\MonthlyRecapController;
 use Mk\Framework\Pages\NowPlayingController;
 use Mk\Framework\Pages\SettingsController;
 use Mk\Framework\Pages\StatisticsController;
@@ -28,6 +29,7 @@ final class Router
         'libraries' => LibrariesController::class,
         'history' => HistoryController::class,
         'statistics' => StatisticsController::class,
+        'statistics/recap' => MonthlyRecapController::class,
         'settings' => SettingsController::class,
         'login' => LoginController::class,
     ];
