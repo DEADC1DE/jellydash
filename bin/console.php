@@ -37,7 +37,7 @@ try {
     switch ($command) {
         case 'user:add':
             $db->ensureAuthSchema();
-            $username = $argv[2] ?? null;
+            $username = isset($argv[2]) ? trim(strtolower($argv[2])) : null;
             $password = $argv[3] ?? null;
             $name = $argv[4] ?? null;
             $role = (int) ($argv[5] ?? Authorization::ROLE_USER);
@@ -56,7 +56,8 @@ try {
             // missing, never touches an existing one, so a password changed in
             // the app isn't reset on every container restart.
             $useEnvironment = !isset($argv[2]) && !isset($argv[3]);
-            $username = $useEnvironment ? Config::get('AUTH_ADMIN_USER') : ($argv[2] ?? null);
+            $rawUsername = $useEnvironment ? Config::get('AUTH_ADMIN_USER') : ($argv[2] ?? null);
+            $username = $rawUsername !== null ? trim(strtolower($rawUsername)) : null;
             $password = $useEnvironment ? Config::get('AUTH_ADMIN_PASSWORD') : ($argv[3] ?? null);
             $name = $argv[4] ?? $username;
 
@@ -73,8 +74,18 @@ try {
             }
 
             $db->ensureAuthSchema();
-            $exists = $db->getDibi()->select('id')->from('users')
-                ->where('username = %s', trim(strtolower($username)))->fetch();
+            $exists = false;
+            foreach ($db->getDibi()->select('username')->from('users')->fetchAll() as $account) {
+                $stored = (string) $account['username'];
+                if (trim(strtolower($stored)) !== $username) {
+                    continue;
+                }
+                if ($stored !== $username) {
+                    fwrite(STDERR, "user:ensure: an existing account has a username with surrounding whitespace or different case. No account was created. Review the users table before trying again.\n");
+                    exit(1);
+                }
+                $exists = true;
+            }
 
             if ($exists) {
                 echo "User {$username} already exists; left untouched.\n";

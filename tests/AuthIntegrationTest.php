@@ -69,6 +69,32 @@ final class AuthIntegrationTest extends TestCase
         $this->assertFalse($auth->hasRole(Authorization::ROLE_OWNER));
     }
 
+    public function testNewUsernameIsTrimmedForLoginAndPasswordReset(): void
+    {
+        $id = $this->db->addAuthUser('  ' . self::USER_USERNAME . '  ', self::PASSWORD, 'Spaced', Authorization::ROLE_USER);
+        try {
+            $stored = $this->dibi->select('username')->from('users')->where('id = %i', $id)->fetchSingle();
+            $this->assertSame(self::USER_USERNAME, $stored);
+            $auth = new Authorization($this->db);
+            $this->assertTrue($auth->userLogin(' ' . self::USER_USERNAME . ' ', self::PASSWORD));
+            $this->assertTrue($this->db->setUserPassword(' ' . self::USER_USERNAME . ' ', 'new-password-123'));
+            $_SESSION = [];
+            $this->assertTrue((new Authorization($this->db))->userLogin(self::USER_USERNAME, 'new-password-123'));
+        } finally {
+            $this->dibi->delete('users')->where('id = %i', $id)->execute();
+        }
+    }
+
+    public function testWhitespaceOnlyUsernameCannotBeCreated(): void
+    {
+        try {
+            $this->expectException(InvalidArgumentException::class);
+            $this->db->addAuthUser(" \t ", self::PASSWORD, 'Invalid', Authorization::ROLE_USER);
+        } finally {
+            $this->dibi->delete('users')->where('username = %s', " \t ")->execute();
+        }
+    }
+
     public function testWrongPasswordFails(): void
     {
         $auth = new Authorization($this->db);
@@ -374,6 +400,42 @@ final class AuthIntegrationTest extends TestCase
             ->where('username = %s', self::ENV_USERNAME)->fetchSingle());
     }
 
+    public function testUserEnsureNormalizesSpacedEnvironmentNameAndRemainsIdempotent(): void
+    {
+        $result = $this->runConsole(['user:ensure'], [
+            'AUTH_ADMIN_USER' => ' ' . self::ENV_USERNAME . ' ',
+            'AUTH_ADMIN_PASSWORD' => self::ENV_PASSWORD,
+        ]);
+        $this->assertSame(0, $result['exitCode'], $result['error'] . $result['output']);
+        $this->assertSame(self::ENV_USERNAME, (string) $this->dibi->select('username')->from('users')
+            ->where('username = %s', self::ENV_USERNAME)->fetchSingle());
+        $again = $this->runConsole(['user:ensure', self::ENV_USERNAME, self::ENV_PASSWORD], []);
+        $this->assertSame(0, $again['exitCode'], $again['error'] . $again['output']);
+        $this->assertStringContainsString('already exists', $again['output']);
+        $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('users')
+            ->where('username = %s', self::ENV_USERNAME)->fetchSingle());
+    }
+
+    public function testUserEnsureDoesNotSilentlyDuplicateALegacySpacedAccount(): void
+    {
+        $legacy = ' ' . self::CLI_USERNAME . ' ';
+        $this->dibi->insert('users', [
+            'username' => $legacy,
+            'password' => password_hash(self::CLI_PASSWORD, PASSWORD_DEFAULT),
+            'name' => 'Legacy',
+            'role' => Authorization::ROLE_OWNER,
+        ])->execute();
+
+        $result = $this->runConsole(['user:ensure', self::CLI_USERNAME, self::CLI_PASSWORD], []);
+
+        $this->assertNotSame(0, $result['exitCode']);
+        $this->assertStringContainsString('existing account', $result['error']);
+        $this->assertSame($legacy, (string) $this->dibi->select('username')->from('users')
+            ->where('username = %s', $legacy)->fetchSingle());
+        $this->assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('users')
+            ->where('username = %s', self::CLI_USERNAME)->fetchSingle());
+    }
+
     public function testConsoleCanExplicitlyRestoreAnOwnerRole(): void
     {
         $result = $this->runConsole(['user:role', self::USERNAME, (string) Authorization::ROLE_OWNER], []);
@@ -450,6 +512,9 @@ final class AuthIntegrationTest extends TestCase
             self::USERNAME,
             self::ENV_USERNAME,
             self::CLI_USERNAME,
+            ' ' . self::CLI_USERNAME . ' ',
+            ' ' . self::ENV_USERNAME . ' ',
+            '  ' . self::USER_USERNAME . '  ',
             self::OWNER_USERNAME,
             self::USER_USERNAME,
             self::GUEST_USERNAME,
@@ -461,6 +526,9 @@ final class AuthIntegrationTest extends TestCase
             self::USERNAME,
             self::ENV_USERNAME,
             self::CLI_USERNAME,
+            ' ' . self::CLI_USERNAME . ' ',
+            ' ' . self::ENV_USERNAME . ' ',
+            '  ' . self::USER_USERNAME . '  ',
             self::OWNER_USERNAME,
             self::USER_USERNAME,
             self::GUEST_USERNAME,
