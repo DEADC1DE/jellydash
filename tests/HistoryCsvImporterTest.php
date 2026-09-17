@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Mk\Framework\AppSettings;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\Jellyfin\HistoryCsvExporter;
@@ -134,6 +135,41 @@ final class HistoryCsvImporterTest extends TestCase
             ->where('session_key LIKE %s', 'phpunit-native-csv-%')
             ->fetchSingle();
         $this->assertSame(0, (int) $count);
+    }
+
+    public function testImportRollsBackWhenProgressCallbackFailsWithColdSettings(): void
+    {
+        $path = $this->csvFile($this->csvRow([
+            'session_key' => 'phpunit-native-csv-rollback',
+            'item_id' => 'phpunit-native-rollback-item',
+        ]));
+        $cache = new ReflectionProperty(AppSettings::class, 'cache');
+        $schemaConnections = new ReflectionProperty(AppSettings::class, 'schemaConnections');
+        $previousCache = $cache->getValue();
+        $previousSchemaConnections = $schemaConnections->getValue();
+
+        try {
+            $cache->setValue(null, null);
+            $schemaConnections->setValue(null, null);
+            $importer = new HistoryCsvImporter(Container::db(), new HistoryCsvParser(), $this->repository);
+
+            try {
+                $importer->importFile($path, static function (array $progress): void {
+                    if ($progress['phase'] === 'importing') {
+                        throw new RuntimeException('Injected progress failure.');
+                    }
+                });
+                self::fail('The injected progress failure should escape the import.');
+            } catch (RuntimeException $error) {
+                self::assertSame('Injected progress failure.', $error->getMessage());
+            }
+
+            self::assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('play_history')
+                ->where('session_key = %s', 'phpunit-native-csv-rollback')->fetchSingle());
+        } finally {
+            $cache->setValue(null, $previousCache);
+            $schemaConnections->setValue(null, $previousSchemaConnections);
+        }
     }
 
     public function testVersionOneBackupsRemainImportable(): void
