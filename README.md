@@ -87,7 +87,13 @@ The project is very young and in very active development.
 
 ## Quick start
 
-You need Docker with the Compose plugin. Pick the database setup you want, grab two files, and you are ready to go.
+Install Jellydash from Community Apps on Unraid, or use Docker Compose with MariaDB or SQLite. Choose your setup below.
+
+### Unraid
+
+Jellydash is [listed in Unraid Community Apps](https://ca.unraid.net/apps/jellydash-1vybjoi0yy69ry). On your Unraid server, open Apps, search for Jellydash, and select Install.
+
+The [Unraid template](unraid/jellydash.xml) uses the SQLite setup for a new, single-container install. See the [Unraid setup notes](unraid/README.md) for the required fields and persistent data paths. If you already run Jellydash through Compose on Unraid, keep that installation; adding the template does not move its data.
 
 ### MariaDB (default)
 
@@ -195,12 +201,6 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Updating then means `git pull` and running the same command again. For a source-built SQLite install, replace `docker-compose.yml` with `docker-compose.sqlite.yml`.
-
-### Unraid
-
-Jellydash is [listed in Unraid Community Apps](https://ca.unraid.net/apps/jellydash-1vybjoi0yy69ry). On your Unraid server, open Apps, search for Jellydash, and select Install.
-
-The [Unraid template](unraid/jellydash.xml) uses the SQLite setup for a new, single-container install. See the [Unraid setup notes](unraid/README.md) for the required fields and persistent data paths. If you already run Jellydash through Compose on Unraid, keep that installation; adding the template does not move its data.
 
 ## Notifications
 
