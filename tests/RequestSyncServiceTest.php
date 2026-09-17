@@ -7,6 +7,7 @@ use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Jellyseerr\JellyseerrClient;
 use Mk\Framework\Jellyseerr\RequestSyncService;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class RequestSyncServiceTest extends TestCase
@@ -74,6 +75,49 @@ final class RequestSyncServiceTest extends TestCase
         $this->assertSame(61, $this->repository->count());
         $this->assertSame(0, (int) $this->database->getDibi()->select('notified')->from('seerr_requests')->where('request_id = 101')->fetchSingle());
         $this->assertSame(1, (int) $this->database->getDibi()->select('request_status')->from('seerr_requests')->where('request_id = 100')->fetchSingle());
+
+        $claims = $this->repository->claimUnnotified((new DateTimeImmutable('2026-09-17T12:00:00Z'))->getTimestamp());
+        $this->assertSame([], $claims);
+        $this->assertSame(60, (int) $this->database->getDibi()->select('COUNT(*)')
+            ->from('seerr_requests')->where('notified = 1')->where('request_id > %i', 100)->fetchSingle());
+    }
+
+    #[DataProvider('disabledNotificationSwitches')]
+    public function testDisabledNotificationsRetirePendingAndNewRequestsBeforeReenable(string $switch): void
+    {
+        $this->insertKnown(100, 1);
+        $this->repository->insert([
+            'request_id' => 99,
+            'media_type' => 'movie',
+            'tmdb_id' => 10099,
+            'title' => 'Pending request',
+            'requested_at' => '2026-09-17 12:00:00',
+            'created_at' => '2026-09-17 12:00:00',
+            'notified' => 0,
+        ]);
+        $client = new FakePagedJellyseerrClient([
+            0 => $this->requests(101, 100, '2026-09-17T12:00:00Z'),
+        ]);
+        $previous = getenv($switch);
+
+        try {
+            putenv($switch . '=false');
+            $this->assertSame(1, (new RequestSyncService($client, $this->repository))->sync());
+        } finally {
+            putenv($previous === false ? $switch : $switch . '=' . $previous);
+        }
+
+        $this->assertSame(1, (int) $this->database->getDibi()->select('notified')
+            ->from('seerr_requests')->where('request_id = %i', 99)->fetchSingle());
+        $this->assertSame(1, (int) $this->database->getDibi()->select('notified')
+            ->from('seerr_requests')->where('request_id = %i', 101)->fetchSingle());
+        $this->assertSame([], $this->repository->claimUnnotified((new DateTimeImmutable('2026-09-17T12:01:00Z'))->getTimestamp()));
+    }
+
+    /** @return array<string, array{string}> */
+    public static function disabledNotificationSwitches(): array
+    {
+        return ['master' => ['PUSH_ENABLED'], 'requests' => ['SEERR_NOTIFY_ENABLED']];
     }
 
     public function testFailedLaterPageMakesNoPartialWrites(): void
@@ -217,7 +261,7 @@ final class RequestSyncServiceTest extends TestCase
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function requests(int $newest, int $oldest): array
+    private function requests(int $newest, int $oldest, string $createdAt = '2026-09-08T12:00:00Z'): array
     {
         $requests = [];
         for ($id = $newest; $id >= $oldest; --$id) {
@@ -225,7 +269,7 @@ final class RequestSyncServiceTest extends TestCase
                 'id' => $id,
                 'status' => 1,
                 'media' => ['mediaType' => 'movie', 'tmdbId' => 10000 + $id, 'status' => 2],
-                'createdAt' => '2026-09-08T12:00:00Z',
+                'createdAt' => $createdAt,
             ];
         }
 

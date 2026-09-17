@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Mk\Framework\Config;
 use Mk\Framework\Database;
 use Mk\Framework\DatabaseSchemaInitializer;
 use PHPUnit\Framework\TestCase;
@@ -40,6 +41,7 @@ final class SQLiteConcurrencyTest extends TestCase
     public function testConcurrentWorkersClaimEveryRequestExactlyOnce(): void
     {
         $connection = $this->database->getDibi();
+        $now = (new DateTimeImmutable('now', new DateTimeZone(Config::timezone())))->format('Y-m-d H:i:s');
         $connection->begin();
         for ($requestId = 1; $requestId <= 200; ++$requestId) {
             $connection->insert('seerr_requests', [
@@ -50,9 +52,9 @@ final class SQLiteConcurrencyTest extends TestCase
                 'request_status' => 1,
                 'media_status' => 2,
                 'is_4k' => 0,
-                'requested_at' => '2026-08-11 12:00:00',
+                'requested_at' => $now,
                 'notified' => 0,
-                'created_at' => '2026-08-11 12:00:00',
+                'created_at' => $now,
             ])->execute();
         }
         $connection->commit();

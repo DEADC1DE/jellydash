@@ -250,6 +250,7 @@ final class SchemaCompatibilityTest extends TestCase
     {
         new SeerrRequestRepository($this->database);
         WorkerStatusRepository::ensureSchema($this->database);
+        $now = (new DateTimeImmutable('now', new DateTimeZone(Config::timezone())))->format('Y-m-d H:i:s');
         $this->dibi->insert('seerr_requests', [
             'request_id' => 9002,
             'media_type' => 'movie',
@@ -258,9 +259,9 @@ final class SchemaCompatibilityTest extends TestCase
             'request_status' => 1,
             'media_status' => 2,
             'is_4k' => 0,
-            'requested_at' => '2026-08-09 12:00:00',
+            'requested_at' => $now,
             'notified' => 0,
-            'created_at' => '2026-08-09 12:00:00',
+            'created_at' => $now,
         ])->execute();
 
         // Hold the first claim update long enough for a second worker to read

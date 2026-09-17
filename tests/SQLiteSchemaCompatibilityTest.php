@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Mk\Framework\AppSettings;
 use Mk\Framework\Authorization;
+use Mk\Framework\Config;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\Health\WorkerStatusRepository;
@@ -183,6 +184,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         $this->assertSame(1, $subscriptions->count());
 
         $requests = new SeerrRequestRepository($this->database);
+        $now = (new DateTimeImmutable('now', new DateTimeZone(Config::timezone())))->format('Y-m-d H:i:s');
         $request = [
             'request_id' => 42,
             'media_type' => 'movie',
@@ -191,9 +193,9 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             'request_status' => 1,
             'media_status' => 2,
             'is_4k' => 0,
-            'requested_at' => '2026-08-11 12:00:00',
+            'requested_at' => $now,
             'notified' => 0,
-            'created_at' => '2026-08-11 12:00:00',
+            'created_at' => $now,
         ];
         $requests->insert($request);
         $requests->insert($request);
