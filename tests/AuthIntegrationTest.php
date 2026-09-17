@@ -146,6 +146,7 @@ final class AuthIntegrationTest extends TestCase
                     $auth->can(Authorization::CAPABILITY_MANAGE_OWN_PUSH),
                     $auth->can(Authorization::CAPABILITY_MANAGE_ALL_PUSH),
                 ], $username);
+                $this->assertSame($expected[0], $auth->canSendGlobalNotificationTest(), $username);
             }
 
             $_SESSION = [];
@@ -169,6 +170,7 @@ final class AuthIntegrationTest extends TestCase
             $auth = new Authorization($this->db);
             $this->assertFalse($auth->isUserLoggedIn());
             $this->assertTrue($auth->can(Authorization::CAPABILITY_MANAGE_GLOBAL));
+            $this->assertFalse($auth->canSendGlobalNotificationTest());
             $this->assertTrue($auth->can(Authorization::CAPABILITY_ENROLL_PUSH));
             $this->assertTrue($auth->can(Authorization::CAPABILITY_MANAGE_ALL_PUSH));
         } finally {
