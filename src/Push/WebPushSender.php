@@ -47,13 +47,14 @@ final class WebPushSender
      *
      * @param array<int, array{endpoint: string, p256dh: string, auth: string}> $subscriptions
      * @param array<string, mixed> $payload
-     * @return array{sent: int, failed: int, expired: array<int, string>, ineligible: int}
+     * @return array{sent: int, failed: int, expired: list<string>, ineligible: int, succeeded: list<string>, failed_endpoints: list<string>, ineligible_endpoints: list<string>}
      *   `expired` holds endpoints the push service rejected as gone (404/410),
      *   which the caller should delete.
      */
     public function send(array $subscriptions, array $payload): array
     {
-        $result = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0];
+        $result = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0,
+            'succeeded' => [], 'failed_endpoints' => [], 'ineligible_endpoints' => []];
 
         if (!$this->isConfigured() || $subscriptions === []) {
             return $result;
@@ -64,6 +65,7 @@ final class WebPushSender
             if (!PushSubscriptionValidator::isValid($sub['endpoint'], $sub['p256dh'], $sub['auth'])) {
                 ++$result['failed'];
                 ++$result['ineligible'];
+                $result['ineligible_endpoints'][] = $sub['endpoint'];
                 continue;
             }
             $eligible[] = $sub;
@@ -86,12 +88,15 @@ final class WebPushSender
                 ++$reported;
                 if ($report['success']) {
                     ++$result['sent'];
+                    $result['succeeded'][] = $report['endpoint'];
                     continue;
                 }
 
                 ++$result['failed'];
                 if ($report['expired']) {
                     $result['expired'][] = $report['endpoint'];
+                } else {
+                    $result['failed_endpoints'][] = $report['endpoint'];
                 }
             }
         } catch (\Throwable) {
