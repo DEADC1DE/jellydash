@@ -58,6 +58,17 @@
         `).join('');
     }
 
+    function showSummaryError() {
+        summaryRoot.classList.remove('is-loading');
+        summaryRoot.querySelectorAll('.library-summary-card').forEach((card) => {
+            card.classList.remove('is-loading');
+            const value = card.querySelector('strong');
+            const note = card.querySelector('small');
+            if (value) value.textContent = 'N/A';
+            if (note) note.textContent = 'Could not load';
+        });
+    }
+
     function stat(label, value) {
         return `
             <div>
@@ -138,7 +149,7 @@
             gridRoot.innerHTML = `
                 <article class="library-empty-state">
                     <strong>No matching Jellyfin libraries found.</strong>
-                    <span>Expected TV Shows, Movies, Stand-Up Comedy, Anime, and PPV & Events.</span>
+                    <span>Jellyfin did not return any media libraries for this connection.</span>
                 </article>
             `;
             return;
@@ -169,6 +180,7 @@
 
     loadLibraries().catch(() => {
         setStatus('Could not load library stats', 'error');
+        showSummaryError();
         gridRoot.classList.remove('is-loading');
         gridRoot.innerHTML = `
             <article class="library-empty-state">

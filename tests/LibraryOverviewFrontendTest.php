@@ -26,4 +26,12 @@ final class LibraryOverviewFrontendTest extends TestCase
         $this->assertStringContainsString("['Libraries', 'Total Items', 'Total Playback', 'Total Plays']", $template);
         $this->assertStringNotContainsString('Storage Used', $template);
     }
+
+    public function testLibraryFailureAndEmptyStatesUseSettledGenericCopy(): void
+    {
+        exec(sprintf('node %s 2>&1', escapeshellarg(ROOT_DIR . '/tests/frontend/libraries-state.test.js')), $output, $exitCode);
+
+        $this->assertSame(0, $exitCode, implode("\n", $output));
+        $this->assertContains('Libraries state tests passed.', $output);
+    }
 }
