@@ -1345,9 +1345,9 @@ final class PlayHistoryRepository implements LibraryHistorySource
         }
 
         if ($filters->search !== '') {
-            $like = '%' . $filters->search . '%';
+            $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search) . '%';
             $selection->where(
-                '(series_name LIKE %s OR item_name LIKE %s OR user_name LIKE %s OR client LIKE %s OR device LIKE %s)',
+                "(series_name LIKE %s ESCAPE '!' OR item_name LIKE %s ESCAPE '!' OR user_name LIKE %s ESCAPE '!' OR client LIKE %s ESCAPE '!' OR device LIKE %s ESCAPE '!')",
                 $like,
                 $like,
                 $like,

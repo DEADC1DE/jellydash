@@ -248,6 +248,32 @@ final class PlayHistoryRepositoryTest extends TestCase
         }
     }
 
+    public function testFreeTextSearchTreatsLikeWildcardsAsLiteralAcrossRowsCountsAndExport(): void
+    {
+        $user = 'PHPUnit Literal Search Viewer';
+        foreach (['50% done', '500 done', '100_percent', '100Xpercent', 'bang!_match', 'bang!Xmatch'] as $index => $title) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-literal-search-' . $index,
+                'user_name' => $user,
+                'item_name' => $title,
+            ]);
+        }
+
+        foreach (['50%' => '50% done', '100_' => '100_percent', 'bang!_' => 'bang!_match', '%' => '50% done'] as $term => $expected) {
+            $filters = new HistoryFilters(user: $user, search: $term, range: 'all');
+            $this->assertSame([$expected], array_map(
+                static fn (\Dibi\Row $row): string => (string) $row['item_name'],
+                $this->repository->historyRows($filters),
+            ), $term);
+            $this->assertSame(1, $this->repository->historyTotal($filters), $term);
+            $this->assertSame(1, $this->repository->historyAggregate($filters)['plays'], $term);
+            $this->assertSame([$expected], array_map(
+                static fn (\Dibi\Row $row): string => (string) $row['item_name'],
+                iterator_to_array($this->repository->historyExportRows($filters)),
+            ), $term);
+        }
+    }
+
     public function testCustomPeriodUsesInclusiveStartExclusiveEndAcrossRowsAndAggregates(): void
     {
         $user = 'PHPUnit Exact History Period';
