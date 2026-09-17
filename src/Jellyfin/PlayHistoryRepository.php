@@ -77,6 +77,15 @@ final class PlayHistoryRepository implements LibraryHistorySource
         return $this->themePlaybackExclusions;
     }
 
+    /**
+     * Resolve settings-backed exclusions before an import transaction starts.
+     * Their first read can create app_settings, and MariaDB DDL commits transactions.
+     */
+    public function prepareHistoryImport(): void
+    {
+        $this->exclusions();
+    }
+
     public function visibleHistorySql(string $historyAlias = 'play_history', bool $alsoPending = false): string
     {
         return $this->themePlaybackExclusions->visibilitySql($historyAlias, $alsoPending);
@@ -700,6 +709,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
             return $this->importHistoricalPlaysBatch($rows, true, $onProgress);
         }
 
+        $this->prepareHistoryImport();
         $this->db->begin();
         try {
             $result = $this->importHistoricalPlaysBatch($rows, false, null);

@@ -1,5 +1,6 @@
 <?php
 
+use Mk\Framework\AppSettings;
 use Mk\Framework\Container;
 use Mk\Framework\Jellyfin\HistoryFilters;
 use Mk\Framework\Jellyfin\MonitoringExclusions;
@@ -858,16 +859,29 @@ final class PlayHistoryRepositoryTest extends TestCase
             }
         });
 
-        try {
-            $repository->importHistoricalPlays($rows);
-            self::fail('The injected write failure should escape the batch.');
-        } catch (RuntimeException $error) {
-            self::assertSame('Injected second-row failure.', $error->getMessage());
-        }
+        $cache = new ReflectionProperty(AppSettings::class, 'cache');
+        $schemaConnections = new ReflectionProperty(AppSettings::class, 'schemaConnections');
+        $previousCache = $cache->getValue();
+        $previousSchemaConnections = $schemaConnections->getValue();
 
-        self::assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('play_history')
-            ->where('item_id IN %in', ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'])
-            ->fetchSingle());
+        try {
+            $cache->setValue(null, null);
+            $schemaConnections->setValue(null, null);
+
+            try {
+                $repository->importHistoricalPlays($rows);
+                self::fail('The injected write failure should escape the batch.');
+            } catch (RuntimeException $error) {
+                self::assertSame('Injected second-row failure.', $error->getMessage());
+            }
+
+            self::assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('play_history')
+                ->where('item_id IN %in', ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'])
+                ->fetchSingle());
+        } finally {
+            $cache->setValue(null, $previousCache);
+            $schemaConnections->setValue(null, $previousSchemaConnections);
+        }
     }
 
     public function testItemPlaySummariesGroupsPlaysByItemAndKeepsLatest(): void
