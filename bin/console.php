@@ -139,11 +139,13 @@ try {
                     if (!Config::bool('PUSH_ENABLED', true)) {
                         return 0;
                     }
-                    $dispatcher = new Notifications\NotificationDispatcher();
+                    return $monitor->run('playback_notifications', static function (): int {
+                        $dispatcher = new Notifications\NotificationDispatcher();
 
-                    return $dispatcher->hasAnyChannel()
-                        ? $monitor->run('playback_notifications', static fn (): int => (new Push\PlaybackNotifier(null, $dispatcher))->dispatch())
-                        : 0;
+                        return $dispatcher->hasAnyChannel()
+                            ? (new Push\PlaybackNotifier(null, $dispatcher))->dispatch()
+                            : 0;
+                    });
                 },
                 static function (\Throwable $error): void {
                     Log::logException($error);

@@ -13,6 +13,11 @@ use Mk\Framework\Log;
  */
 final class DiscordChannel implements NotificationChannel
 {
+    /** @param (\Closure(string, array<string, mixed>): array{status: int, body: string})|null $sender */
+    public function __construct(private ?\Closure $sender = null)
+    {
+    }
+
     public function name(): string
     {
         return 'discord';
@@ -26,8 +31,8 @@ final class DiscordChannel implements NotificationChannel
     public function send(array $notification): bool
     {
         $embed = [
-            'title' => trim((string) ($notification['title'] ?? 'Jellydash')),
-            'description' => trim((string) ($notification['body'] ?? '')),
+            'title' => NotificationEndpoint::characters(trim((string) ($notification['title'] ?? 'Jellydash')), 256),
+            'description' => NotificationEndpoint::characters(trim((string) ($notification['body'] ?? '')), 4096),
             'color' => 0x7C5CFF,
         ];
 
@@ -36,14 +41,14 @@ final class DiscordChannel implements NotificationChannel
             $embed['url'] = $absolute;
         }
 
-        $result = HttpSender::postJson((string) Config::get('DISCORD_WEBHOOK_URL'), [
+        $result = ($this->sender ?? HttpSender::postJson(...))((string) Config::get('DISCORD_WEBHOOK_URL'), [
             'username' => 'Jellydash',
             'embeds' => [$embed],
         ]);
 
         // Discord answers 204 No Content on success.
         if ($result['status'] < 200 || $result['status'] >= 300) {
-            Log::logDebugMessage('Discord notification failed (HTTP ' . $result['status'] . '): ' . mb_substr($result['body'], 0, 300), $this);
+            Log::logErrorMessage('Discord notification failed (HTTP ' . $result['status'] . '). Check the channel settings.', $this);
 
             return false;
         }
