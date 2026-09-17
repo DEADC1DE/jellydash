@@ -53,6 +53,7 @@ final class SQLiteConcurrencyTest extends TestCase
                 'media_status' => 2,
                 'is_4k' => 0,
                 'requested_at' => $now,
+                'requested_at_epoch' => time(),
                 'notified' => 0,
                 'created_at' => $now,
             ])->execute();

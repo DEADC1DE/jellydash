@@ -195,6 +195,83 @@ final class RequestSyncServiceTest extends TestCase
         });
     }
 
+    #[DataProvider('notificationTimingCases')]
+    public function testFreshRequestClaimsUseElapsedTimeAndPollingCadence(string $createdAt, string $now, string $interval): void
+    {
+        $this->withTimezoneEnvironment('Europe/Prague', null, function () use ($createdAt, $now, $interval): void {
+            $previous = getenv('SEERR_POLL_INTERVAL');
+            putenv('SEERR_POLL_INTERVAL=' . $interval);
+            try {
+                $this->insertKnown(100, 1);
+                $client = new FakePagedJellyseerrClient([0 => $this->requests(101, 100, $createdAt)]);
+                self::assertSame(1, (new RequestSyncService($client, $this->repository))->sync());
+                $claims = $this->repository->claimUnnotified((new DateTimeImmutable($now))->getTimestamp());
+                self::assertCount(1, $claims);
+                self::assertSame(101, (int) $claims[0]['request_id']);
+            } finally {
+                putenv($previous === false ? 'SEERR_POLL_INTERVAL' : 'SEERR_POLL_INTERVAL=' . $previous);
+            }
+        });
+    }
+
+    /** @return array<string, array{string, string, string}> */
+    public static function notificationTimingCases(): array
+    {
+        return [
+            'fall back' => ['2026-10-25T01:04:00Z', '2026-10-25T01:05:00Z', '120'],
+            'spring forward' => ['2026-03-29T00:59:00Z', '2026-03-29T01:01:00Z', '120'],
+            'fifteen minute poll' => ['2026-09-17T12:01:00Z', '2026-09-17T12:15:00Z', '900'],
+            'daily poll with processing time' => ['2026-09-16T12:00:01Z', '2026-09-17T12:00:30Z', '86400'],
+        ];
+    }
+
+    public function testRepeatedLocalHourDoesNotMakeAnOldRequestFresh(): void
+    {
+        $this->withTimezoneEnvironment('Europe/Prague', null, function (): void {
+            $this->insertKnown(100, 1);
+            $client = new FakePagedJellyseerrClient([0 => $this->requests(101, 100, '2026-10-25T00:20:00Z')]);
+            (new RequestSyncService($client, $this->repository))->sync();
+            self::assertSame([], $this->repository->claimUnnotified((new DateTimeImmutable('2026-10-25T01:21:00Z'))->getTimestamp()));
+        });
+    }
+
+    public function testSyncRestoresTheExactInstantForPendingLegacyRows(): void
+    {
+        $this->withTimezoneEnvironment('Europe/Prague', null, function (): void {
+            $this->insertKnown(100, 1);
+            $this->database->getDibi()->update('seerr_requests', ['notified' => 0])->execute();
+            $client = new FakePagedJellyseerrClient([0 => $this->requests(100, 100, '2026-10-25T01:04:00Z')]);
+            self::assertSame(0, (new RequestSyncService($client, $this->repository))->sync());
+            $claims = $this->repository->claimUnnotified((new DateTimeImmutable('2026-10-25T01:05:00Z'))->getTimestamp());
+            self::assertCount(1, $claims);
+            self::assertSame(100, (int) $claims[0]['request_id']);
+            self::assertSame('Known request', (string) $claims[0]['title']);
+        });
+    }
+
+    public function testLegacyRowsWithoutAnExactInstantDoNotReplay(): void
+    {
+        $this->insertKnown(100, 1);
+        $this->database->getDibi()->update('seerr_requests', ['notified' => 0])->execute();
+        self::assertSame([], $this->repository->claimUnnotified());
+        self::assertSame(1, $this->repository->count());
+        self::assertSame('Known request', (string) $this->repository->latest()[0]['title']);
+    }
+
+    public function testSlowPollingStillRetiresRequestsOlderThanItsFreshnessWindow(): void
+    {
+        $previous = getenv('SEERR_POLL_INTERVAL');
+        putenv('SEERR_POLL_INTERVAL=900');
+        try {
+            $this->insertKnown(100, 1);
+            $client = new FakePagedJellyseerrClient([0 => $this->requests(101, 100, '2026-09-17T11:00:00Z')]);
+            (new RequestSyncService($client, $this->repository))->sync();
+            self::assertSame([], $this->repository->claimUnnotified((new DateTimeImmutable('2026-09-17T12:15:00Z'))->getTimestamp()));
+        } finally {
+            putenv($previous === false ? 'SEERR_POLL_INTERVAL' : 'SEERR_POLL_INTERVAL=' . $previous);
+        }
+    }
+
     public function testRequestedAtUsesDockerTimezoneWhenAppTimezoneIsMissing(): void
     {
         $this->withTimezoneEnvironment(null, 'America/New_York', function (): void {

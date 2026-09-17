@@ -128,6 +128,7 @@ final class NotificationRetryTest extends TestCase
         $now = new DateTimeImmutable('now', new DateTimeZone(Config::timezone()));
         $this->database->getDibi()->update('seerr_requests', [
             'requested_at' => $now->modify('-1 day')->format('Y-m-d H:i:s'),
+            'requested_at_epoch' => $now->getTimestamp() - 86400,
         ])->where('request_id = %i', 901)->execute();
         $channel = new CountingSuccessChannel();
         $notifier = new RequestNotifier($this->repository, new NotificationDispatcher(
@@ -151,6 +152,7 @@ final class NotificationRetryTest extends TestCase
             'request_status' => 1,
             'media_status' => 2,
             'requested_at' => $now->modify('-1 minute')->format('Y-m-d H:i:s'),
+            'requested_at_epoch' => $now->getTimestamp() - 60,
             'created_at' => $now->format('Y-m-d H:i:s'),
             'notified' => 0,
         ])->execute();
@@ -432,6 +434,7 @@ final class NotificationRetryTest extends TestCase
             'media_status' => 2,
             'is_4k' => 0,
             'requested_at' => $now,
+            'requested_at_epoch' => time(),
             'notified' => 0,
             'created_at' => $now,
         ])->execute();

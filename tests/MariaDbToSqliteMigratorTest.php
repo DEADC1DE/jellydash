@@ -124,6 +124,7 @@ final class MariaDbToSqliteMigratorTest extends TestCase
                 ->where('server_key = %s', str_repeat('1', 64))->fetchSingle(),
         );
         $this->assertSame('Migration Movie', (string) $sqlite->select('title')->from('seerr_requests')->fetchSingle());
+        $this->assertSame(1786449600, (int) $sqlite->select('requested_at_epoch')->from('seerr_requests')->fetchSingle());
         $status = $sqlite->select('status, error_code, last_started_at, last_finished_at, last_success_at')
             ->from('system_status')->where('source_id = %s AND component = %s', 'default', 'history')->fetch();
         $this->assertNotFalse($status);
@@ -445,6 +446,7 @@ final class MariaDbToSqliteMigratorTest extends TestCase
             'media_status' => 2,
             'is_4k' => 0,
             'requested_at' => '2026-08-11 12:00:00',
+            'requested_at_epoch' => 1786449600,
             'notified' => 1,
             'created_at' => '2026-08-11 12:00:00',
         ])->execute();

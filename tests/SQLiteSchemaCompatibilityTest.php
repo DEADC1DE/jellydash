@@ -123,6 +123,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         ])->execute();
         $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `notified`');
         $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `library_resolved_at`');
+        $this->dibi->query('ALTER TABLE `seerr_requests` DROP COLUMN `requested_at_epoch`');
         foreach (['notification_attempts', 'notification_claim_token', 'notification_claimed_at_epoch', 'notification_next_attempt_at_epoch'] as $column) {
             $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN %n', $column);
             $this->dibi->query('ALTER TABLE `seerr_requests` DROP COLUMN %n', $column);
@@ -155,6 +156,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         $this->assertNull($row['notification_claim_token']);
         $this->assertNull($row['notification_claimed_at_epoch']);
         $this->assertNull($row['notification_next_attempt_at_epoch']);
+        $this->assertTrue($this->database->getPlatform()->columnExists('seerr_requests', 'requested_at_epoch'));
         foreach (['notification_attempts', 'notification_claim_token', 'notification_claimed_at_epoch', 'notification_next_attempt_at_epoch'] as $column) {
             $this->assertTrue($this->database->getPlatform()->columnExists('seerr_requests', $column));
         }
@@ -194,6 +196,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             'media_status' => 2,
             'is_4k' => 0,
             'requested_at' => $now,
+            'requested_at_epoch' => time(),
             'notified' => 0,
             'created_at' => $now,
         ];
