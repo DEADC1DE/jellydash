@@ -6,6 +6,18 @@ use PHPUnit\Framework\TestCase;
 
 final class SettingsTemplateTest extends TestCase
 {
+    public function testDeviceLoadFailureIsNotPresentedAsAnEmptyList(): void
+    {
+        $controller = (string) file_get_contents(ROOT_DIR . '/src/Pages/SettingsController.php');
+        $template = (string) file_get_contents(TEMPLATES_DIR . '/settings/index.twig');
+
+        $this->assertStringContainsString("'push_devices_error' => \$devicesError", $controller);
+        $this->assertStringContainsString('Log::logException', $controller);
+        $this->assertStringContainsString('{% if push_devices_error %}', $template);
+        $this->assertStringContainsString('Could not load notification devices', $template);
+        $this->assertStringContainsString('{% elseif push_devices is empty %}', $template);
+    }
+
     public function testImportSectionKeepsNativeAndPlaybackReportingSourcesSeparate(): void
     {
         $template = file_get_contents(TEMPLATES_DIR . '/settings/index.twig');

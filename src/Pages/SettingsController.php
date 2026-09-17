@@ -10,6 +10,7 @@ use Mk\Framework\Config;
 use Mk\Framework\Controller;
 use Mk\Framework\Jellyfin\JellyfinClient;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
+use Mk\Framework\Log;
 use Mk\Framework\Main;
 use Mk\Framework\Push\PushDeviceCapability;
 use Mk\Framework\Push\PushSubscriptionRepository;
@@ -52,6 +53,7 @@ final class SettingsController extends Controller
         }
 
         $devices = [];
+        $devicesError = false;
         if ($canManagePush) {
             try {
                 $devices = (new PushSubscriptionRepository())->devices(
@@ -60,8 +62,9 @@ final class SettingsController extends Controller
                     $authEnabled,
                     (new PushDeviceCapability())->existingHash(),
                 );
-            } catch (\Throwable) {
-                $devices = [];
+            } catch (\Throwable $e) {
+                $devicesError = true;
+                Log::logException(new \RuntimeException('Could not load notification devices.', previous: $e));
             }
         }
 
@@ -108,6 +111,7 @@ final class SettingsController extends Controller
             'can_manage_push' => $canManagePush,
             'can_manage_all_push' => $canManageAllPush,
             'push_devices' => $devices,
+            'push_devices_error' => $devicesError,
             'server_label_value' => AppSettings::get('server_label', 'Jellyfin dashboard'),
             'show_server_stats' => AppSettings::bool('show_server_stats', true),
             'show_recently_added' => AppSettings::bool('show_recently_added', true),
