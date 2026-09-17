@@ -68,6 +68,7 @@ services:
       - app_cache:/var/www/html/cache
       - app_runtime_cache:/var/www/html/var/cache
       - app_logs:/var/www/html/var/log
+      - app_sessions:/var/www/html/var/sessions
       - app_uploads:/var/www/html/public/uploads
       # Drop-in feature modules (see docs/MODULES.md), e.g.:
       # - ./my-modules/downloads:/var/www/html/modules/downloads:ro
@@ -92,5 +93,6 @@ volumes:
   app_cache:
   app_runtime_cache:
   app_logs:
+  app_sessions:
   app_uploads:
   db_data:
