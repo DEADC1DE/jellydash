@@ -38,13 +38,16 @@ if [ -n "${AUTH_ADMIN_USER:-}" ] && [ -n "${AUTH_ADMIN_PASSWORD:-}" ]; then
     gosu www-data php /var/www/html/bin/console.php user:ensure || true
 fi
 
-# Background workers (disable all with POLLER_ENABLED=false). Each runs detached
-# alongside the web server and is self-healing: a failed run never stops the
-# loop.
-if [ "${POLLER_ENABLED:-true}" = "true" ]; then
-    POLL_INTERVAL="${POLL_INTERVAL:-30}"
-    LIBRARIES_CACHE_TTL="${LIBRARIES_CACHE_TTL:-300}"
-    SEERR_POLL_INTERVAL="${SEERR_POLL_INTERVAL:-120}"
+# Resolve the same boolean and interval rules used by the status page. This
+# also prevents invalid or zero sleep values from stopping or spinning workers.
+worker_config="$(php /var/www/html/bin/worker-config.php)"
+read -r workers_enabled POLL_INTERVAL LIBRARIES_CACHE_TTL SEERR_POLL_INTERVAL <<EOF
+$worker_config
+EOF
+
+# Each worker runs detached alongside the web server. A failed run never stops
+# its loop.
+if [ "$workers_enabled" = "1" ]; then
     echo "[entrypoint] starting background workers (history every ${POLL_INTERVAL}s, libraries every ${LIBRARIES_CACHE_TTL}s, jellyseerr every ${SEERR_POLL_INTERVAL}s)"
 
     # Records currently-playing sessions so history logs even when nobody has
@@ -74,6 +77,8 @@ if [ "${POLLER_ENABLED:-true}" = "true" ]; then
             sleep "${SEERR_POLL_INTERVAL}"
         done
     ) &
+else
+    echo "[entrypoint] background workers disabled (POLLER_ENABLED is false or invalid)"
 fi
 
 exec "$@"

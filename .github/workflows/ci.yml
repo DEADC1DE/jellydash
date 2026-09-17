@@ -106,6 +106,20 @@ jobs:
         run: |
           docker run --rm --entrypoint php jellydash:ci -r "exit(PHP_VERSION_ID === 80333 && extension_loaded('curl') && extension_loaded('mbstring') && extension_loaded('mysqli') && extension_loaded('gmp') && extension_loaded('sqlite3') && extension_loaded('openssl') ? 0 : 1);"
 
+      - name: Check worker startup settings
+        run: |
+          output=$(docker run --rm \
+            --env DB_DRIVER=sqlite3 \
+            --env DB_NAME=/var/www/html/var/data/ci-worker.sqlite \
+            --env POLLER_ENABLED=1 \
+            --env POLL_INTERVAL=0 \
+            --env LIBRARIES_CACHE_TTL=invalid \
+            --env SEERR_POLL_INTERVAL=-5 \
+            jellydash:ci sh -c 'sleep 2' 2>&1)
+          printf '%s\n' "$output" | grep -F '[entrypoint] starting background workers (history every 30s, libraries every 300s, jellyseerr every 120s)'
+          output=$(docker run --rm --env POLLER_ENABLED=OFF jellydash:ci sh -c 'sleep 1' 2>&1)
+          printf '%s\n' "$output" | grep -F '[entrypoint] background workers disabled'
+
       - name: Check Apache configuration
         run: docker run --rm --entrypoint apache2ctl jellydash:ci -t
 

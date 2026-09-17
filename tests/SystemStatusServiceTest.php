@@ -58,6 +58,11 @@ final class SystemStatusServiceTest extends TestCase
         self::assertSame('unknown', $this->history([])['state']);
         putenv('POLLER_ENABLED=false');
         self::assertSame('disabled', $this->history([])['state']);
+        putenv('POLLER_ENABLED=invalid');
+        self::assertSame('disabled', $this->history([])['state']);
+        putenv('POLLER_ENABLED=1');
+        self::assertSame('unknown', $this->history([])['state']);
+        putenv('POLLER_ENABLED=false');
         self::assertSame('healthy', $this->history($this->success())['state'], 'External scheduling can still run workers.');
     }
 
@@ -67,6 +72,8 @@ final class SystemStatusServiceTest extends TestCase
         self::assertSame('delayed', $this->history($row)['state']);
         putenv('POLL_INTERVAL=120');
         self::assertSame('healthy', $this->history($row)['state']);
+        putenv('POLL_INTERVAL=0');
+        self::assertSame('delayed', $this->history($row)['state']);
     }
 
     public function testRunningStalledFailedRecoveredAndFutureClockStates(): void
