@@ -84,9 +84,33 @@ async function testEmptyResultDoesNotNamePersonalLibraries() {
     assert.doesNotMatch(page.grid.innerHTML, /Stand-Up Comedy|PPV & Events/);
 }
 
+async function testMixedLibraryLabelsPlayableItems() {
+    const page = harness(async () => ({
+        ok: true,
+        json: async () => ({ summary: [], refreshedLabel: 'Live from Jellyfin', libraries: [{
+            kind: 'mixed', available: true, playbackAvailable: true,
+            totalFiles: '9', totalPlays: '0', playback: '0m',
+            name: 'Mixed', type: 'Library', glyph: 'M', accent: '#abcdef',
+            chipBg: '#abcdef', chipBorder: '#abcdef', banner: '',
+            lastActivity: '', lastPlayed: '', lastUser: '',
+            breakdown: [
+                { label: 'Movies', value: '2', color: '#abcdef' },
+                { label: 'Series', value: '3', color: '#abcdef' },
+                { label: 'Videos', value: '1', color: '#abcdef' },
+                { label: 'Episodes', value: '6', color: '#abcdef' },
+            ],
+        }] }),
+    }));
+    await settle();
+    assert.match(page.grid.innerHTML, /9 playable items/);
+    assert.match(page.grid.innerHTML, /<dt>Playable Items<\/dt>\s*<dd>9<\/dd>/);
+    assert.match(page.grid.innerHTML, /6<\/strong>Episodes/);
+}
+
 (async () => {
     await testFailedRequestSettlesBothSections();
     await testEmptyResultDoesNotNamePersonalLibraries();
+    await testMixedLibraryLabelsPlayableItems();
     process.stdout.write('Libraries state tests passed.\n');
 })().catch((error) => {
     console.error(error);

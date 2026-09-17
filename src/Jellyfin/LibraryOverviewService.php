@@ -660,6 +660,7 @@ final class LibraryOverviewService
                     ['value' => $this->comma($movies), 'label' => 'Movies', 'color' => $accent],
                     ['value' => $this->comma($series), 'label' => 'Series', 'color' => '#f0c46b'],
                     ['value' => $this->comma($videos), 'label' => 'Videos', 'color' => '#6fb6ff'],
+                    ['value' => $this->comma($episodes), 'label' => 'Episodes', 'color' => '#3b9eff'],
                 ],
             ];
         }

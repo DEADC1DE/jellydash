@@ -10,7 +10,7 @@ final class LibraryOverviewFrontendTest extends TestCase
     {
         $script = (string) file_get_contents(ROOT_DIR . '/public/assets/js/libraries.js');
 
-        $this->assertStringContainsString("stat('Total Items', library.totalFiles)", $script);
+        $this->assertStringContainsString("stat(library.kind === 'mixed' ? 'Playable Items' : 'Total Items', library.totalFiles)", $script);
         $this->assertStringContainsString('library.playbackAvailable === false', $script);
         $this->assertStringContainsString("playbackUnavailable ? 'Playback Unavailable'", $script);
         $this->assertStringContainsString('Live item counts are unavailable.', $script);

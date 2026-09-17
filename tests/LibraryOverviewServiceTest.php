@@ -73,6 +73,26 @@ final class LibraryOverviewServiceTest extends TestCase
         $this->assertSame(193414, $data['libraries'][1]['totalFilesRaw']);
     }
 
+    public function testMixedLibraryBreakdownExplainsPlayableItemTotal(): void
+    {
+        $client = new FakeLibraryOverviewClient(
+            [['Id' => 'mixed', 'Name' => 'Mixed', 'CollectionType' => 'other']],
+            [
+                'mixed|Movie' => 2,
+                'mixed|Series' => 3,
+                'mixed|Video' => 1,
+                'mixed|Episode' => 6,
+            ],
+        );
+
+        $data = (new LibraryOverviewService($client, new FakeLibraryHistorySource()))->data();
+
+        $this->assertSame(9, $data['libraries'][0]['totalFilesRaw']);
+        $this->assertSame(['Movies' => '2', 'Series' => '3', 'Videos' => '1', 'Episodes' => '6'],
+            array_column($data['libraries'][0]['breakdown'], 'value', 'label'));
+        $this->assertSame('9', $data['summary'][1]['value']);
+    }
+
     public function testIncompleteRefreshKeepsACompleteStaleCache(): void
     {
         $cachePath = tempnam(sys_get_temp_dir(), 'jellydash-libraries-');

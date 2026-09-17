@@ -88,6 +88,7 @@
             anime: 'episodes',
             music: 'songs',
             videos: 'videos',
+            mixed: 'playable items',
         }[library.kind] || 'items';
 
         return `${escapeHtml(library.totalFiles)} ${unit}`;
@@ -122,7 +123,7 @@
                     ` : ''}
 
                     <dl class="library-stat-grid">
-                        ${stat('Total Items', library.totalFiles)}
+                        ${stat(library.kind === 'mixed' ? 'Playable Items' : 'Total Items', library.totalFiles)}
                         ${stat(playbackUnavailable ? 'Total Plays Unavailable' : 'Total Plays', library.totalPlays)}
                         ${stat(playbackUnavailable ? 'Playback Unavailable' : (library.playbackEstimated ? 'Estimated Playback' : 'Total Playback'), library.playback)}
                         ${stat('Last Activity', library.lastActivity)}
