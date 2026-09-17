@@ -43,12 +43,14 @@ if (!in_array($scope, ['current', 'all'], true)) {
 
     return;
 }
-$requiredCapability = $scope === 'all'
-    ? Authorization::CAPABILITY_MANAGE_GLOBAL
-    : Authorization::CAPABILITY_ENROLL_PUSH;
-if (!$authorization->can($requiredCapability)) {
+$allowed = $scope === 'all'
+    ? $authorization->canSendGlobalNotificationTest()
+    : $authorization->can(Authorization::CAPABILITY_ENROLL_PUSH);
+if (!$allowed) {
     http_response_code(403);
-    echo json_encode(['error' => 'This account cannot send that notification test.']);
+    echo json_encode(['error' => $scope === 'all'
+        ? 'Testing every channel requires an admin login. Open installs can use the server console command push:test.'
+        : 'This account cannot send that notification test.']);
 
     return;
 }
