@@ -6,6 +6,7 @@ use Mk\Framework\Authorization;
 use Mk\Framework\Config;
 use Mk\Framework\Pager;
 use Mk\Framework\RequestContext;
+use Mk\Framework\SessionStorage;
 
 // Enforce the external request policy for pages and direct API requests before
 // opening a session or restoring a remembered login.
@@ -52,7 +53,7 @@ ini_set('session.gc_maxlifetime', (string) Authorization::SESSION_ABSOLUTE_TIMEO
 // Keep Jellydash session files away from other PHP apps on the same host.
 // Otherwise another app with PHP's shorter cleanup window can remove them.
 $sessionPath = ROOT_DIR . '/var/sessions';
-if ((is_dir($sessionPath) || @mkdir($sessionPath, 0770, true)) && is_writable($sessionPath)) {
+if ((is_dir($sessionPath) || @mkdir($sessionPath, 0770, true)) && SessionStorage::usable($sessionPath)) {
     ini_set('session.save_path', $sessionPath);
 }
 
