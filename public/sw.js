@@ -47,28 +47,31 @@ self.addEventListener('push', (event) => {
     event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Tapping a notification focuses an open Jellydash window (or opens one).
+// Tapping a notification keeps unrelated open pages in place.
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
     const target = (event.notification.data && event.notification.data.url) || '/now-playing';
 
     event.waitUntil((async () => {
+        let targetUrl;
+        try {
+            targetUrl = new URL(target, self.location.origin);
+        } catch (e) {
+            targetUrl = new URL('/now-playing', self.location.origin);
+        }
+        if (targetUrl.origin !== self.location.origin) {
+            targetUrl = new URL('/now-playing', self.location.origin);
+        }
+
         const clientList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
         for (const client of clientList) {
-            if ('focus' in client) {
+            if (client.url === targetUrl.href && 'focus' in client) {
                 await client.focus();
-                if ('navigate' in client) {
-                    try {
-                        await client.navigate(target);
-                    } catch (e) {
-                        // Cross-origin or detached client; ignore.
-                    }
-                }
                 return;
             }
         }
         if (self.clients.openWindow) {
-            await self.clients.openWindow(target);
+            await self.clients.openWindow(targetUrl.href);
         }
     })());
 });
