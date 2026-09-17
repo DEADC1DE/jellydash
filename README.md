@@ -87,13 +87,7 @@ The project is very young and in very active development.
 
 ## Quick start
 
-Install Jellydash from Community Apps on Unraid, or use Docker Compose with MariaDB or SQLite. Choose your setup below.
-
-### Unraid
-
-Jellydash is [listed in Unraid Community Apps](https://ca.unraid.net/apps/jellydash-1vybjoi0yy69ry). On your Unraid server, open Apps, search for Jellydash, and select Install.
-
-The [Unraid template](unraid/jellydash.xml) uses the SQLite setup for a new, single-container install. See the [Unraid setup notes](unraid/README.md) for the required fields and persistent data paths. If you already run Jellydash through Compose on Unraid, keep that installation; adding the template does not move its data.
+Use Docker Compose with MariaDB or SQLite, or install from Community Apps on Unraid. Choose your setup below.
 
 ### MariaDB (default)
 
@@ -128,6 +122,12 @@ Whichever database you choose, the active setup is saved as `docker-compose.yml`
 If you want to use your own MariaDB server or mount modules, copy [docker-compose.override.example.yml](docker-compose.override.example.yml) to `docker-compose.override.yml` and adjust it there.
 
 **For setting up notifications, check the section down below.**
+
+### Unraid
+
+Jellydash is [listed in Unraid Community Apps](https://ca.unraid.net/apps/jellydash-1vybjoi0yy69ry). On your Unraid server, open Apps, search for Jellydash, and select Install.
+
+The [Unraid template](unraid/jellydash.xml) uses the SQLite setup for a new, single-container install. See the [Unraid setup notes](unraid/README.md) for the required fields and persistent data paths. If you already run Jellydash through Compose on Unraid, keep that installation; adding the template does not move its data.
 
 ### Updating
 
