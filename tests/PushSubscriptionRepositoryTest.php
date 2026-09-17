@@ -384,6 +384,46 @@ final class PushSubscriptionRepositoryTest extends TestCase
         $this->assertSame(0, $repository->count());
     }
 
+    public function testEndpointKeysCanRemoveAnUnownedLegacyDeviceAfterAuthenticationIsEnabled(): void
+    {
+        $this->database->ensureAuthSchema();
+        $user = $this->database->addAuthUser('push-legacy-revoke-user', 'password-123', 'User', Authorization::ROLE_USER);
+        $guest = $this->database->addAuthUser('push-legacy-revoke-guest', 'password-123', 'Guest', Authorization::ROLE_GUEST);
+        $repository = new PushSubscriptionRepository($this->database);
+        $endpoint = $this->endpoint('legacy-rotation');
+        $key = $this->encodedBytes(65, 'a');
+        $secret = $this->encodedBytes(16, 'b');
+        $capability = hash('sha256', 'legacy-rotation');
+        $repository->save($endpoint, $key, $secret, null, $capability);
+
+        $this->assertSame(0, $repository->revokeCurrent($capability, $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpoint($endpoint, $capability, $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $this->encodedBytes(16, 'c'), $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, strtoupper($secret), $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $guest, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, null, true));
+        $this->assertSame(1, $repository->count());
+
+        $this->assertTrue($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $user, true));
+        $this->assertSame(0, $repository->count());
+    }
+
+    public function testLegacyKeyFallbackNeverRemovesAnotherAccountsDevice(): void
+    {
+        $this->database->ensureAuthSchema();
+        $owner = $this->database->addAuthUser('push-legacy-other-owner', 'password-123', 'Owner', Authorization::ROLE_USER);
+        $other = $this->database->addAuthUser('push-legacy-other-user', 'password-123', 'Other', Authorization::ROLE_USER);
+        $repository = new PushSubscriptionRepository($this->database);
+        $endpoint = $this->endpoint('owned-after-rotation');
+        $key = $this->encodedBytes(65, 'd');
+        $secret = $this->encodedBytes(16, 'e');
+        $repository->save($endpoint, $key, $secret, null, hash('sha256', 'owned-after-rotation'), $owner, true);
+
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $other, true));
+        $this->assertSame(1, $repository->count());
+        $this->assertTrue($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $owner, true));
+    }
+
     public function testDeliveryFailureSurvivesSameKeyRefreshAndSuccessResetsIt(): void
     {
         $repository = new PushSubscriptionRepository($this->database);

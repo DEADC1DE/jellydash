@@ -245,19 +245,31 @@ final class PushSubscriptionRepository
 
     public function revokeCurrentEndpointWithKeys(string $endpoint, string $p256dh, string $auth, ?int $userId, bool $authEnabled): bool
     {
-        if (!PushSubscriptionValidator::isValid($endpoint, $p256dh, $auth) || ($authEnabled && $userId === null)) {
+        if (!PushSubscriptionValidator::isValid($endpoint, $p256dh, $auth) || ($authEnabled && !$this->isEligibleAccount($userId))) {
             return false;
         }
-        $delete = $this->db->delete('push_subscriptions')
-            ->where('endpoint_hash = %s', hash('sha256', $endpoint))
-            ->where('p256dh = %s', $p256dh)
-            ->where('auth = %s', $auth);
-        if ($authEnabled) {
-            $delete->where('user_id = %i', $userId);
-        }
-        $delete->execute();
 
-        return $this->db->getAffectedRows() > 0;
+        $removed = false;
+        $this->withInstallationLock(function () use ($endpoint, $p256dh, $auth, $userId, $authEnabled, &$removed): void {
+            $row = $this->db->select('id, p256dh, auth, user_id')->from('push_subscriptions')
+                ->where('endpoint_hash = %s', hash('sha256', $endpoint))->fetch();
+            if (!$row || !hash_equals((string) $row['p256dh'], $p256dh) || !hash_equals((string) $row['auth'], $auth)) {
+                return;
+            }
+            $ownerId = $row['user_id'] !== null ? (int) $row['user_id'] : null;
+            if ($authEnabled && $ownerId !== null && $ownerId !== $userId) {
+                return;
+            }
+
+            $delete = $this->db->delete('push_subscriptions')->where('id = %i', (int) $row['id']);
+            if ($authEnabled) {
+                $delete->where('(user_id = %i OR user_id IS NULL)', $userId);
+            }
+            $delete->execute();
+            $removed = $this->db->getAffectedRows() > 0;
+        });
+
+        return $removed;
     }
 
     public function containsEndpoint(string $endpoint): bool

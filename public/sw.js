@@ -70,6 +70,14 @@ self.addEventListener('notificationclick', (event) => {
                 return;
             }
         }
+        // openWindow can reuse an installed app window and discard its edits.
+        // Keep an existing Jellydash page in place when the target is not open.
+        for (const client of clientList) {
+            if (new URL(client.url).origin === self.location.origin && 'focus' in client) {
+                await client.focus();
+                return;
+            }
+        }
         if (self.clients.openWindow) {
             await self.clients.openWindow(targetUrl.href);
         }

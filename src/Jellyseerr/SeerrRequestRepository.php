@@ -76,12 +76,16 @@ final class SeerrRequestRepository
         }
     }
 
-    public function updateStatuses(int $requestId, int $requestStatus, int $mediaStatus): void
+    public function updateStatuses(int $requestId, int $requestStatus, int $mediaStatus, ?int $requestedAtEpoch = null): void
     {
-        $this->db->update('seerr_requests', [
+        $data = [
             'request_status' => $requestStatus,
             'media_status' => $mediaStatus,
-        ])
+        ];
+        if ($requestedAtEpoch !== null) {
+            $data['requested_at_epoch'] = $requestedAtEpoch;
+        }
+        $this->db->update('seerr_requests', $data)
             ->where('request_id = %i', $requestId)
             ->execute();
     }
@@ -90,7 +94,7 @@ final class SeerrRequestRepository
      * Apply one completely fetched remote prefix as a transaction, so a failed
      * row cannot establish a newer boundary while leaving older requests out.
      *
-     * @param array<int, array{request_id: int, request_status: int, media_status: int}> $statusUpdates
+     * @param array<int, array{request_id: int, request_status: int, media_status: int, requested_at_epoch?: ?int}> $statusUpdates
      * @param array<int, array<string, mixed>> $inserts
      */
     public function applySyncBatch(array $statusUpdates, array $inserts): int
@@ -99,7 +103,7 @@ final class SeerrRequestRepository
         $this->db->begin();
         try {
             foreach ($statusUpdates as $update) {
-                $this->updateStatuses($update['request_id'], $update['request_status'], $update['media_status']);
+                $this->updateStatuses($update['request_id'], $update['request_status'], $update['media_status'], $update['requested_at_epoch'] ?? null);
             }
             foreach ($inserts as $row) {
                 try {
@@ -153,23 +157,25 @@ final class SeerrRequestRepository
     public function claimUnnotified(?int $nowEpoch = null): array
     {
         $nowEpoch ??= time();
-        $since = (new \DateTimeImmutable('@' . ($nowEpoch - self::FRESH_WINDOW_SECONDS)))
-            ->setTimezone(new \DateTimeZone(Config::timezone()))->format('Y-m-d H:i:s');
+        // Allow one configured polling interval plus five minutes for sync
+        // processing. The ordinary two-minute poll retains a ten-minute window.
+        $since = $nowEpoch - max(self::FRESH_WINDOW_SECONDS, Config::interval('SEERR_POLL_INTERVAL', 120) + 300);
         $this->recoverExpiredNotificationClaims($nowEpoch);
 
         // A request discovered after an outage or a disabled channel is not
         // a new alert. Keep it in the mirror, but retire its notification.
+        // Legacy rows have no unambiguous instant until sync sees them again.
         $this->db->update('seerr_requests', [
             'notified' => 1,
             'notification_claim_token' => null,
             'notification_claimed_at_epoch' => null,
             'notification_next_attempt_at_epoch' => null,
-        ])->where('notified = 0')->where('requested_at < %s', $since)->execute();
+        ])->where('notified = 0')->where('(requested_at_epoch IS NULL OR requested_at_epoch < %i)', $since)->execute();
 
         $rows = $this->db->select('*')
             ->from('seerr_requests')
             ->where('notified = 0')
-            ->where('requested_at >= %s', $since)
+            ->where('requested_at_epoch >= %i', $since)
             ->where('notification_attempts < %i', 3)
             ->where('notification_claim_token IS NULL')
             ->where('(notification_next_attempt_at_epoch IS NULL OR notification_next_attempt_at_epoch <= %i)', $nowEpoch)
@@ -184,7 +190,7 @@ final class SeerrRequestRepository
         foreach ($rows as $row) {
             $token = bin2hex(random_bytes(32));
             $this->db->query(
-                'UPDATE `seerr_requests` SET `notification_attempts` = `notification_attempts` + 1, `notification_claim_token` = %s, `notification_claimed_at_epoch` = %i, `notification_next_attempt_at_epoch` = NULL WHERE `id` = %i AND `requested_at` >= %s AND `notified` = 0 AND `notification_attempts` < 3 AND `notification_claim_token` IS NULL AND (`notification_next_attempt_at_epoch` IS NULL OR `notification_next_attempt_at_epoch` <= %i)',
+                'UPDATE `seerr_requests` SET `notification_attempts` = `notification_attempts` + 1, `notification_claim_token` = %s, `notification_claimed_at_epoch` = %i, `notification_next_attempt_at_epoch` = NULL WHERE `id` = %i AND `requested_at_epoch` >= %i AND `notified` = 0 AND `notification_attempts` < 3 AND `notification_claim_token` IS NULL AND (`notification_next_attempt_at_epoch` IS NULL OR `notification_next_attempt_at_epoch` <= %i)',
                 $token,
                 $nowEpoch,
                 (int) $row['id'],
@@ -257,6 +263,7 @@ final class SeerrRequestRepository
                 `is_4k` tinyint(1) NOT NULL DEFAULT 0,
                 `season_count` int DEFAULT NULL,
                 `requested_at` datetime NOT NULL,
+                `requested_at_epoch` bigint DEFAULT NULL,
                 `notified` tinyint(1) NOT NULL DEFAULT 0,
                 `notification_attempts` tinyint NOT NULL DEFAULT 0,
                 `notification_claim_token` varchar(64) DEFAULT NULL,
@@ -281,6 +288,7 @@ final class SeerrRequestRepository
                 `is_4k` INTEGER NOT NULL DEFAULT 0,
                 `season_count` INTEGER DEFAULT NULL,
                 `requested_at` TEXT NOT NULL,
+                `requested_at_epoch` INTEGER DEFAULT NULL,
                 `notified` INTEGER NOT NULL DEFAULT 0,
                 `notification_attempts` INTEGER NOT NULL DEFAULT 0,
                 `notification_claim_token` TEXT DEFAULT NULL,
@@ -292,6 +300,7 @@ final class SeerrRequestRepository
         );
         $this->platform->createSqliteIndex('idx_requested_at', 'seerr_requests', ['requested_at']);
 
+        $this->ensureColumn('requested_at_epoch', '`requested_at_epoch` bigint DEFAULT NULL AFTER `requested_at`', '`requested_at_epoch` INTEGER DEFAULT NULL');
         $this->ensureColumn('notification_attempts', '`notification_attempts` tinyint NOT NULL DEFAULT 0 AFTER `notified`', '`notification_attempts` INTEGER NOT NULL DEFAULT 0');
         $this->ensureColumn('notification_claim_token', '`notification_claim_token` varchar(64) DEFAULT NULL AFTER `notification_attempts`', '`notification_claim_token` TEXT DEFAULT NULL');
         $this->ensureColumn('notification_claimed_at_epoch', '`notification_claimed_at_epoch` bigint DEFAULT NULL AFTER `notification_claim_token`', '`notification_claimed_at_epoch` INTEGER DEFAULT NULL');

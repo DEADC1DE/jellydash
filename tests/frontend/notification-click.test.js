@@ -27,7 +27,11 @@ async function click(openClients, target) {
             addEventListener(name, listener) { listeners[name] = listener; },
             clients: {
                 async matchAll() { return openClients; },
-                async openWindow(url) { opened.push(url); },
+                async openWindow(url) {
+                    opened.push(url);
+                    // Installed apps may reuse their current window.
+                    if (openClients.length) openClients[0].url = url;
+                },
             },
         },
     };
@@ -46,9 +50,10 @@ async function click(openClients, target) {
 (async () => {
     const settings = windowClient('https://jellydash.example.test/settings');
     const opened = await click([settings], '/now-playing');
-    assert.equal(settings.focused, 0);
+    assert.equal(settings.focused, 1);
     assert.deepEqual(settings.navigated, []);
-    assert.deepEqual(opened, ['https://jellydash.example.test/now-playing']);
+    assert.equal(settings.url, 'https://jellydash.example.test/settings');
+    assert.deepEqual(opened, []);
 
     const destination = windowClient('https://jellydash.example.test/now-playing');
     const openedAgain = await click([settings, destination], '/now-playing');
@@ -57,6 +62,8 @@ async function click(openClients, target) {
 
     const external = await click([], 'https://unrelated.example.test/path');
     assert.deepEqual(external, ['https://jellydash.example.test/now-playing']);
+    const newDestination = await click([], '/jellyseerr');
+    assert.deepEqual(newDestination, ['https://jellydash.example.test/jellyseerr']);
     process.stdout.write('Notification click tests passed.\n');
 })().catch((error) => {
     console.error(error);
