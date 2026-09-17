@@ -166,7 +166,7 @@ final class HistoryLibraryBackfillService
                         'library_resolved_at' => $now,
                         'library_resolved_at_epoch' => $nowInstant->getTimestamp(),
                     ])->where('id = %i', (int) $row['id'])
-                        ->where('library_resolved_at IS NULL')
+                        ->where('(library_resolved_at IS NULL OR library_resolved_at = %s)', '')
                         ->execute();
                 }
 
@@ -232,6 +232,7 @@ final class HistoryLibraryBackfillService
             "SELECT COUNT(*) AS row_count, COALESCE(MAX(id), 0) AS maximum_id
              FROM play_history
              WHERE item_id <> '' AND item_type <> 'TvChannel'
+               AND (library_resolved_at IS NULL OR library_resolved_at = '')
                AND " . $this->history->visibleHistorySql('play_history')
         )->fetch();
         if ($row === false) {
@@ -250,6 +251,7 @@ final class HistoryLibraryBackfillService
             ->where('id <= %i', $highWatermark)
             ->where('item_id <> %s', '')
             ->where('item_type <> %s', 'TvChannel')
+            ->where('(library_resolved_at IS NULL OR library_resolved_at = %s)', '')
             ->where($this->history->visibleHistorySql('play_history'))
             ->orderBy('id')
             ->limit($limit)

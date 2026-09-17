@@ -14,6 +14,7 @@
     var track = dialog && dialog.querySelector('[data-history-library-upgrade-track]');
     var bar = dialog && dialog.querySelector('[data-history-library-upgrade-bar]');
     var note = dialog && dialog.querySelector('[data-history-library-upgrade-note]');
+    var hideButton = dialog && dialog.querySelector('[data-history-library-upgrade-hide]');
     var errorActions = dialog && dialog.querySelector('[data-history-library-upgrade-error]');
     var retry = dialog && dialog.querySelector('[data-history-library-upgrade-retry]');
     var continueButton = dialog && dialog.querySelector('[data-history-library-upgrade-continue]');
@@ -24,19 +25,26 @@
     var csrfToken = csrfMeta && csrfMeta.content ? csrfMeta.content : '';
     var settled = false;
     var timer = null;
+    var pollGeneration = 0;
+
+    function stopPolling() {
+        pollGeneration += 1;
+        if (timer !== null) {
+            window.clearTimeout(timer);
+            timer = null;
+        }
+    }
 
     function settle() {
         if (settled) {
             return;
         }
         settled = true;
-        if (timer !== null) {
-            window.clearTimeout(timer);
-        }
+        stopPolling();
         resolveUpgrade();
     }
 
-    if (!dialog || typeof dialog.showModal !== 'function' || !title || !summary || !count || !percent || !track || !bar || !note || !errorActions || !retry || !continueButton || !completeActions || !closeButton || !reopenButton || !csrfToken) {
+    if (!dialog || typeof dialog.showModal !== 'function' || !title || !summary || !count || !percent || !track || !bar || !note || !hideButton || !errorActions || !retry || !continueButton || !completeActions || !closeButton || !reopenButton || !csrfToken) {
         settle();
         return;
     }
@@ -82,6 +90,8 @@
     }
 
     function showError(message) {
+        stopPolling();
+        hideButton.hidden = true;
         title.textContent = 'We couldn\'t finish the update';
         summary.textContent = message;
         completeActions.hidden = true;
@@ -90,6 +100,8 @@
     }
 
     function finish(payload) {
+        stopPolling();
+        hideButton.hidden = true;
         render(payload);
         title.textContent = 'History update complete';
         summary.textContent = 'Jellydash matched older plays to their real Jellyfin libraries wherever Jellyfin could still find the item.';
@@ -101,30 +113,38 @@
         reopenButton.hidden = true;
     }
 
-    function advance() {
+    function advance(generation) {
+        if (generation !== pollGeneration || !dialog.open) {
+            return;
+        }
+        timer = null;
         errorActions.hidden = true;
         completeActions.hidden = true;
+        hideButton.hidden = false;
         title.textContent = 'Updating your History';
         summary.textContent = 'Jellydash is matching older plays to their real Jellyfin libraries.';
         note.textContent = 'Progress is saved. You can close Jellydash if you need to.';
 
         request('POST').then(function (payload) {
+            if (generation !== pollGeneration || !dialog.open) {
+                return;
+            }
             render(payload);
             if (payload.state === 'complete') {
                 finish(payload);
                 return;
             }
-            timer = window.setTimeout(advance, payload.busy ? 700 : 180);
+            timer = window.setTimeout(function () { advance(generation); }, payload.busy ? 700 : 180);
         }).catch(function (error) {
+            if (generation !== pollGeneration || !dialog.open) {
+                return;
+            }
             showError(error.message || 'Jellydash could not continue the History update.');
         });
     }
 
     function hideForNow() {
-        if (timer !== null) {
-            window.clearTimeout(timer);
-            timer = null;
-        }
+        stopPolling();
         if (dialog.open) {
             dialog.close();
         }
@@ -133,6 +153,7 @@
     }
 
     function showStatus(payload) {
+        stopPolling();
         if (!payload.required) {
             reopenButton.hidden = true;
             settle();
@@ -149,14 +170,22 @@
             finish(payload);
             return;
         }
-        timer = window.setTimeout(advance, 120);
+        errorActions.hidden = true;
+        completeActions.hidden = true;
+        hideButton.hidden = false;
+        var generation = pollGeneration;
+        timer = window.setTimeout(function () { advance(generation); }, 120);
     }
 
     dialog.addEventListener('cancel', function (event) {
         event.preventDefault();
         hideForNow();
     });
-    retry.addEventListener('click', advance);
+    retry.addEventListener('click', function () {
+        stopPolling();
+        advance(pollGeneration);
+    });
+    hideButton.addEventListener('click', hideForNow);
     continueButton.addEventListener('click', hideForNow);
     reopenButton.addEventListener('click', function () {
         request('GET').then(showStatus).catch(function (error) {
@@ -168,6 +197,7 @@
         });
     });
     closeButton.addEventListener('click', function () {
+        stopPolling();
         if (dialog.open) {
             dialog.close();
         }
