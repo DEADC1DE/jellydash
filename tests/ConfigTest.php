@@ -50,6 +50,19 @@ final class ConfigTest extends TestCase
         $this->assertTrue(Config::bool('CFG_MISSING', true));
     }
 
+    public function testWorkerIntervalsUseOnlyPositiveWholeSecondsWithinOneDay(): void
+    {
+        foreach (['', '0', '-5', 'abc', '30 seconds', '030', '86401', '999999999999999999999'] as $value) {
+            putenv('CFG_FOO=' . $value);
+            $this->assertSame(30, Config::interval('CFG_FOO', 30), $value);
+        }
+
+        putenv('CFG_FOO=86400');
+        $this->assertSame(86400, Config::interval('CFG_FOO', 30));
+        putenv('CFG_FOO= 120 ');
+        $this->assertSame(120, Config::interval('CFG_FOO', 30));
+    }
+
     public function testEnvDefaultsToProduction(): void
     {
         $this->assertSame('production', Config::env());
