@@ -19,6 +19,8 @@ use Mk\Framework\Notifications\NtfyChannel;
 use Mk\Framework\Push\PushSubscriptionRepository;
 use Mk\Framework\Push\WebPushSender;
 use Mk\Framework\Push\WebPushTransport;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
 use PHPUnit\Framework\TestCase;
 
 final class NotificationRetryTest extends TestCase
@@ -179,6 +181,24 @@ final class NotificationRetryTest extends TestCase
         $this->assertSame(1, $report['sent']);
         $this->assertSame(0, $channel->calls);
         $this->assertSame([$subscription], $transport->subscriptions);
+    }
+
+    public function testWebPushDatabaseFailureDoesNotSkipOtherChannels(): void
+    {
+        $subscriptions = new PushSubscriptionRepository($this->database);
+        $this->database->getDibi()->query('DROP TABLE push_subscriptions');
+        $logs = new TestHandler();
+        Container::set('logger', new Logger('test', [$logs]));
+        $channel = new CountingSuccessChannel();
+        $dispatcher = new NotificationDispatcher(
+            new WebPushSender(new CurrentDeviceRecordingTransport(), 'public-key', 'private-key'),
+            $subscriptions,
+            [$channel],
+        );
+
+        self::assertSame(1, $dispatcher->send(['title' => 'Test']));
+        self::assertSame(1, $channel->calls);
+        self::assertTrue($logs->hasErrorRecords());
     }
 
     public function testSelfHostedRequestDeliveryPreservesAggregateRetryContract(): void

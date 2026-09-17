@@ -73,15 +73,19 @@ final class NotificationDispatcher
         $delivered = 0;
 
         if ($this->webPush->isConfigured()) {
-            $subs = $this->subscriptions->deliverySubscriptions(Config::bool('AUTH_ENABLED', false));
-            if ($subs !== []) {
-                $result = $this->webPush->send($subs, $notification);
-                foreach ($result['expired'] as $endpoint) {
-                    $this->subscriptions->delete($endpoint);
+            try {
+                $subs = $this->subscriptions->deliverySubscriptions(Config::bool('AUTH_ENABLED', false));
+                if ($subs !== []) {
+                    $result = $this->webPush->send($subs, $notification);
+                    if ($result['sent'] > 0) {
+                        $delivered++;
+                    }
+                    foreach ($result['expired'] as $endpoint) {
+                        $this->subscriptions->delete($endpoint);
+                    }
                 }
-                if ($result['sent'] > 0) {
-                    $delivered++;
-                }
+            } catch (\Throwable) {
+                Log::logErrorMessage('Web Push delivery failed. Check the database and Web Push settings.', self::class);
             }
         }
 

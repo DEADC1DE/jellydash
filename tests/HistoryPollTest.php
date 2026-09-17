@@ -31,4 +31,23 @@ final class HistoryPollTest extends TestCase
         $this->assertTrue($dispatched);
         $this->assertSame(['History database is unavailable'], $logged);
     }
+
+    public function testNotificationFailureIsLoggedWithoutStoppingTheHistoryTick(): void
+    {
+        $logged = [];
+
+        (new HistoryPoll(
+            static fn (): int => 0,
+            static function (): never {
+                throw new RuntimeException('Notification database is unavailable');
+            },
+            static function (Throwable $error) use (&$logged): void {
+                $logged[] = $error->getMessage();
+            },
+            static function (string $message): void {
+            },
+        ))->run();
+
+        self::assertSame(['Notification database is unavailable'], $logged);
+    }
 }

@@ -31,9 +31,13 @@ final class HistoryPoll
             ($this->logException)($error);
         }
 
-        $alerts = ($this->dispatchNotifications)();
-        if ($alerts > 0) {
-            ($this->write)(" history:poll - sent {$alerts} playback alert(s)");
+        try {
+            $alerts = ($this->dispatchNotifications)();
+            if ($alerts > 0) {
+                ($this->write)(" history:poll - sent {$alerts} playback alert(s)");
+            }
+        } catch (\Throwable $error) {
+            ($this->logException)($error);
         }
     }
 }

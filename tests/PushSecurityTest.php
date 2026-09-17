@@ -113,6 +113,20 @@ final class PushSecurityTest extends TestCase
         ], $result);
     }
 
+    public function testInvalidUtf8PayloadIsNotSentAsAnEmptyNotification(): void
+    {
+        $transport = new RecordingWebPushTransport([
+            ['endpoint' => 'https://fcm.googleapis.com/wp/valid', 'success' => true, 'expired' => false],
+        ]);
+        $sender = new WebPushSender($transport, 'public', 'private', 'mailto:test@example.test');
+
+        $result = $sender->send([$this->subscription('https://fcm.googleapis.com/wp/valid')], ['title' => "\xff"]);
+
+        self::assertSame(0, $result['sent']);
+        self::assertSame(1, $result['failed']);
+        self::assertSame([], $transport->subscriptions);
+    }
+
     /** @return array{endpoint: string, p256dh: string, auth: string} */
     private function subscription(string $endpoint): array
     {

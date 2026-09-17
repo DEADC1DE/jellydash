@@ -72,10 +72,17 @@ final class WebPushSender
             return $result;
         }
 
-        $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        try {
+            $json = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $result['failed'] += count($eligible);
+            Log::logErrorMessage('Web Push payload could not be encoded.', self::class);
+
+            return $result;
+        }
         $reported = 0;
         try {
-            foreach ($this->transport()->send($eligible, $json !== false ? $json : null) as $report) {
+            foreach ($this->transport()->send($eligible, $json) as $report) {
                 ++$reported;
                 if ($report['success']) {
                     ++$result['sent'];
