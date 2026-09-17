@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Mk\Framework\Jellyfin\HistoryFilters;
 use Mk\Framework\Jellyfin\PlaybackStatisticsService;
 use Mk\Framework\Jellyfin\StatisticsPeriod;
 use PHPUnit\Framework\TestCase;
@@ -568,6 +569,20 @@ final class PlaybackStatisticsServiceTest extends TestCase
         foreach ($cards as $card) {
             $this->assertArrayNotHasKey('href', $card);
         }
+    }
+
+    public function testEpisodeWithoutSeriesLinksToItsExactHistoryItem(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $groups = (new ReflectionMethod($service, 'groupTitles'))->invoke($service, [
+            $this->titleRow('2026-08-20 10:00:00', 'episode-a', 'TV', '', 'Episode', '', 'Pilot'),
+        ]);
+        $cards = (new ReflectionMethod($service, 'titleCards'))->invoke($service, $groups, 'all');
+
+        $this->assertSame('/history?media_type=item&media_id=episode-a&media_item_type=Episode&media_title=Pilot&range=all', $cards[0]['href'] ?? null);
+        $query = [];
+        parse_str((string) parse_url($cards[0]['href'], PHP_URL_QUERY), $query);
+        $this->assertTrue(HistoryFilters::fromQuery($query)->hasMediaScope());
     }
 
     public function testExclusionsRemoveRowsBeforeSameTitleGroupsAreBuilt(): void
