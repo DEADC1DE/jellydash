@@ -38,6 +38,10 @@ final class RequestSyncService
         }
 
         $repo = $this->repository ?? new SeerrRequestRepository();
+        $notificationsEnabled = Config::bool('PUSH_ENABLED', true) && Config::bool('SEERR_NOTIFY_ENABLED', true);
+        if (!$notificationsEnabled) {
+            $repo->retireUnnotified();
+        }
         $firstRun = $repo->isEmpty();
         $requests = $firstRun
             ? $client->requests(self::FETCH_COUNT)
@@ -97,7 +101,7 @@ final class RequestSyncService
                 'is_4k' => ($request['is4k'] ?? false) ? 1 : 0,
                 'season_count' => isset($request['seasonCount']) ? (int) $request['seasonCount'] : null,
                 'requested_at' => $this->requestedAt($request, $now),
-                'notified' => $firstRun ? 1 : 0,
+                'notified' => ($firstRun || !$notificationsEnabled) ? 1 : 0,
                 'created_at' => $now,
             ];
         }

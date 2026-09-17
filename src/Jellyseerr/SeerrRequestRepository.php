@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mk\Framework\Jellyseerr;
 
+use Mk\Framework\Config;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
@@ -18,6 +19,8 @@ use Mk\Framework\DatabasePlatform;
  */
 final class SeerrRequestRepository
 {
+    private const FRESH_WINDOW_SECONDS = 600;
+
     private \Dibi\Connection $db;
     private DatabasePlatform $platform;
     /** @var \WeakMap<\Dibi\Connection, true>|null */
@@ -130,6 +133,17 @@ final class SeerrRequestRepository
             ->fetchAll();
     }
 
+    /** A disabled notification switch makes already-mirrored requests a baseline. */
+    public function retireUnnotified(): void
+    {
+        $this->db->update('seerr_requests', [
+            'notified' => 1,
+            'notification_claim_token' => null,
+            'notification_claimed_at_epoch' => null,
+            'notification_next_attempt_at_epoch' => null,
+        ])->where('notified = 0')->execute();
+    }
+
     /**
      * Lease requests that haven't been announced yet. Delivery acknowledges the
      * lease; total failure releases it with bounded retries and backoff.
@@ -139,11 +153,23 @@ final class SeerrRequestRepository
     public function claimUnnotified(?int $nowEpoch = null): array
     {
         $nowEpoch ??= time();
+        $since = (new \DateTimeImmutable('@' . ($nowEpoch - self::FRESH_WINDOW_SECONDS)))
+            ->setTimezone(new \DateTimeZone(Config::timezone()))->format('Y-m-d H:i:s');
         $this->recoverExpiredNotificationClaims($nowEpoch);
+
+        // A request discovered after an outage or a disabled channel is not
+        // a new alert. Keep it in the mirror, but retire its notification.
+        $this->db->update('seerr_requests', [
+            'notified' => 1,
+            'notification_claim_token' => null,
+            'notification_claimed_at_epoch' => null,
+            'notification_next_attempt_at_epoch' => null,
+        ])->where('notified = 0')->where('requested_at < %s', $since)->execute();
 
         $rows = $this->db->select('*')
             ->from('seerr_requests')
             ->where('notified = 0')
+            ->where('requested_at >= %s', $since)
             ->where('notification_attempts < %i', 3)
             ->where('notification_claim_token IS NULL')
             ->where('(notification_next_attempt_at_epoch IS NULL OR notification_next_attempt_at_epoch <= %i)', $nowEpoch)
@@ -158,10 +184,11 @@ final class SeerrRequestRepository
         foreach ($rows as $row) {
             $token = bin2hex(random_bytes(32));
             $this->db->query(
-                'UPDATE `seerr_requests` SET `notification_attempts` = `notification_attempts` + 1, `notification_claim_token` = %s, `notification_claimed_at_epoch` = %i, `notification_next_attempt_at_epoch` = NULL WHERE `id` = %i AND `notified` = 0 AND `notification_attempts` < 3 AND `notification_claim_token` IS NULL AND (`notification_next_attempt_at_epoch` IS NULL OR `notification_next_attempt_at_epoch` <= %i)',
+                'UPDATE `seerr_requests` SET `notification_attempts` = `notification_attempts` + 1, `notification_claim_token` = %s, `notification_claimed_at_epoch` = %i, `notification_next_attempt_at_epoch` = NULL WHERE `id` = %i AND `requested_at` >= %s AND `notified` = 0 AND `notification_attempts` < 3 AND `notification_claim_token` IS NULL AND (`notification_next_attempt_at_epoch` IS NULL OR `notification_next_attempt_at_epoch` <= %i)',
                 $token,
                 $nowEpoch,
                 (int) $row['id'],
+                $since,
                 $nowEpoch,
             );
 

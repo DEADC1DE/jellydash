@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Mk\Framework\Container;
+use Mk\Framework\Config;
 use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Health\WorkerMonitor;
@@ -118,6 +119,44 @@ final class NotificationRetryTest extends TestCase
 
         $this->assertSame(0, $notifier->dispatch());
         $this->assertSame(1, $channel->calls);
+    }
+
+    public function testOldMirroredRequestIsRetiredWithoutAnAlertWhenNotificationsResume(): void
+    {
+        $now = new DateTimeImmutable('now', new DateTimeZone(Config::timezone()));
+        $this->database->getDibi()->update('seerr_requests', [
+            'requested_at' => $now->modify('-1 day')->format('Y-m-d H:i:s'),
+        ])->where('request_id = %i', 901)->execute();
+        $channel = new CountingSuccessChannel();
+        $notifier = new RequestNotifier($this->repository, new NotificationDispatcher(
+            new WebPushSender(),
+            new PushSubscriptionRepository($this->database),
+            [$channel],
+        ));
+
+        self::assertSame(0, $notifier->dispatch());
+        self::assertSame(0, $channel->calls);
+        $old = $this->database->getDibi()->select('notified, notification_attempts')
+            ->from('seerr_requests')->where('request_id = %i', 901)->fetch();
+        self::assertSame(1, (int) $old['notified']);
+        self::assertSame(0, (int) $old['notification_attempts']);
+
+        $this->database->getDibi()->insert('seerr_requests', [
+            'request_id' => 902,
+            'media_type' => 'movie',
+            'tmdb_id' => 903,
+            'title' => 'New request',
+            'request_status' => 1,
+            'media_status' => 2,
+            'requested_at' => $now->modify('-1 minute')->format('Y-m-d H:i:s'),
+            'created_at' => $now->format('Y-m-d H:i:s'),
+            'notified' => 0,
+        ])->execute();
+
+        self::assertSame(1, $notifier->dispatch());
+        self::assertSame(1, $channel->calls);
+        self::assertSame(1, (int) $this->database->getDibi()->select('notified')
+            ->from('seerr_requests')->where('request_id = %i', 902)->fetchSingle());
     }
 
     public function testCurrentDeviceConfirmationUsesOnlyTheSuppliedWebPushSubscription(): void
@@ -311,6 +350,7 @@ final class NotificationRetryTest extends TestCase
 
     private function insertRequest(): void
     {
+        $now = (new DateTimeImmutable('now', new DateTimeZone(Config::timezone())))->format('Y-m-d H:i:s');
         $this->database->getDibi()->insert('seerr_requests', [
             'request_id' => 901,
             'media_type' => 'movie',
@@ -319,9 +359,9 @@ final class NotificationRetryTest extends TestCase
             'request_status' => 1,
             'media_status' => 2,
             'is_4k' => 0,
-            'requested_at' => '2026-09-08 12:00:00',
+            'requested_at' => $now,
             'notified' => 0,
-            'created_at' => '2026-09-08 12:00:00',
+            'created_at' => $now,
         ])->execute();
     }
 
@@ -389,6 +429,8 @@ final class CountingFailureChannel implements NotificationChannel
 
 final class CountingSuccessChannel implements NotificationChannel
 {
+    public int $calls = 0;
+
     public function name(): string
     {
         return 'success';
@@ -401,6 +443,8 @@ final class CountingSuccessChannel implements NotificationChannel
 
     public function send(array $notification): bool
     {
+        ++$this->calls;
+
         return true;
     }
 }
