@@ -228,6 +228,30 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame('Middle', $pageTwo[0]['item_name']);
     }
 
+    public function testEpisodeWithoutSeriesDrilldownFiltersToItsExactItem(): void
+    {
+        foreach (['episode-a' => 'Pilot', 'episode-b' => 'Another episode'] as $id => $title) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-episode-drilldown-' . $id,
+                'item_id' => $id,
+                'item_type' => 'Episode',
+                'series_name' => '',
+                'item_name' => $title,
+            ]);
+        }
+        $filters = HistoryFilters::fromQuery([
+            'media_type' => 'item', 'media_id' => 'episode-a',
+            'media_item_type' => 'Episode', 'media_title' => 'Pilot',
+            'range' => 'all',
+        ]);
+
+        $this->assertSame(['episode-a'], array_map(
+            static fn (\Dibi\Row $row): string => (string) $row['item_id'],
+            $this->repository->historyRows($filters),
+        ));
+        $this->assertSame(1, $this->repository->historyTotal($filters));
+    }
+
     public function testFreeTextSearchKeepsTheDocumentedBackendAccentContract(): void
     {
         $this->insertPlay([
