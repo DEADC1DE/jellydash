@@ -342,6 +342,8 @@ Use **Import history** on the History page, or open the importer directly from S
 
 User names are resolved through the connected server's `/Users` API. Media runtime is looked up through `/Items` (`RunTimeTicks`) so the completion bar matches live history; plays are marked finished at 95% of that runtime, same as the poller. If an item no longer exists, runtime stays empty and the play is left unfinished. `PlayDuration` is elapsed session time, not playback position. When an Emby backup includes `PauseDuration`, Jellydash excludes that paused time from the watched total. Dates are kept as the plugin recorded them in the server's local time. Each play is attached to the library that currently owns the item from its file path; if the item is gone, the type is used as a fallback (Movie → Movies, Episode → TV Shows). Imported plays never trigger notifications. Re-importing skips duplicates, but will fill in a missing runtime and replace a generic library label if the server is reachable the second time.
 
+If you have ignored users configured, the import stops before writing a play whose user name cannot be resolved. Check the server connection and retry. With no ignored users, offline imports can still keep unnamed plays.
+
 This compatibility only covers Playback Reporting imports from Emby. Jellydash is still built and tested for Jellyfin, so Emby is not a fully supported server yet.
 
 ## Good to know

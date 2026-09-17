@@ -86,6 +86,11 @@ final class PlayHistoryRepository implements LibraryHistorySource
         $this->exclusions();
     }
 
+    public function hasIgnoredUsers(): bool
+    {
+        return $this->exclusions()->names() !== [];
+    }
+
     public function visibleHistorySql(string $historyAlias = 'play_history', bool $alsoPending = false): string
     {
         return $this->themePlaybackExclusions->visibilitySql($historyAlias, $alsoPending);
