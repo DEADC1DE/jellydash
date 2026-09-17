@@ -46,15 +46,33 @@ function harness(options = {}) {
     const timers = new Map();
     let nextTimer = 1;
     let permissionRequests = 0;
-    const subscription = options.subscription === undefined ? {
+    let subscription = options.subscription === undefined ? {
         endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/existing',
         keys: { p256dh: 'key', auth: 'secret' },
+        options: { applicationServerKey: Uint8Array.from([1]).buffer },
         unsubscribe: async () => true,
     } : options.subscription;
+    let subscribeCalls = 0;
+    let unsubscribeCalls = 0;
+    if (subscription) {
+        const unsubscribe = subscription.unsubscribe;
+        subscription.unsubscribe = async () => {
+            unsubscribeCalls += 1;
+            const removed = await unsubscribe();
+            if (removed) {
+                subscription = null;
+            }
+            return removed;
+        };
+    }
     const registration = {
         pushManager: {
             getSubscription: async () => subscription,
-            subscribe: async () => options.createdSubscription,
+            subscribe: async () => {
+                subscribeCalls += 1;
+                subscription = options.createdSubscription;
+                return subscription;
+            },
         },
     };
     const notification = {
@@ -110,6 +128,8 @@ function harness(options = {}) {
         toggle,
         requests,
         get permissionRequests() { return permissionRequests; },
+        get subscribeCalls() { return subscribeCalls; },
+        get unsubscribeCalls() { return unsubscribeCalls; },
         runTimers() {
             const callbacks = Array.from(timers.values());
             timers.clear();
@@ -136,6 +156,7 @@ async function testExistingSubscriptionIsConfirmedBeforeShowingOn() {
     assert.equal(state.toggle.label.textContent, 'On');
     assert.equal(state.toggle.attributes['aria-pressed'], 'true');
     assert.deepEqual(state.requests.map((request) => request.url), ['/api/push/subscribe.php']);
+    assert.equal(state.subscribeCalls, 0);
 
     state.toggle.click();
     await settle();
@@ -144,6 +165,97 @@ async function testExistingSubscriptionIsConfirmedBeforeShowingOn() {
         '/api/push/subscribe.php',
         '/api/push/unsubscribe.php',
     ]);
+}
+
+async function testRotatedKeyReplacesSubscriptionBeforeShowingOn() {
+    const old = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/old-key',
+        keys: { p256dh: 'old', auth: 'old' },
+        options: { applicationServerKey: Uint8Array.from([2]).buffer },
+        unsubscribe: async () => true,
+    };
+    const current = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/new-key',
+        keys: { p256dh: 'new', auth: 'new' },
+        options: { applicationServerKey: Uint8Array.from([1]).buffer },
+        unsubscribe: async () => true,
+    };
+    const state = harness({ subscription: old, createdSubscription: current });
+    await settle();
+
+    assert.equal(state.unsubscribeCalls, 1);
+    assert.equal(state.subscribeCalls, 1);
+    assert.equal(state.toggle.label.textContent, 'On');
+    assert.deepEqual(state.requests.map((request) => request.url), [
+        '/api/push/unsubscribe.php',
+        '/api/push/subscribe.php',
+    ]);
+    assert.equal(JSON.parse(state.requests[0].init.body).endpoint, old.endpoint);
+    assert.equal(JSON.parse(state.requests[1].init.body).endpoint, current.endpoint);
+}
+
+async function testUnknownKeyNeedsUserActionInsteadOfReconfirmingOldSubscription() {
+    const old = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/unknown-key',
+        keys: { p256dh: 'old', auth: 'old' },
+        unsubscribe: async () => true,
+    };
+    const current = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/new-key',
+        keys: { p256dh: 'new', auth: 'new' },
+        options: { applicationServerKey: Uint8Array.from([1]).buffer },
+        unsubscribe: async () => true,
+    };
+    const state = harness({ subscription: old, createdSubscription: current });
+    await settle();
+    assert.equal(state.toggle.label.textContent, 'Could not update. Try again.');
+    assert.equal(state.requests.length, 0);
+    assert.equal(state.toggle.disabled, false);
+
+    state.toggle.click();
+    await settle();
+    assert.equal(state.toggle.label.textContent, 'On');
+    assert.equal(state.unsubscribeCalls, 1);
+    assert.equal(state.subscribeCalls, 1);
+}
+
+async function testRotationCanContinueWhenOldServerRowIsAlreadyGone() {
+    const old = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/already-gone',
+        options: { applicationServerKey: Uint8Array.from([2]).buffer },
+        unsubscribe: async () => true,
+    };
+    const current = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/replaced',
+        options: { applicationServerKey: Uint8Array.from([1]).buffer },
+        unsubscribe: async () => true,
+    };
+    const state = harness({
+        subscription: old,
+        createdSubscription: current,
+        fetch: async (url) => url === '/api/push/unsubscribe.php'
+            ? response(false, 404, 'No matching notification device was found.')
+            : response(true, 200),
+    });
+    await settle();
+    assert.equal(state.toggle.label.textContent, 'On');
+    assert.equal(state.subscribeCalls, 1);
+}
+
+async function testRotationServerFailureDoesNotShowTheStaleDeviceAsOn() {
+    const old = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/old-key',
+        options: { applicationServerKey: Uint8Array.from([2]).buffer },
+        unsubscribe: async () => true,
+    };
+    const state = harness({
+        subscription: old,
+        fetch: async () => response(false, 500, 'Could not remove subscription.'),
+    });
+    await settle();
+    assert.equal(state.toggle.label.textContent, 'Could not update. Try again.');
+    assert.equal(state.toggle.disabled, false);
+    assert.equal(state.subscribeCalls, 0);
 }
 
 async function testRejectedReconciliationStaysRetryable() {
@@ -247,6 +359,10 @@ async function testLateReconciliationCompletionCannotOverrideRetryAndDisable() {
 
 (async () => {
     await testExistingSubscriptionIsConfirmedBeforeShowingOn();
+    await testRotatedKeyReplacesSubscriptionBeforeShowingOn();
+    await testUnknownKeyNeedsUserActionInsteadOfReconfirmingOldSubscription();
+    await testRotationCanContinueWhenOldServerRowIsAlreadyGone();
+    await testRotationServerFailureDoesNotShowTheStaleDeviceAsOn();
     await testRejectedReconciliationStaysRetryable();
     await testMissingBrowserSubscriptionStartsOffAndCanBeEnabled();
     await testReconciliationNetworkWaitIsBounded();
