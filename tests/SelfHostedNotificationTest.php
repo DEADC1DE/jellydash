@@ -6,6 +6,7 @@ use Mk\Framework\Container;
 use Mk\Framework\Notifications\GotifyChannel;
 use Mk\Framework\Notifications\NotificationDispatcher;
 use Mk\Framework\Notifications\NtfyChannel;
+use Mk\Framework\Notifications\PushoverChannel;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -18,7 +19,7 @@ final class SelfHostedNotificationTest extends TestCase
 
     protected function setUp(): void
     {
-        foreach (['NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN', 'GOTIFY_URL', 'GOTIFY_APP_TOKEN', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'APP_URL'] as $key) {
+        foreach (['NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN', 'GOTIFY_URL', 'GOTIFY_APP_TOKEN', 'PUSHOVER_APP_TOKEN', 'PUSHOVER_USER_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'APP_URL'] as $key) {
             $this->environment[$key] = getenv($key);
             putenv($key . '=');
         }
@@ -162,5 +163,36 @@ final class SelfHostedNotificationTest extends TestCase
         });
         self::assertSame(1, (new NotificationDispatcher(channels: [$ntfy, $gotify]))->send(['body' => 'Test', 'url' => '/history']));
         self::assertStringNotContainsString('private-token', json_encode($this->logs->getRecords()));
+    }
+
+    public function testInvalidAppUrlLeavesDeliveryIntactWithoutABrokenLink(): void
+    {
+        putenv('GOTIFY_URL=https://gotify.invalid');
+        putenv('GOTIFY_APP_TOKEN=token');
+        putenv('PUSHOVER_APP_TOKEN=fixture-token');
+        putenv('PUSHOVER_USER_KEY=fixture-user');
+        putenv('APP_URL=dashboard.example.test');
+        $payload = null;
+        $fields = null;
+        $gotify = new GotifyChannel(static function ($url, $data) use (&$payload): array {
+            $payload = $data;
+            return ['status' => 200, 'body' => '{"id":1}'];
+        });
+        $pushover = new PushoverChannel(static function ($url, $data) use (&$fields): array {
+            $fields = $data;
+            return ['status' => 200, 'body' => ''];
+        });
+        $dispatcher = new NotificationDispatcher(channels: [$gotify, $pushover]);
+
+        self::assertSame(2, $dispatcher->send(['body' => 'Test', 'url' => '/history']));
+        self::assertIsArray($payload);
+        self::assertArrayNotHasKey('client::notification', $payload['extras']);
+        self::assertIsArray($fields);
+        self::assertArrayNotHasKey('url', $fields);
+
+        putenv('APP_URL=https://dashboard.example.test/jellydash');
+        self::assertSame(2, $dispatcher->send(['body' => 'Test', 'url' => '/history']));
+        self::assertSame('https://dashboard.example.test/jellydash/history', $payload['extras']['client::notification']['click']['url']);
+        self::assertSame('https://dashboard.example.test/jellydash/history', $fields['url']);
     }
 }

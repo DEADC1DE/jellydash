@@ -22,6 +22,7 @@ final class SystemStatusServiceTest extends TestCase
             'LIBRARIES_CACHE_TTL' => '300',
             'NTFY_URL' => '', 'NTFY_TOPIC' => '', 'NTFY_TOKEN' => '',
             'GOTIFY_URL' => '', 'GOTIFY_APP_TOKEN' => '',
+            'APP_URL' => '',
         ] as $key => $value) {
             $this->environment[$key] = getenv($key);
             putenv($key . '=' . $value);
@@ -175,6 +176,28 @@ final class SystemStatusServiceTest extends TestCase
         foreach (['NTFY_TOKEN', 'TELEGRAM_BOT_TOKEN', 'PUSHOVER_USER_KEY', 'VAPID_PUBLIC_KEY'] as $key) {
             putenv($key . '=');
         }
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+    }
+
+    public function testInvalidDiscordAndAppUrlAreNamedWithoutTheirValues(): void
+    {
+        putenv('DISCORD_WEBHOOK_URL=private-webhook.invalid/secret');
+        putenv('APP_URL=private-dashboard.invalid');
+        putenv('PUSHOVER_APP_TOKEN=private-app-token');
+        putenv('PUSHOVER_USER_KEY=private-user-key');
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+        );
+
+        $component = $service->snapshot(1000)['components'][3];
+        self::assertSame('failed', $component['state']);
+        self::assertStringContainsString('Discord', $component['message']);
+        self::assertStringContainsString('APP_URL', $component['message']);
+        self::assertStringNotContainsString('private-', json_encode($service->snapshot(1000), JSON_THROW_ON_ERROR));
+
+        putenv('DISCORD_WEBHOOK_URL=');
+        putenv('APP_URL=');
         self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
     }
 

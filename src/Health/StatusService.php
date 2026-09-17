@@ -7,6 +7,7 @@ namespace Mk\Framework\Health;
 use Mk\Framework\Config;
 use Mk\Framework\Notifications\DiscordChannel;
 use Mk\Framework\Notifications\GotifyChannel;
+use Mk\Framework\Notifications\NotificationEndpoint;
 use Mk\Framework\Notifications\NtfyChannel;
 use Mk\Framework\Notifications\PushoverChannel;
 use Mk\Framework\Notifications\TelegramChannel;
@@ -48,10 +49,18 @@ final class StatusService
             $this->worker('libraries', 'Library refresh', $rows, $jellyfin, Config::interval('LIBRARIES_CACHE_TTL', 300), $workersEnabled, $now),
         ];
 
+        $discord = new DiscordChannel();
         $httpChannel = (new TelegramChannel())->isConfigured()
-            || (new PushoverChannel())->isConfigured() || (new DiscordChannel())->isConfigured();
+            || (new PushoverChannel())->isConfigured() || $discord->isConfigured();
         $webPush = (new WebPushSender())->isConfigured();
         $incompleteNotifications = [];
+        if (Config::get('DISCORD_WEBHOOK_URL') !== null && !$discord->isConfigured()) {
+            $incompleteNotifications[] = 'Discord';
+        }
+        $appUrl = NotificationEndpoint::setting('APP_URL');
+        if ($appUrl !== '' && NotificationEndpoint::baseUrl($appUrl) === null) {
+            $incompleteNotifications[] = 'APP_URL';
+        }
         foreach (['ntfy' => new NtfyChannel(), 'Gotify' => new GotifyChannel()] as $label => $channel) {
             $configured = $channel->isConfigured();
             $httpChannel = $httpChannel || $configured;

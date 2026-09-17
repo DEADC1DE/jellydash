@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Mk\Framework\Notifications;
 
-use Mk\Framework\Config;
 use Mk\Framework\Log;
 
 /**
@@ -25,11 +24,14 @@ final class DiscordChannel implements NotificationChannel
 
     public function isConfigured(): bool
     {
-        return Config::get('DISCORD_WEBHOOK_URL') !== null;
+        return NotificationEndpoint::validUrl(NotificationEndpoint::setting('DISCORD_WEBHOOK_URL'));
     }
 
     public function send(array $notification): bool
     {
+        if (!$this->isConfigured()) {
+            return false;
+        }
         $embed = [
             'title' => NotificationEndpoint::characters(trim((string) ($notification['title'] ?? 'Jellydash')), 256),
             'description' => NotificationEndpoint::characters(trim((string) ($notification['body'] ?? '')), 4096),
@@ -37,11 +39,11 @@ final class DiscordChannel implements NotificationChannel
         ];
 
         $absolute = trim((string) ($notification['absolute_url'] ?? ''));
-        if ($absolute !== '') {
+        if (NotificationEndpoint::validUrl($absolute)) {
             $embed['url'] = $absolute;
         }
 
-        $result = ($this->sender ?? HttpSender::postJson(...))((string) Config::get('DISCORD_WEBHOOK_URL'), [
+        $result = ($this->sender ?? HttpSender::postJson(...))(NotificationEndpoint::setting('DISCORD_WEBHOOK_URL'), [
             'username' => 'Jellydash',
             'embeds' => [$embed],
         ]);

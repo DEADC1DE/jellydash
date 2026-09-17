@@ -198,11 +198,11 @@ final class NotificationDispatcher
      */
     private function withAbsoluteUrl(array $notification): array
     {
-        $base = rtrim((string) Config::get('APP_URL', ''), '/');
+        $base = NotificationEndpoint::baseUrl(NotificationEndpoint::setting('APP_URL'));
         $path = (string) ($notification['url'] ?? '');
 
-        if ($base !== '' && $path !== '' && str_starts_with($path, '/')) {
-            $notification['absolute_url'] = $base . $path;
+        if ($base !== null && $path !== '' && str_starts_with($path, '/')) {
+            $notification['absolute_url'] = rtrim($base, '/') . $path;
         }
 
         return $notification;
