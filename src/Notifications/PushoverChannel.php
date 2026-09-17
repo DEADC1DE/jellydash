@@ -38,7 +38,7 @@ final class PushoverChannel implements NotificationChannel
         ];
 
         $absolute = trim((string) ($notification['absolute_url'] ?? ''));
-        if ($absolute !== '' && mb_strlen($absolute) <= 512) {
+        if (NotificationEndpoint::validUrl($absolute) && mb_strlen($absolute) <= 512) {
             $fields['url'] = $absolute;
             $fields['url_title'] = 'Open Jellydash';
         }

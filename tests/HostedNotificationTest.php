@@ -88,6 +88,21 @@ final class HostedNotificationTest extends TestCase
         }
     }
 
+    public function testMalformedDiscordWebhookIsNotUsed(): void
+    {
+        putenv('DISCORD_WEBHOOK_URL=discord.example.test/private-webhook');
+        $called = false;
+        $channel = new DiscordChannel(static function () use (&$called): array {
+            $called = true;
+
+            return ['status' => 204, 'body' => ''];
+        });
+
+        self::assertFalse($channel->isConfigured());
+        self::assertFalse($channel->send(['title' => 'Test']));
+        self::assertFalse($called);
+    }
+
     /** @return iterable<string, array{string, class-string<NotificationChannel>}> */
     public static function channels(): iterable
     {

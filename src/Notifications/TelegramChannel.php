@@ -38,7 +38,7 @@ final class TelegramChannel implements NotificationChannel
             $text .= "\n" . $body;
         }
         $absolute = trim((string) ($notification['absolute_url'] ?? ''));
-        if ($absolute !== '' && mb_strlen($absolute) < 4096) {
+        if (NotificationEndpoint::validUrl($absolute) && mb_strlen($absolute) < 4096) {
             $text = NotificationEndpoint::characters($text, 4096 - mb_strlen($absolute) - 1) . "\n" . $absolute;
         }
         $text = NotificationEndpoint::characters($text, 4096);
