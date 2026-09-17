@@ -129,6 +129,7 @@
                         : fallback;
                     var error = new Error(message);
                     error.userMessage = message;
+                    error.status = response.status;
                     reject(error);
                 }, function () {
                     if (settled) {
@@ -136,7 +137,9 @@
                     }
                     settled = true;
                     window.clearTimeout(timer);
-                    reject(new Error(fallback));
+                    var error = new Error(fallback);
+                    error.status = response.status;
+                    reject(error);
                 });
             }, function (error) {
                 if (settled) {
@@ -163,6 +166,61 @@
         setState(error && error.name === 'TimeoutError' ? 'timeout' : 'error', error && error.userMessage);
     }
 
+    function subscriptionUsesCurrentKey(subscription) {
+        var previous = subscription.options && subscription.options.applicationServerKey;
+        if (!previous) {
+            return null;
+        }
+        try {
+            var current = urlBase64ToUint8Array(VAPID_KEY);
+            var bytes = new Uint8Array(previous);
+            if (bytes.length !== current.length) {
+                return false;
+            }
+            for (var i = 0; i < bytes.length; ++i) {
+                if (bytes[i] !== current[i]) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function subscribeWithCurrentKey(reg, existing, replaceUnknown) {
+        if (existing) {
+            var matches = subscriptionUsesCurrentKey(existing);
+            if (matches === true) {
+                return Promise.resolve(existing);
+            }
+            if (matches === null && !replaceUnknown) {
+                var error = new Error('Could not verify the browser subscription key. Turn notifications on again.');
+                error.userMessage = error.message;
+                return Promise.reject(error);
+            }
+            return existing.unsubscribe().then(function (removed) {
+                if (!removed) {
+                    throw new Error('Could not replace the browser subscription.');
+                }
+                return postJson('/api/push/unsubscribe.php', { endpoint: existing.endpoint }).catch(function (error) {
+                    if (error.status !== 404) {
+                        throw error;
+                    }
+                });
+            }).then(function () {
+                return reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(VAPID_KEY)
+                });
+            });
+        }
+        return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_KEY)
+        });
+    }
+
     function subscribe() {
         setState('working');
         return Notification.requestPermission().then(function (permission) {
@@ -172,10 +230,7 @@
             }
             return waitForServiceWorker().then(function (reg) {
                 return reg.pushManager.getSubscription().then(function (existing) {
-                    return existing || reg.pushManager.subscribe({
-                        userVisibleOnly: true,
-                        applicationServerKey: urlBase64ToUint8Array(VAPID_KEY)
-                    });
+                    return subscribeWithCurrentKey(reg, existing, true);
                 });
             }).then(function (sub) {
                 return storeSubscription(sub, true);
@@ -245,13 +300,15 @@
         busy = true;
         setState('working');
         waitForServiceWorker().then(function (reg) {
-            return reg.pushManager.getSubscription();
-        }).then(function (sub) {
-            if (!sub) {
-                setState('off');
-                return;
-            }
-            return storeSubscription(sub, false);
+            return reg.pushManager.getSubscription().then(function (sub) {
+                if (!sub) {
+                    setState('off');
+                    return;
+                }
+                return subscribeWithCurrentKey(reg, sub, false).then(function (current) {
+                    return storeSubscription(current, false);
+                });
+            });
         }).catch(function (error) {
             setFailedState(error, 'reconciling');
         }).then(function () {
