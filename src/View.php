@@ -13,7 +13,7 @@ use Twig\Loader\FilesystemLoader;
  */
 class View
 {
-    public const ASSET_REVISION = '20260917-push-rotation';
+    public const ASSET_REVISION = '20260917-history-upgrade';
 
     private Environment $twig;
 

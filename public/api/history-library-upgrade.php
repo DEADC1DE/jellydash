@@ -36,7 +36,7 @@ if ($method === 'POST' && !Csrf::validateHeader()) {
     exit;
 }
 
-if ($method === 'POST' && !(new Authorization())->can(Authorization::CAPABILITY_MANAGE_GLOBAL)) {
+if (!(new Authorization())->can(Authorization::CAPABILITY_MANAGE_GLOBAL)) {
     http_response_code(403);
     echo json_encode(['error' => 'Forbidden.'], JSON_THROW_ON_ERROR);
     exit;

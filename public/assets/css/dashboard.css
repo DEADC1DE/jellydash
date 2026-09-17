@@ -758,6 +758,11 @@ svg.icon-filled {
     line-height: 1.45;
 }
 
+.history-upgrade-hide {
+    position: relative;
+    z-index: 1;
+}
+
 .history-upgrade-error,
 .history-upgrade-complete {
     position: relative;
