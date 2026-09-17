@@ -80,9 +80,7 @@ final class NotificationDispatcher
                     if ($result['sent'] > 0) {
                         $delivered++;
                     }
-                    foreach ($result['expired'] as $endpoint) {
-                        $this->subscriptions->delete($endpoint);
-                    }
+                    $this->recordWebPushOutcome($result);
                 }
             } catch (\Throwable) {
                 Log::logErrorMessage('Web Push delivery failed. Check the database and Web Push settings.', self::class);
@@ -122,12 +120,11 @@ final class NotificationDispatcher
         $subs = $this->webPush->isConfigured()
             ? $this->subscriptions->deliverySubscriptions(Config::bool('AUTH_ENABLED', false))
             : [];
-        $webPushResult = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0];
+        $webPushResult = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0,
+            'succeeded' => [], 'failed_endpoints' => [], 'ineligible_endpoints' => []];
         if ($this->webPush->isConfigured() && $subs !== []) {
             $webPushResult = $this->webPush->send($subs, $notification);
-            foreach ($webPushResult['expired'] as $endpoint) {
-                $this->subscriptions->delete($endpoint);
-            }
+            $this->recordWebPushOutcome($webPushResult);
         }
         $report['webpush'] = [
             'configured' => $this->webPush->isConfigured(),
@@ -161,12 +158,11 @@ final class NotificationDispatcher
      */
     public function testCurrentWebPush(array $subscription, array $notification): array
     {
-        $result = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0];
+        $result = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0,
+            'succeeded' => [], 'failed_endpoints' => [], 'ineligible_endpoints' => []];
         if ($this->webPush->isConfigured()) {
             $result = $this->webPush->send([$subscription], $this->withAbsoluteUrl($notification));
-            foreach ($result['expired'] as $endpoint) {
-                $this->subscriptions->delete($endpoint);
-            }
+            $this->recordWebPushOutcome($result);
         }
 
         return [
@@ -175,6 +171,22 @@ final class NotificationDispatcher
             'failed' => $result['failed'],
             'ineligible' => $result['ineligible'],
         ];
+    }
+
+    /**
+     * @param array{sent: int, failed: int, expired: list<string>, ineligible: int, succeeded: list<string>, failed_endpoints: list<string>, ineligible_endpoints: list<string>} $result
+     */
+    private function recordWebPushOutcome(array $result): void
+    {
+        foreach ($result['succeeded'] as $endpoint) {
+            $this->subscriptions->markSuccess($endpoint);
+        }
+        foreach ($result['failed_endpoints'] as $endpoint) {
+            $this->subscriptions->markFailure($endpoint);
+        }
+        foreach (array_merge($result['expired'], $result['ineligible_endpoints']) as $endpoint) {
+            $this->subscriptions->delete($endpoint);
+        }
     }
 
     /**

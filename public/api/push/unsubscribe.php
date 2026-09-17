@@ -52,6 +52,9 @@ if (session_status() === PHP_SESSION_ACTIVE) {
 try {
     $body = json_decode((string) file_get_contents('php://input'), true);
     $endpoint = is_array($body) ? (string) ($body['endpoint'] ?? '') : '';
+    $keys = is_array($body) && isset($body['keys']) && is_array($body['keys']) ? $body['keys'] : [];
+    $p256dh = (string) ($keys['p256dh'] ?? '');
+    $auth = (string) ($keys['auth'] ?? '');
 
     if (!PushSubscriptionValidator::isValidEndpoint($endpoint)) {
         http_response_code(422);
@@ -60,9 +63,13 @@ try {
         return;
     }
 
+    $repository = new PushSubscriptionRepository();
     $removed = $capabilityHash !== null
-        && (new PushSubscriptionRepository())->revokeCurrentEndpoint($endpoint, $capabilityHash, $userId, $authEnabled);
+        && $repository->revokeCurrentEndpoint($endpoint, $capabilityHash, $userId, $authEnabled);
     if (!$removed) {
+        $removed = $repository->revokeCurrentEndpointWithKeys($endpoint, $p256dh, $auth, $userId, $authEnabled);
+    }
+    if (!$removed && $repository->containsEndpoint($endpoint)) {
         http_response_code(404);
         echo json_encode(['error' => 'No matching notification device was found.']);
 

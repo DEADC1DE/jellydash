@@ -78,6 +78,8 @@ final class PushSubscriptionRepository
             $existing = $this->db->select('id, user_id, device_capability_hash, p256dh, auth')
                 ->from('push_subscriptions')->where('endpoint_hash = %s', $hash)->fetch();
             if ($existing) {
+                $keysMatch = hash_equals((string) $existing['p256dh'], $p256dh)
+                    && hash_equals((string) $existing['auth'], $auth);
                 if ($authEnabled) {
                     $existingUserId = $existing['user_id'] !== null ? (int) $existing['user_id'] : null;
                     if ($existingUserId !== null && $existingUserId !== $userId) {
@@ -86,21 +88,31 @@ final class PushSubscriptionRepository
                     $storedCapability = (string) ($existing['device_capability_hash'] ?? '');
                     $capabilityMatches = self::isValidCapabilityHash($storedCapability)
                         && hash_equals($storedCapability, $deviceCapabilityHash);
-                    $keysMatch = hash_equals((string) $existing['p256dh'], $p256dh)
-                        && hash_equals((string) $existing['auth'], $auth);
                     if (!$capabilityMatches && !$keysMatch) {
                         throw new PushSubscriptionOwnershipException('Notification device possession could not be verified.');
                     }
                     if ($existingUserId === null && $userId !== null && $this->countForUser($userId) >= $this->accountLimit) {
-                        throw new PushSubscriptionLimitExceeded('The Web Push account limit has been reached.');
+                        $this->reclaimUnavailableSubscriptions(true);
+                        if ($this->countForUser($userId) >= $this->accountLimit) {
+                            throw new PushSubscriptionLimitExceeded('The Web Push account limit has been reached.');
+                        }
                     }
                     $data['user_id'] = $userId;
+                }
+                if ($keysMatch) {
+                    unset($data['failure_count']);
+                } else {
+                    $data['last_success_at'] = null;
                 }
                 $this->db->update('push_subscriptions', $data)->where('endpoint_hash = %s', $hash)->execute();
 
                 return;
             }
 
+            if ($this->count() >= $this->installationLimit
+                || ($authEnabled && $userId !== null && $this->countForUser($userId) >= $this->accountLimit)) {
+                $this->reclaimUnavailableSubscriptions($authEnabled);
+            }
             if ($this->count() >= $this->installationLimit) {
                 throw new PushSubscriptionLimitExceeded('The Web Push installation limit has been reached.');
             }
@@ -157,11 +169,11 @@ final class PushSubscriptionRepository
     }
 
     /**
-     * @return list<array{id: int, label: string, owner: ?string, state: string, current: bool, created_at: string, last_success_at: ?string}>
+     * @return list<array{id: int, label: string, owner: ?string, state: string, current: bool, created_at: string, last_success_at: ?string, failure_count: int}>
      */
     public function devices(?int $userId, bool $canManageAll, bool $authEnabled, ?string $currentCapabilityHash): array
     {
-        $selection = $this->db->select('id, endpoint, p256dh, auth, user_agent, user_id, device_capability_hash, created_at, last_success_at')
+        $selection = $this->db->select('id, endpoint, p256dh, auth, user_agent, user_id, device_capability_hash, created_at, last_success_at, failure_count')
             ->from('push_subscriptions');
         if ($authEnabled && !$canManageAll) {
             if ($userId === null) {
@@ -192,6 +204,7 @@ final class PushSubscriptionRepository
                 'current' => $currentCapabilityHash !== null && self::isValidCapabilityHash($storedCapability) && hash_equals($storedCapability, $currentCapabilityHash),
                 'created_at' => (string) $row['created_at'],
                 'last_success_at' => $row['last_success_at'] !== null ? (string) $row['last_success_at'] : null,
+                'failure_count' => (int) $row['failure_count'],
             ];
         }
 
@@ -228,6 +241,29 @@ final class PushSubscriptionRepository
         $delete->execute();
 
         return $this->db->getAffectedRows() > 0;
+    }
+
+    public function revokeCurrentEndpointWithKeys(string $endpoint, string $p256dh, string $auth, ?int $userId, bool $authEnabled): bool
+    {
+        if (!PushSubscriptionValidator::isValid($endpoint, $p256dh, $auth) || ($authEnabled && $userId === null)) {
+            return false;
+        }
+        $delete = $this->db->delete('push_subscriptions')
+            ->where('endpoint_hash = %s', hash('sha256', $endpoint))
+            ->where('p256dh = %s', $p256dh)
+            ->where('auth = %s', $auth);
+        if ($authEnabled) {
+            $delete->where('user_id = %i', $userId);
+        }
+        $delete->execute();
+
+        return $this->db->getAffectedRows() > 0;
+    }
+
+    public function containsEndpoint(string $endpoint): bool
+    {
+        return $this->db->select('id')->from('push_subscriptions')
+            ->where('endpoint_hash = %s', hash('sha256', $endpoint))->fetchSingle() !== false;
     }
 
     public function revokeById(int $id, ?int $userId, bool $canManageAll, bool $authEnabled): bool
@@ -267,6 +303,26 @@ final class PushSubscriptionRepository
             'failure_count' => 0,
             'last_success_at' => (new \DateTimeImmutable('now'))->format('Y-m-d H:i:s'),
         ])->where('endpoint_hash = %s', hash('sha256', $endpoint))->execute();
+    }
+
+    public function markFailure(string $endpoint): void
+    {
+        $this->db->query(
+            'UPDATE push_subscriptions SET failure_count = CASE WHEN failure_count < 2147483647 THEN failure_count + 1 ELSE failure_count END WHERE endpoint_hash = %s',
+            hash('sha256', $endpoint),
+        );
+    }
+
+    private function reclaimUnavailableSubscriptions(bool $authEnabled): void
+    {
+        $owners = $authEnabled ? $this->usersById() : [];
+        foreach ($this->db->select('id, endpoint, p256dh, auth, user_id')->from('push_subscriptions')->fetchAll() as $row) {
+            $ownerId = $row['user_id'] !== null ? (int) $row['user_id'] : null;
+            if (!PushSubscriptionValidator::isValid((string) $row['endpoint'], (string) $row['p256dh'], (string) $row['auth'])
+                || ($authEnabled && $ownerId !== null && !isset($owners[$ownerId]))) {
+                $this->db->delete('push_subscriptions')->where('id = %i', (int) $row['id'])->execute();
+            }
+        }
     }
 
     private function withInstallationLock(callable $save): void

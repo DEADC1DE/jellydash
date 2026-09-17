@@ -38,10 +38,10 @@
         error: 'Could not update. Try again.'
     };
 
-    function setState(state, detail) {
+    function setState(state, detail, keepOn) {
         toggles.forEach(function (el) {
             el.hidden = false;
-            var isOn = state === 'on';
+            var isOn = state === 'on' || !!keepOn;
             el.classList.toggle('is-on', isOn);
             el.setAttribute('aria-pressed', isOn ? 'true' : 'false');
             el.disabled = state === 'working' || state === 'blocked' || state === 'unsupported';
@@ -163,7 +163,7 @@
 
     function setFailedState(error, action) {
         console.warn('[jellydash] ' + action + ' notifications failed:', error && error.name, error && error.message);
-        setState(error && error.name === 'TimeoutError' ? 'timeout' : 'error', error && error.userMessage);
+        setState(error && error.name === 'TimeoutError' ? 'timeout' : 'error', error && error.userMessage, action === 'disabling');
     }
 
     function subscriptionUsesCurrentKey(subscription) {
@@ -199,16 +199,12 @@
                 error.userMessage = error.message;
                 return Promise.reject(error);
             }
-            return existing.unsubscribe().then(function (removed) {
+            return postJson('/api/push/unsubscribe.php', existing).then(function () {
+                return existing.unsubscribe();
+            }).then(function (removed) {
                 if (!removed) {
                     throw new Error('Could not replace the browser subscription.');
                 }
-                return postJson('/api/push/unsubscribe.php', { endpoint: existing.endpoint }).catch(function (error) {
-                    if (error.status !== 404) {
-                        throw error;
-                    }
-                });
-            }).then(function () {
                 return reg.pushManager.subscribe({
                     userVisibleOnly: true,
                     applicationServerKey: urlBase64ToUint8Array(VAPID_KEY)
@@ -251,10 +247,12 @@
                 setState('off');
                 return;
             }
-            var endpoint = sub.endpoint;
-            return sub.unsubscribe().then(function () {
-                return postJson('/api/push/unsubscribe.php', { endpoint: endpoint }).catch(function () {});
-            }).then(function () {
+            return postJson('/api/push/unsubscribe.php', sub).then(function () {
+                return sub.unsubscribe();
+            }).then(function (removed) {
+                if (!removed) {
+                    throw new Error('Could not remove the browser subscription.');
+                }
                 setState('off');
             });
         }).catch(function (err) {

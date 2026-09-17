@@ -193,7 +193,7 @@
                             <span class="system-status-state">{{ device.state == 'needs_reenrollment' ? 'Re-enroll' : device.state|capitalize }}</span>
                             <span>
                                 <strong>{{ device.current ? 'Current browser' : device.label }}</strong>
-                                <small>{% if device.owner %}{{ device.owner }} · {% endif %}Added {{ device.created_at|date('Y-m-d H:i', false) }}{% if device.last_success_at %} · Last delivery {{ device.last_success_at|date('Y-m-d H:i', false) }}{% endif %}</small>
+                                <small>{% if device.owner %}{{ device.owner }} · {% endif %}Added {{ device.created_at|date('Y-m-d H:i', false) }}{% if device.last_success_at %} · Last delivery {{ device.last_success_at|date('Y-m-d H:i', false) }}{% endif %}{% if device.failure_count > 0 %} · Failed attempts {{ device.failure_count }}{% endif %}</small>
                             </span>
                             <form action="?req=push-revoke" method="post">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

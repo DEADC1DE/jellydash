@@ -167,6 +167,40 @@ async function testExistingSubscriptionIsConfirmedBeforeShowingOn() {
     ]);
 }
 
+async function testServerRemovalFailureLeavesBrowserEnabledAndShowsAnError() {
+    let attempts = 0;
+    const state = harness({
+        fetch: async (url) => url === '/api/push/unsubscribe.php'
+            ? (++attempts === 1 ? response(false, 500, 'Could not remove subscription.') : response(true, 200))
+            : response(true, 200),
+    });
+    await settle();
+    assert.equal(state.toggle.label.textContent, 'On');
+    state.toggle.click();
+    await settle();
+    assert.equal(state.unsubscribeCalls, 0);
+    assert.equal(state.toggle.label.textContent, 'Could not update. Try again.');
+    assert.equal(state.toggle.title, 'Could not remove subscription.');
+    assert.equal(state.toggle.attributes['aria-pressed'], 'true');
+    state.toggle.click();
+    await settle();
+    assert.equal(state.unsubscribeCalls, 1);
+    assert.equal(state.toggle.label.textContent, 'Off');
+}
+
+async function testBrowserRemovalFailureIsNotReportedAsOff() {
+    const state = harness({ subscription: {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/still-active',
+        options: { applicationServerKey: Uint8Array.from([1]).buffer },
+        unsubscribe: async () => false,
+    } });
+    await settle();
+    state.toggle.click();
+    await settle();
+    assert.equal(state.unsubscribeCalls, 1);
+    assert.equal(state.toggle.label.textContent, 'Could not update. Try again.');
+}
+
 async function testRotatedKeyReplacesSubscriptionBeforeShowingOn() {
     const old = {
         endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/old-key',
@@ -233,9 +267,7 @@ async function testRotationCanContinueWhenOldServerRowIsAlreadyGone() {
     const state = harness({
         subscription: old,
         createdSubscription: current,
-        fetch: async (url) => url === '/api/push/unsubscribe.php'
-            ? response(false, 404, 'No matching notification device was found.')
-            : response(true, 200),
+        fetch: async () => response(true, 200),
     });
     await settle();
     assert.equal(state.toggle.label.textContent, 'On');
@@ -256,6 +288,23 @@ async function testRotationServerFailureDoesNotShowTheStaleDeviceAsOn() {
     assert.equal(state.toggle.label.textContent, 'Could not update. Try again.');
     assert.equal(state.toggle.disabled, false);
     assert.equal(state.subscribeCalls, 0);
+    assert.equal(state.unsubscribeCalls, 0);
+}
+
+async function testRotationDoesNotDiscardBrowserSubscriptionOwnedByAnotherAccount() {
+    const old = {
+        endpoint: 'https://updates.push.services.mozilla.com/wpush/v2/other-account',
+        options: { applicationServerKey: Uint8Array.from([2]).buffer },
+        unsubscribe: async () => true,
+    };
+    const state = harness({
+        subscription: old,
+        fetch: async () => response(false, 404, 'No matching notification device was found.'),
+    });
+    await settle();
+    assert.equal(state.unsubscribeCalls, 0);
+    assert.equal(state.subscribeCalls, 0);
+    assert.equal(state.toggle.label.textContent, 'Could not update. Try again.');
 }
 
 async function testRejectedReconciliationStaysRetryable() {
@@ -359,10 +408,13 @@ async function testLateReconciliationCompletionCannotOverrideRetryAndDisable() {
 
 (async () => {
     await testExistingSubscriptionIsConfirmedBeforeShowingOn();
+    await testServerRemovalFailureLeavesBrowserEnabledAndShowsAnError();
+    await testBrowserRemovalFailureIsNotReportedAsOff();
     await testRotatedKeyReplacesSubscriptionBeforeShowingOn();
     await testUnknownKeyNeedsUserActionInsteadOfReconfirmingOldSubscription();
     await testRotationCanContinueWhenOldServerRowIsAlreadyGone();
     await testRotationServerFailureDoesNotShowTheStaleDeviceAsOn();
+    await testRotationDoesNotDiscardBrowserSubscriptionOwnedByAnotherAccount();
     await testRejectedReconciliationStaysRetryable();
     await testMissingBrowserSubscriptionStartsOffAndCanBeEnabled();
     await testReconciliationNetworkWaitIsBounded();
