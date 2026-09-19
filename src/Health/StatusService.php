@@ -7,6 +7,7 @@ namespace Mk\Framework\Health;
 use Mk\Framework\Config;
 use Mk\Framework\Notifications\DiscordChannel;
 use Mk\Framework\Notifications\GotifyChannel;
+use Mk\Framework\Notifications\NotificationEndpoint;
 use Mk\Framework\Notifications\NtfyChannel;
 use Mk\Framework\Notifications\PushoverChannel;
 use Mk\Framework\Notifications\TelegramChannel;
@@ -35,8 +36,8 @@ final class StatusService
         $now ??= time();
         $rows = ($this->readWorkers ?? static fn (): array => (new WorkerStatusRepository())->all())();
         $workersEnabled = Config::bool('POLLER_ENABLED', true);
-        $historyInterval = $this->interval('POLL_INTERVAL', 30);
-        $requestInterval = $this->interval('SEERR_POLL_INTERVAL', 120);
+        $historyInterval = Config::interval('POLL_INTERVAL', 30);
+        $requestInterval = Config::interval('SEERR_POLL_INTERVAL', 120);
         $jellyfin = $this->configuration(
             Config::get('JELLYFIN_URL'),
             Config::get('JELLYFIN_API_TOKEN', Config::get('JELLYFIN_API_KEY')),
@@ -45,13 +46,21 @@ final class StatusService
         $components = [
             $this->worker('history', 'Jellyfin collection', $rows, $jellyfin, $historyInterval, $workersEnabled, $now),
             $this->worker('jellyseerr', 'Jellyseerr sync', $rows, $jellyseerr, $requestInterval, $workersEnabled, $now),
-            $this->worker('libraries', 'Library refresh', $rows, $jellyfin, $this->interval('LIBRARIES_CACHE_TTL', 300), $workersEnabled, $now),
+            $this->worker('libraries', 'Library refresh', $rows, $jellyfin, Config::interval('LIBRARIES_CACHE_TTL', 300), $workersEnabled, $now),
         ];
 
+        $discord = new DiscordChannel();
         $httpChannel = (new TelegramChannel())->isConfigured()
-            || (new PushoverChannel())->isConfigured() || (new DiscordChannel())->isConfigured();
+            || (new PushoverChannel())->isConfigured() || $discord->isConfigured();
         $webPush = (new WebPushSender())->isConfigured();
         $incompleteNotifications = [];
+        if (Config::get('DISCORD_WEBHOOK_URL') !== null && !$discord->isConfigured()) {
+            $incompleteNotifications[] = 'Discord';
+        }
+        $appUrl = NotificationEndpoint::setting('APP_URL');
+        if ($appUrl !== '' && NotificationEndpoint::baseUrl($appUrl) === null) {
+            $incompleteNotifications[] = 'APP_URL';
+        }
         foreach (['ntfy' => new NtfyChannel(), 'Gotify' => new GotifyChannel()] as $label => $channel) {
             $configured = $channel->isConfigured();
             $httpChannel = $httpChannel || $configured;
@@ -200,13 +209,6 @@ final class StatusService
         $tokenSet = trim($token ?? '') !== '';
 
         return $urlSet && $tokenSet ? 'configured' : ($urlSet || $tokenSet ? 'incomplete' : 'disabled');
-    }
-
-    private function interval(string $key, int $default): int
-    {
-        $value = filter_var(Config::get($key, (string) $default), FILTER_VALIDATE_INT);
-
-        return $value !== false && $value >= 1 && $value <= 86400 ? $value : $default;
     }
 
     private function epoch(mixed $value): ?int

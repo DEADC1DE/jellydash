@@ -73,15 +73,17 @@ final class NotificationDispatcher
         $delivered = 0;
 
         if ($this->webPush->isConfigured()) {
-            $subs = $this->subscriptions->deliverySubscriptions(Config::bool('AUTH_ENABLED', false));
-            if ($subs !== []) {
-                $result = $this->webPush->send($subs, $notification);
-                foreach ($result['expired'] as $endpoint) {
-                    $this->subscriptions->delete($endpoint);
+            try {
+                $subs = $this->subscriptions->deliverySubscriptions(Config::bool('AUTH_ENABLED', false));
+                if ($subs !== []) {
+                    $result = $this->webPush->send($subs, $notification);
+                    if ($result['sent'] > 0) {
+                        $delivered++;
+                    }
+                    $this->recordWebPushOutcome($result);
                 }
-                if ($result['sent'] > 0) {
-                    $delivered++;
-                }
+            } catch (\Throwable) {
+                Log::logErrorMessage('Web Push delivery failed. Check the database and Web Push settings.', self::class);
             }
         }
 
@@ -118,12 +120,11 @@ final class NotificationDispatcher
         $subs = $this->webPush->isConfigured()
             ? $this->subscriptions->deliverySubscriptions(Config::bool('AUTH_ENABLED', false))
             : [];
-        $webPushResult = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0];
+        $webPushResult = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0,
+            'succeeded' => [], 'failed_endpoints' => [], 'ineligible_endpoints' => []];
         if ($this->webPush->isConfigured() && $subs !== []) {
             $webPushResult = $this->webPush->send($subs, $notification);
-            foreach ($webPushResult['expired'] as $endpoint) {
-                $this->subscriptions->delete($endpoint);
-            }
+            $this->recordWebPushOutcome($webPushResult);
         }
         $report['webpush'] = [
             'configured' => $this->webPush->isConfigured(),
@@ -157,12 +158,11 @@ final class NotificationDispatcher
      */
     public function testCurrentWebPush(array $subscription, array $notification): array
     {
-        $result = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0];
+        $result = ['sent' => 0, 'failed' => 0, 'expired' => [], 'ineligible' => 0,
+            'succeeded' => [], 'failed_endpoints' => [], 'ineligible_endpoints' => []];
         if ($this->webPush->isConfigured()) {
             $result = $this->webPush->send([$subscription], $this->withAbsoluteUrl($notification));
-            foreach ($result['expired'] as $endpoint) {
-                $this->subscriptions->delete($endpoint);
-            }
+            $this->recordWebPushOutcome($result);
         }
 
         return [
@@ -174,6 +174,22 @@ final class NotificationDispatcher
     }
 
     /**
+     * @param array{sent: int, failed: int, expired: list<string>, ineligible: int, succeeded: list<string>, failed_endpoints: list<string>, ineligible_endpoints: list<string>} $result
+     */
+    private function recordWebPushOutcome(array $result): void
+    {
+        foreach ($result['succeeded'] as $endpoint) {
+            $this->subscriptions->markSuccess($endpoint);
+        }
+        foreach ($result['failed_endpoints'] as $endpoint) {
+            $this->subscriptions->markFailure($endpoint);
+        }
+        foreach (array_merge($result['expired'], $result['ineligible_endpoints']) as $endpoint) {
+            $this->subscriptions->delete($endpoint);
+        }
+    }
+
+    /**
      * Web Push opens relative URLs inside the PWA, but external services need
      * an absolute link. APP_URL (optional) provides the public base.
      *
@@ -182,11 +198,11 @@ final class NotificationDispatcher
      */
     private function withAbsoluteUrl(array $notification): array
     {
-        $base = rtrim((string) Config::get('APP_URL', ''), '/');
+        $base = NotificationEndpoint::baseUrl(NotificationEndpoint::setting('APP_URL'));
         $path = (string) ($notification['url'] ?? '');
 
-        if ($base !== '' && $path !== '' && str_starts_with($path, '/')) {
-            $notification['absolute_url'] = $base . $path;
+        if ($base !== null && $path !== '' && str_starts_with($path, '/')) {
+            $notification['absolute_url'] = rtrim($base, '/') . $path;
         }
 
         return $notification;

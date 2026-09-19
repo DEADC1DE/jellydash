@@ -297,6 +297,13 @@ final class PlaybackReportingImporter
         }
 
         $named = $this->parser->applyUserNames($rows, $userNames);
+        if ($this->repository->hasIgnoredUsers()) {
+            foreach ($named as $row) {
+                if (trim((string) ($row['user_name'] ?? '')) === '') {
+                    throw new \RuntimeException('Playback Reporting import stopped: user names could not be resolved while ignored users are configured. Check the Jellyfin /Users connection and retry.');
+                }
+            }
+        }
         $meta = $this->fetchItemMeta($named);
         $enriched = $this->applyRuntimes($named, $this->runtimesFromMeta($meta));
         $enriched = $this->applyLibraries($enriched, $this->librariesFromMeta($meta));

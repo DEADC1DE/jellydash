@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Mk\Framework\Container;
 use Mk\Framework\Jellyfin\JellyfinClient;
+use Mk\Framework\Jellyfin\MonitoringExclusions;
 use Mk\Framework\Jellyfin\PlaybackReportingClient;
 use Mk\Framework\Jellyfin\PlaybackReportingImporter;
 use Mk\Framework\Jellyfin\PlaybackReportingParser;
@@ -264,6 +265,65 @@ final class PlaybackReportingImporterTest extends TestCase
             $this->assertSame(PlaybackReportingClient::CHUNK_SIZE + 1, $processed[array_key_last($processed)] ?? 0);
         } finally {
             @unlink($path);
+        }
+    }
+
+    public function testFailedUserLookupStopsImportWhenIgnoredUsersAreConfigured(): void
+    {
+        $database = Container::db();
+        $repository = new PlayHistoryRepository($database, new MonitoringExclusions(['Admin']));
+        $itemHex = bin2hex(random_bytes(16));
+        $itemId = substr($itemHex, 0, 8) . '-' . substr($itemHex, 8, 4) . '-' . substr($itemHex, 12, 4)
+            . '-' . substr($itemHex, 16, 4) . '-' . substr($itemHex, 20);
+        $path = tempnam(sys_get_temp_dir(), 'prtsv');
+        self::assertNotFalse($path);
+
+        try {
+            file_put_contents($path, "2024-05-01 10:00:00.0000000\t0e394f8a9bc64abeba29f63cdc7a12a0\t{$itemHex}\tMovie\tPrivate\tDirectPlay\tWeb\tChrome\t60\n");
+            $client = new JellyfinClient('', '', false);
+            $error = null;
+            try {
+                (new PlaybackReportingImporter(null, $repository, $client))->importFile($path, false, 'tsv');
+            } catch (RuntimeException $exception) {
+                $error = $exception;
+            }
+            self::assertInstanceOf(RuntimeException::class, $error);
+            self::assertStringContainsString('user names could not be resolved', $error->getMessage());
+
+            self::assertSame(0, (int) $database->getDibi()->select('COUNT(*)')->from('play_history')
+                ->where('item_id = %s', $itemId)->fetchSingle());
+        } finally {
+            $database->getDibi()->delete('play_history')->where('item_id = %s', $itemId)->execute();
+            @unlink($path);
+        }
+    }
+
+    public function testIncompleteUserLookupStopsPluginImportWhenIgnoredUsersAreConfigured(): void
+    {
+        $database = Container::db();
+        $repository = new PlayHistoryRepository($database, new MonitoringExclusions(['Admin']));
+        $itemHex = bin2hex(random_bytes(16));
+        $rows = $this->parsedLine('2024-05-01 10:00:00.0000000', $itemHex, 60);
+        $itemId = (string) $rows[0]['item_id'];
+        $client = new JellyfinClient('http://jellyfin.test', 'token', true, static function (string $path): array {
+            return $path === '/Users' ? [['Id' => 'other-user', 'Name' => 'Viewer']] : [];
+        });
+
+        try {
+            $error = null;
+            try {
+                (new PlaybackReportingImporter(null, $repository, $client, new FakePlaybackReportingPlugin($rows)))
+                    ->importFromPlugin();
+            } catch (RuntimeException $exception) {
+                $error = $exception;
+            }
+            self::assertInstanceOf(RuntimeException::class, $error);
+            self::assertStringContainsString('user names could not be resolved', $error->getMessage());
+
+            self::assertSame(0, (int) $database->getDibi()->select('COUNT(*)')->from('play_history')
+                ->where('item_id = %s', $itemId)->fetchSingle());
+        } finally {
+            $database->getDibi()->delete('play_history')->where('item_id = %s', $itemId)->execute();
         }
     }
 

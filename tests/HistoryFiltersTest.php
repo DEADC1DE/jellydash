@@ -159,6 +159,28 @@ final class HistoryFiltersTest extends TestCase
         ], $series->queryParameters());
     }
 
+    public function testEpisodeWithoutSeriesCanKeepAnExactItemScope(): void
+    {
+        $filters = HistoryFilters::fromQuery([
+            'media_type' => 'item',
+            'media_id' => 'episode-without-series',
+            'media_item_type' => 'Episode',
+            'media_title' => 'Pilot',
+            'range' => 'all',
+        ]);
+
+        $this->assertTrue($filters->hasMediaScope());
+        $this->assertSame('item', $filters->mediaType);
+        $this->assertSame('Episode', $filters->mediaItemType);
+        $this->assertSame([
+            'media_type' => 'item',
+            'media_id' => 'episode-without-series',
+            'media_item_type' => 'Episode',
+            'media_title' => 'Pilot',
+            'range' => 'all',
+        ], $filters->queryParameters());
+    }
+
     /** @param array<string, mixed> $query */
     #[DataProvider('invalidMediaScopeProvider')]
     public function testPartialOrUnsupportedMediaScopeIsDiscarded(array $query): void

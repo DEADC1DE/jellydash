@@ -61,7 +61,6 @@ final readonly class HistoryFilters
         if ($mediaType === 'item'
             && $mediaId !== ''
             && $mediaItemType !== ''
-            && $mediaItemType !== 'Episode'
             && $mediaTitle !== ''
         ) {
             $mediaLibrary = '';
@@ -98,7 +97,6 @@ final readonly class HistoryFilters
         return ($this->mediaType === 'item'
                 && $this->mediaId !== ''
                 && $this->mediaItemType !== ''
-                && $this->mediaItemType !== 'Episode'
                 && $this->mediaTitle !== ''
                 && $this->mediaLibrary === '')
             || ($this->mediaType === 'series'

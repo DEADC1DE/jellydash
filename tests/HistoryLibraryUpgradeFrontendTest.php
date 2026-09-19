@@ -6,6 +6,15 @@ use PHPUnit\Framework\TestCase;
 
 final class HistoryLibraryUpgradeFrontendTest extends TestCase
 {
+    public function testHideAndReopenDoNotLeaveExtraPollingLoops(): void
+    {
+        $script = ROOT_DIR . '/tests/frontend/history-upgrade.test.js';
+        exec(sprintf('node %s 2>&1', escapeshellarg($script)), $output, $exitCode);
+
+        $this->assertSame(0, $exitCode, implode("\n", $output));
+        $this->assertContains('History upgrade state tests passed.', $output);
+    }
+
     public function testUpgradeDialogIsGlobalAndCanBeHiddenAndReopenedWhileRunning(): void
     {
         $shell = (string) file_get_contents(TEMPLATES_DIR . '/_shell.twig');
@@ -24,6 +33,7 @@ final class HistoryLibraryUpgradeFrontendTest extends TestCase
         $this->assertStringContainsString("dialog.addEventListener('cancel'", $script);
         $this->assertStringContainsString('event.preventDefault()', $script);
         $this->assertStringContainsString('data-history-library-upgrade-retry', $dialog);
+        $this->assertStringContainsString('data-history-library-upgrade-hide', $dialog);
         $this->assertStringContainsString('data-history-library-upgrade-continue', $dialog);
         $this->assertStringContainsString('data-history-library-upgrade-reopen', $dialog);
         $this->assertStringContainsString('hideForNow', $script);
@@ -46,5 +56,6 @@ final class HistoryLibraryUpgradeFrontendTest extends TestCase
         $this->assertStringContainsString('upgradeReady.then', $release);
         $this->assertStringContainsString('Csrf::validateHeader()', $api);
         $this->assertStringContainsString('HistoryLibraryBackfillService', $api);
+        $this->assertStringContainsString('if (!(new Authorization())->can(Authorization::CAPABILITY_MANAGE_GLOBAL))', $api);
     }
 }

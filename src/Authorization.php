@@ -136,6 +136,13 @@ class Authorization
         };
     }
 
+    public function canSendGlobalNotificationTest(): bool
+    {
+        // Keep other open-dashboard capabilities unchanged, but require a
+        // signed-in manager before one request alerts every channel.
+        return Config::bool('AUTH_ENABLED', false) && $this->can(self::CAPABILITY_MANAGE_GLOBAL);
+    }
+
     /** @return array{id: int, username: string, name: string, role: int}|null */
     public function verifiedUser(): ?array
     {

@@ -7,6 +7,7 @@ use Mk\Framework\Authorization;
 use Mk\Framework\Config;
 use Mk\Framework\Csrf;
 use Mk\Framework\Log;
+use Mk\Framework\Push\PushJsonRequest;
 use Mk\Framework\Push\PushDeviceCapability;
 use Mk\Framework\Push\PushSubscriptionRepository;
 use Mk\Framework\Push\PushSubscriptionValidator;
@@ -26,12 +27,18 @@ header('Cache-Control: no-store, no-cache, must-revalidate');
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'POST') {
     http_response_code(405);
+    header('Allow: POST');
     echo json_encode(['error' => 'Method not allowed']);
 
     return;
 }
 
-Csrf::checkHeader();
+if (!Csrf::validateHeader()) {
+    http_response_code(419);
+    echo json_encode(['error' => 'Security token expired or missing. Refresh the page and try again.']);
+
+    return;
+}
 
 $authEnabled = Config::bool('AUTH_ENABLED', false);
 $authorization = new Authorization();
@@ -50,8 +57,11 @@ if (session_status() === PHP_SESSION_ACTIVE) {
 }
 
 try {
-    $body = json_decode((string) file_get_contents('php://input'), true);
+    $body = PushJsonRequest::decode();
     $endpoint = is_array($body) ? (string) ($body['endpoint'] ?? '') : '';
+    $keys = is_array($body) && isset($body['keys']) && is_array($body['keys']) ? $body['keys'] : [];
+    $p256dh = (string) ($keys['p256dh'] ?? '');
+    $auth = (string) ($keys['auth'] ?? '');
 
     if (!PushSubscriptionValidator::isValidEndpoint($endpoint)) {
         http_response_code(422);
@@ -60,9 +70,13 @@ try {
         return;
     }
 
+    $repository = new PushSubscriptionRepository();
     $removed = $capabilityHash !== null
-        && (new PushSubscriptionRepository())->revokeCurrentEndpoint($endpoint, $capabilityHash, $userId, $authEnabled);
+        && $repository->revokeCurrentEndpoint($endpoint, $capabilityHash, $userId, $authEnabled);
     if (!$removed) {
+        $removed = $repository->revokeCurrentEndpointWithKeys($endpoint, $p256dh, $auth, $userId, $authEnabled);
+    }
+    if (!$removed && $repository->containsEndpoint($endpoint)) {
         http_response_code(404);
         echo json_encode(['error' => 'No matching notification device was found.']);
 
@@ -70,6 +84,12 @@ try {
     }
 
     echo json_encode(['ok' => true]);
+} catch (\LengthException) {
+    http_response_code(413);
+    echo json_encode(['error' => 'Notification request is too large.']);
+} catch (\JsonException|\InvalidArgumentException) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Invalid JSON request.']);
 } catch (\Throwable $e) {
     http_response_code(500);
     Log::logException($e);

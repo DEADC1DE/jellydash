@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Mk\Framework\Container;
+use Mk\Framework\Config;
 use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Health\WorkerMonitor;
@@ -18,6 +19,8 @@ use Mk\Framework\Notifications\NtfyChannel;
 use Mk\Framework\Push\PushSubscriptionRepository;
 use Mk\Framework\Push\WebPushSender;
 use Mk\Framework\Push\WebPushTransport;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
 use PHPUnit\Framework\TestCase;
 
 final class NotificationRetryTest extends TestCase
@@ -120,6 +123,46 @@ final class NotificationRetryTest extends TestCase
         $this->assertSame(1, $channel->calls);
     }
 
+    public function testOldMirroredRequestIsRetiredWithoutAnAlertWhenNotificationsResume(): void
+    {
+        $now = new DateTimeImmutable('now', new DateTimeZone(Config::timezone()));
+        $this->database->getDibi()->update('seerr_requests', [
+            'requested_at' => $now->modify('-1 day')->format('Y-m-d H:i:s'),
+            'requested_at_epoch' => $now->getTimestamp() - 86400,
+        ])->where('request_id = %i', 901)->execute();
+        $channel = new CountingSuccessChannel();
+        $notifier = new RequestNotifier($this->repository, new NotificationDispatcher(
+            new WebPushSender(),
+            new PushSubscriptionRepository($this->database),
+            [$channel],
+        ));
+
+        self::assertSame(0, $notifier->dispatch());
+        self::assertSame(0, $channel->calls);
+        $old = $this->database->getDibi()->select('notified, notification_attempts')
+            ->from('seerr_requests')->where('request_id = %i', 901)->fetch();
+        self::assertSame(1, (int) $old['notified']);
+        self::assertSame(0, (int) $old['notification_attempts']);
+
+        $this->database->getDibi()->insert('seerr_requests', [
+            'request_id' => 902,
+            'media_type' => 'movie',
+            'tmdb_id' => 903,
+            'title' => 'New request',
+            'request_status' => 1,
+            'media_status' => 2,
+            'requested_at' => $now->modify('-1 minute')->format('Y-m-d H:i:s'),
+            'requested_at_epoch' => $now->getTimestamp() - 60,
+            'created_at' => $now->format('Y-m-d H:i:s'),
+            'notified' => 0,
+        ])->execute();
+
+        self::assertSame(1, $notifier->dispatch());
+        self::assertSame(1, $channel->calls);
+        self::assertSame(1, (int) $this->database->getDibi()->select('notified')
+            ->from('seerr_requests')->where('request_id = %i', 902)->fetchSingle());
+    }
+
     public function testCurrentDeviceConfirmationUsesOnlyTheSuppliedWebPushSubscription(): void
     {
         $transport = new CurrentDeviceRecordingTransport();
@@ -140,6 +183,76 @@ final class NotificationRetryTest extends TestCase
         $this->assertSame(1, $report['sent']);
         $this->assertSame(0, $channel->calls);
         $this->assertSame([$subscription], $transport->subscriptions);
+    }
+
+    public function testPushDeliveryRecordsDeviceOutcomesAndReclaimsUnusableRows(): void
+    {
+        $previous = getenv('AUTH_ENABLED');
+        putenv('AUTH_ENABLED=false');
+        try {
+            $subscriptions = new PushSubscriptionRepository($this->database);
+            $good = 'https://updates.push.services.mozilla.com/wpush/v2/good-delivery';
+            $failed = 'https://updates.push.services.mozilla.com/wpush/v2/failed-delivery';
+            $expired = 'https://updates.push.services.mozilla.com/wpush/v2/expired-delivery';
+            $invalid = 'https://updates.push.services.mozilla.com/wpush/v2/invalid-delivery';
+            $key = rtrim(strtr(base64_encode(str_repeat('a', 65)), '+/', '-_'), '=');
+            $secret = rtrim(strtr(base64_encode(str_repeat('b', 16)), '+/', '-_'), '=');
+            foreach ([$good, $failed, $expired, $invalid] as $endpoint) {
+                $subscriptions->save($endpoint, $key, $secret, null);
+            }
+            $this->database->getDibi()->update('push_subscriptions', ['auth' => 'invalid'])
+                ->where('endpoint_hash = %s', hash('sha256', $invalid))->execute();
+            $transport = new OutcomeWebPushTransport([
+                ['endpoint' => $good, 'success' => true, 'expired' => false],
+                ['endpoint' => $failed, 'success' => false, 'expired' => false],
+                ['endpoint' => $expired, 'success' => false, 'expired' => true],
+            ]);
+            $dispatcher = new NotificationDispatcher(
+                new WebPushSender($transport, 'public-key', 'private-key'),
+                $subscriptions,
+                [],
+            );
+
+            self::assertSame(1, $dispatcher->send(['title' => 'Fixture']));
+            self::assertSame(2, $subscriptions->count());
+            $goodRow = $this->database->getDibi()->select('last_success_at, failure_count')
+                ->from('push_subscriptions')->where('endpoint_hash = %s', hash('sha256', $good))->fetch();
+            $failedRow = $this->database->getDibi()->select('last_success_at, failure_count')
+                ->from('push_subscriptions')->where('endpoint_hash = %s', hash('sha256', $failed))->fetch();
+            self::assertNotFalse($goodRow);
+            self::assertNotNull($goodRow['last_success_at']);
+            self::assertSame(0, (int) $goodRow['failure_count']);
+            self::assertNotFalse($failedRow);
+            self::assertSame(1, (int) $failedRow['failure_count']);
+
+            $transport->reports = [['endpoint' => $failed, 'success' => true, 'expired' => false]];
+            self::assertSame(1, $dispatcher->send(['title' => 'Retry']));
+            $recovered = $this->database->getDibi()->select('last_success_at, failure_count')
+                ->from('push_subscriptions')->where('endpoint_hash = %s', hash('sha256', $failed))->fetch();
+            self::assertNotFalse($recovered);
+            self::assertNotNull($recovered['last_success_at']);
+            self::assertSame(0, (int) $recovered['failure_count']);
+        } finally {
+            putenv($previous === false ? 'AUTH_ENABLED' : 'AUTH_ENABLED=' . $previous);
+        }
+    }
+
+    public function testWebPushDatabaseFailureDoesNotSkipOtherChannels(): void
+    {
+        $subscriptions = new PushSubscriptionRepository($this->database);
+        $this->database->getDibi()->query('DROP TABLE push_subscriptions');
+        $logs = new TestHandler();
+        Container::set('logger', new Logger('test', [$logs]));
+        $channel = new CountingSuccessChannel();
+        $dispatcher = new NotificationDispatcher(
+            new WebPushSender(new CurrentDeviceRecordingTransport(), 'public-key', 'private-key'),
+            $subscriptions,
+            [$channel],
+        );
+
+        self::assertSame(1, $dispatcher->send(['title' => 'Test']));
+        self::assertSame(1, $channel->calls);
+        self::assertTrue($logs->hasErrorRecords());
     }
 
     public function testSelfHostedRequestDeliveryPreservesAggregateRetryContract(): void
@@ -311,6 +424,7 @@ final class NotificationRetryTest extends TestCase
 
     private function insertRequest(): void
     {
+        $now = (new DateTimeImmutable('now', new DateTimeZone(Config::timezone())))->format('Y-m-d H:i:s');
         $this->database->getDibi()->insert('seerr_requests', [
             'request_id' => 901,
             'media_type' => 'movie',
@@ -319,9 +433,10 @@ final class NotificationRetryTest extends TestCase
             'request_status' => 1,
             'media_status' => 2,
             'is_4k' => 0,
-            'requested_at' => '2026-09-08 12:00:00',
+            'requested_at' => $now,
+            'requested_at_epoch' => time(),
             'notified' => 0,
-            'created_at' => '2026-09-08 12:00:00',
+            'created_at' => $now,
         ])->execute();
     }
 
@@ -389,6 +504,8 @@ final class CountingFailureChannel implements NotificationChannel
 
 final class CountingSuccessChannel implements NotificationChannel
 {
+    public int $calls = 0;
+
     public function name(): string
     {
         return 'success';
@@ -401,6 +518,8 @@ final class CountingSuccessChannel implements NotificationChannel
 
     public function send(array $notification): bool
     {
+        ++$this->calls;
+
         return true;
     }
 }
@@ -420,5 +539,18 @@ final class CurrentDeviceRecordingTransport implements WebPushTransport
                 'expired' => false,
             ];
         }
+    }
+}
+
+final class OutcomeWebPushTransport implements WebPushTransport
+{
+    /** @param list<array{endpoint: string, success: bool, expired: bool}> $reports */
+    public function __construct(public array $reports)
+    {
+    }
+
+    public function send(array $subscriptions, ?string $payload): iterable
+    {
+        yield from $this->reports;
     }
 }

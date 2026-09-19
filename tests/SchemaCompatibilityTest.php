@@ -165,6 +165,7 @@ final class SchemaCompatibilityTest extends TestCase
         // This matches an install from before playback notifications existed.
         $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `notified`');
         $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN `library_resolved_at`');
+        $this->dibi->query('ALTER TABLE `seerr_requests` DROP COLUMN `requested_at_epoch`');
         foreach (['notification_attempts', 'notification_claim_token', 'notification_claimed_at_epoch', 'notification_next_attempt_at_epoch'] as $column) {
             $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN %n', $column);
             $this->dibi->query('ALTER TABLE `seerr_requests` DROP COLUMN %n', $column);
@@ -203,6 +204,7 @@ final class SchemaCompatibilityTest extends TestCase
         $this->assertSame('ok', AppSettings::get('schema_test'));
         $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('push_subscriptions')->fetchSingle());
         $this->assertSame('Schema Movie', (string) $this->dibi->select('title')->from('seerr_requests')->fetchSingle());
+        $this->assertNull($this->dibi->select('requested_at_epoch')->from('seerr_requests')->fetchSingle());
         $this->assertSame(0, (int) $this->dibi->select('notification_attempts')->from('play_history')->fetchSingle());
         $this->assertSame(0, (int) $this->dibi->select('notification_attempts')->from('seerr_requests')->fetchSingle());
     }
@@ -250,6 +252,7 @@ final class SchemaCompatibilityTest extends TestCase
     {
         new SeerrRequestRepository($this->database);
         WorkerStatusRepository::ensureSchema($this->database);
+        $now = (new DateTimeImmutable('now', new DateTimeZone(Config::timezone())))->format('Y-m-d H:i:s');
         $this->dibi->insert('seerr_requests', [
             'request_id' => 9002,
             'media_type' => 'movie',
@@ -258,9 +261,10 @@ final class SchemaCompatibilityTest extends TestCase
             'request_status' => 1,
             'media_status' => 2,
             'is_4k' => 0,
-            'requested_at' => '2026-08-09 12:00:00',
+            'requested_at' => $now,
+            'requested_at_epoch' => time(),
             'notified' => 0,
-            'created_at' => '2026-08-09 12:00:00',
+            'created_at' => $now,
         ])->execute();
 
         // Hold the first claim update long enough for a second worker to read

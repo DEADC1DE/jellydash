@@ -1,6 +1,7 @@
 # Optional SQLite setup for a new, small Jellydash install.
 #
-# Use this file on its own:
+# Use this file without the MariaDB Compose file. Copy .env.example to .env,
+# set JELLYFIN_URL and JELLYFIN_API_TOKEN there, then start it:
 #   docker compose -f docker-compose.sqlite.yml up -d
 #
 # It deliberately does not include MariaDB. Existing MariaDB installs should
@@ -22,6 +23,7 @@ services:
       - app_cache:/var/www/html/cache
       - app_runtime_cache:/var/www/html/var/cache
       - app_logs:/var/www/html/var/log
+      - app_sessions:/var/www/html/var/sessions
       - app_uploads:/var/www/html/public/uploads
       - ./sqlite-data:/var/www/html/var/data
       # Drop-in feature modules (see docs/MODULES.md), e.g.:
@@ -31,4 +33,5 @@ volumes:
   app_cache:
   app_runtime_cache:
   app_logs:
+  app_sessions:
   app_uploads:

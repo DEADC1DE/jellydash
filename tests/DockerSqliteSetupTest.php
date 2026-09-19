@@ -43,6 +43,17 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertStringNotContainsString('depends_on:', $compose);
     }
 
+    public function testBothComposeSetupsPersistOrdinarySessions(): void
+    {
+        foreach (['docker-compose.yml', 'docker-compose.sqlite.yml'] as $path) {
+            $compose = (string) file_get_contents(ROOT_DIR . '/' . $path);
+            $this->assertStringContainsString('app_sessions:/var/www/html/var/sessions', $compose, $path);
+            $this->assertMatchesRegularExpression('/^  app_sessions:\s*$/m', $compose, $path);
+        }
+        $settings = (string) file_get_contents(ROOT_DIR . '/utils/@settings.php');
+        $this->assertStringContainsString("ROOT_DIR . '/var/sessions'", $settings);
+    }
+
     public function testMainComposeForwardsBothSupportedTimezoneVariables(): void
     {
         $compose = file_get_contents(ROOT_DIR . '/docker-compose.yml');

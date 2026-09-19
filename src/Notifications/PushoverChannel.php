@@ -13,6 +13,11 @@ use Mk\Framework\Log;
  */
 final class PushoverChannel implements NotificationChannel
 {
+    /** @param (\Closure(string, array<string, string>): array{status: int, body: string})|null $sender */
+    public function __construct(private ?\Closure $sender = null)
+    {
+    }
+
     public function name(): string
     {
         return 'pushover';
@@ -28,20 +33,20 @@ final class PushoverChannel implements NotificationChannel
         $fields = [
             'token' => (string) Config::get('PUSHOVER_APP_TOKEN'),
             'user' => (string) Config::get('PUSHOVER_USER_KEY'),
-            'title' => trim((string) ($notification['title'] ?? 'Jellydash')),
-            'message' => trim((string) ($notification['body'] ?? '')) ?: '...',
+            'title' => NotificationEndpoint::characters(trim((string) ($notification['title'] ?? 'Jellydash')), 250),
+            'message' => NotificationEndpoint::characters(trim((string) ($notification['body'] ?? '')) ?: '...', 1024),
         ];
 
         $absolute = trim((string) ($notification['absolute_url'] ?? ''));
-        if ($absolute !== '') {
+        if (NotificationEndpoint::validUrl($absolute) && mb_strlen($absolute) <= 512) {
             $fields['url'] = $absolute;
             $fields['url_title'] = 'Open Jellydash';
         }
 
-        $result = HttpSender::postForm('https://api.pushover.net/1/messages.json', $fields);
+        $result = ($this->sender ?? HttpSender::postForm(...))('https://api.pushover.net/1/messages.json', $fields);
 
         if ($result['status'] !== 200) {
-            Log::logDebugMessage('Pushover notification failed (HTTP ' . $result['status'] . '): ' . mb_substr($result['body'], 0, 300), $this);
+            Log::logErrorMessage('Pushover notification failed (HTTP ' . $result['status'] . '). Check the channel settings.', $this);
 
             return false;
         }

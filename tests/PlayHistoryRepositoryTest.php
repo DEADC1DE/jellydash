@@ -1,5 +1,6 @@
 <?php
 
+use Mk\Framework\AppSettings;
 use Mk\Framework\Container;
 use Mk\Framework\Jellyfin\HistoryFilters;
 use Mk\Framework\Jellyfin\MonitoringExclusions;
@@ -227,6 +228,30 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame('Middle', $pageTwo[0]['item_name']);
     }
 
+    public function testEpisodeWithoutSeriesDrilldownFiltersToItsExactItem(): void
+    {
+        foreach (['episode-a' => 'Pilot', 'episode-b' => 'Another episode'] as $id => $title) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-episode-drilldown-' . $id,
+                'item_id' => $id,
+                'item_type' => 'Episode',
+                'series_name' => '',
+                'item_name' => $title,
+            ]);
+        }
+        $filters = HistoryFilters::fromQuery([
+            'media_type' => 'item', 'media_id' => 'episode-a',
+            'media_item_type' => 'Episode', 'media_title' => 'Pilot',
+            'range' => 'all',
+        ]);
+
+        $this->assertSame(['episode-a'], array_map(
+            static fn (\Dibi\Row $row): string => (string) $row['item_id'],
+            $this->repository->historyRows($filters),
+        ));
+        $this->assertSame(1, $this->repository->historyTotal($filters));
+    }
+
     public function testFreeTextSearchKeepsTheDocumentedBackendAccentContract(): void
     {
         $this->insertPlay([
@@ -244,6 +269,32 @@ final class PlayHistoryRepositoryTest extends TestCase
             $this->assertCount(0, $rows, 'SQLite free-text LIKE does not fold accents.');
         } else {
             $this->assertCount(1, $rows, 'MariaDB utf8mb4_unicode_ci folds case and accents.');
+        }
+    }
+
+    public function testFreeTextSearchTreatsLikeWildcardsAsLiteralAcrossRowsCountsAndExport(): void
+    {
+        $user = 'PHPUnit Literal Search Viewer';
+        foreach (['50% done', '500 done', '100_percent', '100Xpercent', 'bang!_match', 'bang!Xmatch'] as $index => $title) {
+            $this->insertPlay([
+                'session_key' => 'phpunit-literal-search-' . $index,
+                'user_name' => $user,
+                'item_name' => $title,
+            ]);
+        }
+
+        foreach (['50%' => '50% done', '100_' => '100_percent', 'bang!_' => 'bang!_match', '%' => '50% done'] as $term => $expected) {
+            $filters = new HistoryFilters(user: $user, search: $term, range: 'all');
+            $this->assertSame([$expected], array_map(
+                static fn (\Dibi\Row $row): string => (string) $row['item_name'],
+                $this->repository->historyRows($filters),
+            ), $term);
+            $this->assertSame(1, $this->repository->historyTotal($filters), $term);
+            $this->assertSame(1, $this->repository->historyAggregate($filters)['plays'], $term);
+            $this->assertSame([$expected], array_map(
+                static fn (\Dibi\Row $row): string => (string) $row['item_name'],
+                iterator_to_array($this->repository->historyExportRows($filters)),
+            ), $term);
         }
     }
 
@@ -858,16 +909,29 @@ final class PlayHistoryRepositoryTest extends TestCase
             }
         });
 
-        try {
-            $repository->importHistoricalPlays($rows);
-            self::fail('The injected write failure should escape the batch.');
-        } catch (RuntimeException $error) {
-            self::assertSame('Injected second-row failure.', $error->getMessage());
-        }
+        $cache = new ReflectionProperty(AppSettings::class, 'cache');
+        $schemaConnections = new ReflectionProperty(AppSettings::class, 'schemaConnections');
+        $previousCache = $cache->getValue();
+        $previousSchemaConnections = $schemaConnections->getValue();
 
-        self::assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('play_history')
-            ->where('item_id IN %in', ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'])
-            ->fetchSingle());
+        try {
+            $cache->setValue(null, null);
+            $schemaConnections->setValue(null, null);
+
+            try {
+                $repository->importHistoricalPlays($rows);
+                self::fail('The injected write failure should escape the batch.');
+            } catch (RuntimeException $error) {
+                self::assertSame('Injected second-row failure.', $error->getMessage());
+            }
+
+            self::assertSame(0, (int) $this->dibi->select('COUNT(*)')->from('play_history')
+                ->where('item_id IN %in', ['aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'])
+                ->fetchSingle());
+        } finally {
+            $cache->setValue(null, $previousCache);
+            $schemaConnections->setValue(null, $previousSchemaConnections);
+        }
     }
 
     public function testItemPlaySummariesGroupsPlaysByItemAndKeepsLatest(): void

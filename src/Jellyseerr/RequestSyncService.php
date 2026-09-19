@@ -38,6 +38,10 @@ final class RequestSyncService
         }
 
         $repo = $this->repository ?? new SeerrRequestRepository();
+        $notificationsEnabled = Config::bool('PUSH_ENABLED', true) && Config::bool('SEERR_NOTIFY_ENABLED', true);
+        if (!$notificationsEnabled) {
+            $repo->retireUnnotified();
+        }
         $firstRun = $repo->isEmpty();
         $requests = $firstRun
             ? $client->requests(self::FETCH_COUNT)
@@ -72,12 +76,14 @@ final class RequestSyncService
 
             $requestStatus = (int) ($request['status'] ?? 0);
             $mediaStatus = (int) ($media['status'] ?? 0);
+            $requestedAtEpoch = $this->requestedAtEpoch($request);
 
             if (in_array($requestId, $known, true)) {
                 $statusUpdates[] = [
                     'request_id' => $requestId,
                     'request_status' => $requestStatus,
                     'media_status' => $mediaStatus,
+                    'requested_at_epoch' => $requestedAtEpoch,
                 ];
                 continue;
             }
@@ -97,7 +103,8 @@ final class RequestSyncService
                 'is_4k' => ($request['is4k'] ?? false) ? 1 : 0,
                 'season_count' => isset($request['seasonCount']) ? (int) $request['seasonCount'] : null,
                 'requested_at' => $this->requestedAt($request, $now),
-                'notified' => $firstRun ? 1 : 0,
+                'requested_at_epoch' => $requestedAtEpoch ?? time(),
+                'notified' => ($firstRun || !$notificationsEnabled) ? 1 : 0,
                 'created_at' => $now,
             ];
         }
@@ -199,21 +206,29 @@ final class RequestSyncService
      */
     private function requestedAt(array $request, string $fallback): string
     {
-        $raw = trim((string) ($request['createdAt'] ?? ''));
-        if ($raw === '') {
+        $epoch = $this->requestedAtEpoch($request);
+        if ($epoch === null) {
             return $fallback;
         }
 
         // Resolve the zone directly so this stays correct even when a caller
         // did not run the normal web bootstrap first.
-        $zone = Config::timezone();
+        return (new \DateTimeImmutable('@' . $epoch))
+            ->setTimezone(new \DateTimeZone(Config::timezone()))
+            ->format('Y-m-d H:i:s');
+    }
 
+    /** @param array<string, mixed> $request */
+    private function requestedAtEpoch(array $request): ?int
+    {
+        $raw = trim((string) ($request['createdAt'] ?? ''));
+        if ($raw === '') {
+            return null;
+        }
         try {
-            return (new \DateTimeImmutable($raw))
-                ->setTimezone(new \DateTimeZone($zone))
-                ->format('Y-m-d H:i:s');
+            return (new \DateTimeImmutable($raw, new \DateTimeZone('UTC')))->getTimestamp();
         } catch (\Exception) {
-            return $fallback;
+            return null;
         }
     }
 }

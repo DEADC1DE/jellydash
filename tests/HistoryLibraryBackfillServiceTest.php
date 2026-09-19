@@ -133,6 +133,23 @@ final class HistoryLibraryBackfillServiceTest extends TestCase
         $this->assertSame($second, $service->status());
     }
 
+    public function testAlreadyResolvedPlaysDoNotStartTheOneTimeUpgrade(): void
+    {
+        $this->seedPlay('fresh-play', 'ffffffffffffffffffffffffffffffff', 'Movies', true);
+        $service = $this->service(static function (): never {
+            throw new RuntimeException('Resolved plays must not be looked up again.');
+        });
+
+        self::assertSame([
+            'state' => 'complete', 'required' => false, 'total' => 0,
+            'processed' => 0, 'percent' => 100, 'busy' => false,
+        ], $service->status());
+
+        $this->seedPlay('older-play', 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'Movies');
+        self::assertSame(1, $service->status()['total']);
+        self::assertTrue($service->status()['required']);
+    }
+
     public function testMissingJellyfinItemsAreSkippedWithoutBlockingCompletion(): void
     {
         $this->seedPlay('backfill-missing', 'cccccccccccccccccccccccccccccccc', 'Movies');
@@ -226,7 +243,7 @@ final class HistoryLibraryBackfillServiceTest extends TestCase
         return new HistoryLibraryBackfillService($this->database, $loader, $this->lockPath);
     }
 
-    private function seedPlay(string $session, string $itemId, string $library): void
+    private function seedPlay(string $session, string $itemId, string $library, bool $resolved = false): void
     {
         (new PlayHistoryRepository($this->database))->logActiveStreams([[
             'id' => $session,
@@ -234,7 +251,7 @@ final class HistoryLibraryBackfillServiceTest extends TestCase
             'itemType' => 'Movie',
             'itemName' => 'Backfill test item',
             'library' => $library,
-            'libraryResolved' => false,
+            'libraryResolved' => $resolved,
             'playMethod' => 'DirectPlay',
             'watchedSec' => 300,
             'runtimeSec' => 3600,

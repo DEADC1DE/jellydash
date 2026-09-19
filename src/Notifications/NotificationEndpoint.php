@@ -6,7 +6,7 @@ namespace Mk\Framework\Notifications;
 
 use Mk\Framework\Config;
 
-/** Validation and text limits shared by the self-hosted notification channels. */
+/** Validation and text limits shared by notification channels. */
 final class NotificationEndpoint
 {
     public static function setting(string $key): string
@@ -53,5 +53,15 @@ final class NotificationEndpoint
         $value = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
 
         return strlen($value) <= $maxBytes ? $value : mb_strcut($value, 0, $maxBytes - 3, 'UTF-8') . '…';
+    }
+
+    public static function characters(string $value, int $maxCharacters): string
+    {
+        if ($maxCharacters <= 0) {
+            return '';
+        }
+        $value = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+
+        return mb_strlen($value) <= $maxCharacters ? $value : mb_substr($value, 0, $maxCharacters - 1) . '…';
     }
 }
