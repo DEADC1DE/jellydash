@@ -184,6 +184,10 @@ class Database
     ROLES: 1-owner, 2-admin, 3-regular, 4-guest */
     public function addAuthUser($username, $password, $name, $role): int
     {
+        $username = trim(strtolower((string) $username));
+        if ($username === '') {
+            throw new \InvalidArgumentException('Username cannot be empty.');
+        }
         if (strlen((string) $password) < self::MIN_PASSWORD_LENGTH) {
             throw new \InvalidArgumentException(
                 'Password must be at least ' . self::MIN_PASSWORD_LENGTH . ' characters.'
@@ -196,7 +200,7 @@ class Database
         }
 
         $dibi_data = [
-            'username' => strtolower($username),
+            'username' => $username,
             'password' => password_hash((string) $password, PASSWORD_DEFAULT),
             'name' => ucfirst($name),
             'role' => $role,
@@ -218,7 +222,7 @@ class Database
         }
 
         $userId = $this->dibi->select('id')->from('users')
-            ->where('username = %s', strtolower($username))->fetchSingle();
+            ->where('username = %s', trim(strtolower($username)))->fetchSingle();
         if ($userId === false) {
             return false;
         }

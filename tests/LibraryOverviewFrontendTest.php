@@ -10,7 +10,7 @@ final class LibraryOverviewFrontendTest extends TestCase
     {
         $script = (string) file_get_contents(ROOT_DIR . '/public/assets/js/libraries.js');
 
-        $this->assertStringContainsString("stat('Total Items', library.totalFiles)", $script);
+        $this->assertStringContainsString("stat(library.kind === 'mixed' ? 'Playable Items' : 'Total Items', library.totalFiles)", $script);
         $this->assertStringContainsString('library.playbackAvailable === false', $script);
         $this->assertStringContainsString("playbackUnavailable ? 'Playback Unavailable'", $script);
         $this->assertStringContainsString('Live item counts are unavailable.', $script);
@@ -25,5 +25,13 @@ final class LibraryOverviewFrontendTest extends TestCase
 
         $this->assertStringContainsString("['Libraries', 'Total Items', 'Total Playback', 'Total Plays']", $template);
         $this->assertStringNotContainsString('Storage Used', $template);
+    }
+
+    public function testLibraryFailureAndEmptyStatesUseSettledGenericCopy(): void
+    {
+        exec(sprintf('node %s 2>&1', escapeshellarg(ROOT_DIR . '/tests/frontend/libraries-state.test.js')), $output, $exitCode);
+
+        $this->assertSame(0, $exitCode, implode("\n", $output));
+        $this->assertContains('Libraries state tests passed.', $output);
     }
 }

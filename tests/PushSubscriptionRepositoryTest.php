@@ -308,7 +308,7 @@ final class PushSubscriptionRepositoryTest extends TestCase
         $this->assertSame($this->endpoint('active'), $eligible[0]['endpoint']);
         $device = $repository->devices($activeUser, false, true, hash('sha256', 'active'))[0];
         $this->assertSame(
-            ['id', 'label', 'owner', 'state', 'current', 'created_at', 'last_success_at'],
+            ['id', 'label', 'owner', 'state', 'current', 'created_at', 'last_success_at', 'failure_count'],
             array_keys($device),
         );
         $this->assertNull($device['owner']);
@@ -338,6 +338,113 @@ final class PushSubscriptionRepositoryTest extends TestCase
         $this->assertTrue($repository->revokeById($otherId, $firstUser, true, true));
         $this->assertSame(1, $repository->revokeCurrent($firstCapability, $firstUser, true));
         $this->assertSame(0, $repository->count());
+    }
+
+    public function testLimitReclaimsMalformedAndDeletedAccountRowsButKeepsLegacyDevices(): void
+    {
+        $this->database->ensureAuthSchema();
+        $active = $this->database->addAuthUser('push-reclaim-active', 'password-123', 'Active', Authorization::ROLE_USER);
+        $deleted = $this->database->addAuthUser('push-reclaim-deleted', 'password-123', 'Deleted', Authorization::ROLE_USER);
+        $repository = new PushSubscriptionRepository($this->database, 3);
+        $legacy = $this->endpoint('legacy-keep');
+        $repository->save($legacy, $this->encodedBytes(65, 'a'), $this->encodedBytes(16, 'b'), null);
+        $malformed = $this->endpoint('malformed-reclaim');
+        $repository->save($malformed, $this->encodedBytes(65, 'c'), $this->encodedBytes(16, 'd'), null, hash('sha256', 'malformed'), $active, true);
+        $this->database->getDibi()->update('push_subscriptions', ['p256dh' => 'invalid'])
+            ->where('endpoint_hash = %s', hash('sha256', $malformed))->execute();
+        $this->insertOwnedSubscription('deleted-reclaim', $deleted, 'e', 'f');
+        $this->database->getDibi()->delete('users')->where('id = %i', $deleted)->execute();
+
+        $new = $this->endpoint('new-after-reclaim');
+        $repository->save($new, $this->encodedBytes(65, 'g'), $this->encodedBytes(16, 'h'), null, hash('sha256', 'new'), $active, true);
+
+        $this->assertSame(2, $repository->count());
+        $endpoints = array_column($repository->all(), 'endpoint');
+        sort($endpoints);
+        $expected = [$legacy, $new];
+        sort($expected);
+        $this->assertSame($expected, $endpoints);
+    }
+
+    public function testEndpointKeysCanRevokeWithoutTheCookieOnlyForItsOwner(): void
+    {
+        $this->database->ensureAuthSchema();
+        $owner = $this->database->addAuthUser('push-revoke-owner', 'password-123', 'Owner', Authorization::ROLE_USER);
+        $other = $this->database->addAuthUser('push-revoke-other', 'password-123', 'Other', Authorization::ROLE_USER);
+        $repository = new PushSubscriptionRepository($this->database);
+        $endpoint = $this->endpoint('cookie-lost');
+        $key = $this->encodedBytes(65, 'i');
+        $secret = $this->encodedBytes(16, 'j');
+        $repository->save($endpoint, $key, $secret, null, hash('sha256', 'lost-cookie'), $owner, true);
+
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $this->encodedBytes(16, 'z'), $owner, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $other, true));
+        $this->assertSame(1, $repository->count());
+        $this->assertTrue($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $owner, true));
+        $this->assertSame(0, $repository->count());
+    }
+
+    public function testEndpointKeysCanRemoveAnUnownedLegacyDeviceAfterAuthenticationIsEnabled(): void
+    {
+        $this->database->ensureAuthSchema();
+        $user = $this->database->addAuthUser('push-legacy-revoke-user', 'password-123', 'User', Authorization::ROLE_USER);
+        $guest = $this->database->addAuthUser('push-legacy-revoke-guest', 'password-123', 'Guest', Authorization::ROLE_GUEST);
+        $repository = new PushSubscriptionRepository($this->database);
+        $endpoint = $this->endpoint('legacy-rotation');
+        $key = $this->encodedBytes(65, 'a');
+        $secret = $this->encodedBytes(16, 'b');
+        $capability = hash('sha256', 'legacy-rotation');
+        $repository->save($endpoint, $key, $secret, null, $capability);
+
+        $this->assertSame(0, $repository->revokeCurrent($capability, $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpoint($endpoint, $capability, $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $this->encodedBytes(16, 'c'), $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, strtoupper($secret), $user, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $guest, true));
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, null, true));
+        $this->assertSame(1, $repository->count());
+
+        $this->assertTrue($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $user, true));
+        $this->assertSame(0, $repository->count());
+    }
+
+    public function testLegacyKeyFallbackNeverRemovesAnotherAccountsDevice(): void
+    {
+        $this->database->ensureAuthSchema();
+        $owner = $this->database->addAuthUser('push-legacy-other-owner', 'password-123', 'Owner', Authorization::ROLE_USER);
+        $other = $this->database->addAuthUser('push-legacy-other-user', 'password-123', 'Other', Authorization::ROLE_USER);
+        $repository = new PushSubscriptionRepository($this->database);
+        $endpoint = $this->endpoint('owned-after-rotation');
+        $key = $this->encodedBytes(65, 'd');
+        $secret = $this->encodedBytes(16, 'e');
+        $repository->save($endpoint, $key, $secret, null, hash('sha256', 'owned-after-rotation'), $owner, true);
+
+        $this->assertFalse($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $other, true));
+        $this->assertSame(1, $repository->count());
+        $this->assertTrue($repository->revokeCurrentEndpointWithKeys($endpoint, $key, $secret, $owner, true));
+    }
+
+    public function testDeliveryFailureSurvivesSameKeyRefreshAndSuccessResetsIt(): void
+    {
+        $repository = new PushSubscriptionRepository($this->database);
+        $endpoint = $this->endpoint('delivery-state');
+        $key = $this->encodedBytes(65, 'k');
+        $secret = $this->encodedBytes(16, 'l');
+        $repository->save($endpoint, $key, $secret, null);
+        $repository->markFailure($endpoint);
+        $repository->save($endpoint, $key, $secret, null);
+        $row = $this->database->getDibi()->select('failure_count, last_success_at')->from('push_subscriptions')->fetch();
+        $this->assertSame(1, (int) $row['failure_count']);
+        $this->assertNull($row['last_success_at']);
+
+        $repository->markSuccess($endpoint);
+        $row = $this->database->getDibi()->select('failure_count, last_success_at')->from('push_subscriptions')->fetch();
+        $this->assertSame(0, (int) $row['failure_count']);
+        $this->assertNotNull($row['last_success_at']);
+        $repository->save($endpoint, $this->encodedBytes(65, 'm'), $secret, null);
+        $row = $this->database->getDibi()->select('failure_count, last_success_at')->from('push_subscriptions')->fetch();
+        $this->assertSame(0, (int) $row['failure_count']);
+        $this->assertNull($row['last_success_at']);
     }
 
     private function endpoint(string $token): string

@@ -26,7 +26,7 @@ Jellydash is a monitoring dashboard for [Jellyfin](https://jellyfin.org). If you
 
 It's supposed to be lightweight, without too much bloat and (hopefully) nice looking!
 
-It also works as a PWA, so you can install it on your phone like a real app. With notifications turned on, your phone buzzes the moment someone hits play. Alerts can go through Telegram, Pushover, Discord or Web Push, whatever you already use.
+It also works as a PWA, so you can install it on your phone like a real app. With notifications turned on, your phone buzzes the moment someone hits play. Alerts can go through Telegram, Pushover, Discord, ntfy, Gotify or Web Push, whatever you already use.
 I may work on open-source Android app in the future.
 
 The project is very young and in very active development.
@@ -69,6 +69,8 @@ The project is very young and in very active development.
 
 - **Statistics.** Watch time trends, top users, device activity, clients, codecs and transcode reasons. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
 
+- **Monthly recap.** Open Monthly recap from Statistics to look back at a completed month, with watch time, favourite movies and series, daily activity and a viewer filter. Viewing time inferred from older history is labelled as an estimate.
+
 - **Libraries.** An overview of all your libraries with item counts and type breakdowns. New libraries are picked up automatically.
 
 - **System status.** Check background collection, library refreshes, optional request sync, and notification retries from Settings. Copy a diagnostic summary without service URLs, credentials, or viewing details. See [System status](docs/SYSTEM_STATUS.md) for what the checks mean.
@@ -77,7 +79,7 @@ The project is very young and in very active development.
 
 - **Jellyseerr requests** (optional). The latest requests with their current status, plus a push notification when a new request comes in. The page only appears once you connect your Jellyseerr instance.
 
-- **Notifications** (optional). "Anna started watching The Office" straight to your phone or desktop, even with the app closed. Delivered through Telegram, Pushover, a Discord webhook, Web Push, or any combination of them.
+- **Notifications** (optional). "Anna started watching The Office" straight to your phone or desktop, even with the app closed. Delivered through Telegram, Pushover, a Discord webhook, ntfy, Gotify, Web Push, or any combination of them.
 
 - **Optional login.** Off by default, because on a trusted home network it just gets in the way. One env var turns it on. Recommended if you expose Jellydash to the internet. I recommend using Tailscale for exposing.
 
@@ -85,7 +87,7 @@ The project is very young and in very active development.
 
 ## Quick start
 
-You need Docker with the Compose plugin. Pick the database setup you want, grab two files, and you are ready to go.
+Use Docker Compose with MariaDB or SQLite, or install from Community Apps on Unraid. Choose your setup below.
 
 ### MariaDB (default)
 
@@ -120,6 +122,12 @@ Whichever database you choose, the active setup is saved as `docker-compose.yml`
 If you want to use your own MariaDB server or mount modules, copy [docker-compose.override.example.yml](docker-compose.override.example.yml) to `docker-compose.override.yml` and adjust it there.
 
 **For setting up notifications, check the section down below.**
+
+### Unraid
+
+Jellydash is [listed in Unraid Community Apps](https://ca.unraid.net/apps/jellydash-1vybjoi0yy69ry). On your Unraid server, open Apps, search for Jellydash, and select Install.
+
+The [Unraid template](unraid/jellydash.xml) uses the SQLite setup for a new, single-container install. See the [Unraid setup notes](unraid/README.md) for the required fields and persistent data paths. If you already run Jellydash through Compose on Unraid, keep that installation; adding the template does not move its data.
 
 ### Updating
 
@@ -196,7 +204,13 @@ Updating then means `git pull` and running the same command again. For a source-
 
 ## Notifications
 
-Jellydash can ping you when someone starts playing and when a new Jellyseerr request comes in. There are four ways to get the alerts, pick whatever you already use. Every configured channel gets every alert, and a channel is on as soon as its values are filled in `.env`.
+Jellydash can ping you when someone starts playing and when a new Jellyseerr request comes in. Pick whichever channels you already use. Jellydash attempts delivery through every configured channel. Once any channel accepts an alert, it is considered delivered; failed channels do not get separate retries. If all channels fail, the existing retry queue handles the alert.
+
+Configure Telegram, Pushover, Discord, ntfy and Gotify in `.env`. Each is optional and stays off until its required settings are filled in. Web Push uses `.env` for its server keys and browser permission for each receiving device.
+
+After changing channel settings in `.env`, recreate the app container with `docker compose up -d --force-recreate app`. If you run the separate SQLite file with `-f docker-compose.sqlite.yml`, keep that option in this command too. A plain container restart does not reload Compose environment values.
+
+If you are upgrading an existing MariaDB install, update its Compose file to include the new notification variables, preserving your custom settings and overrides. The current `docker-compose.yml` forwards them to the app; older copies do not. The SQLite Compose setup reads `.env` through `env_file`. Custom Compose setups must also pass the chosen channel's variables to the app container.
 
 Two things that apply to all channels:
 
@@ -237,6 +251,35 @@ Server Settings > Integrations > Webhooks > New Webhook, pick a channel, copy th
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
 
+### ntfy
+
+Use your own [ntfy server](https://docs.ntfy.sh/) or `https://ntfy.sh`. Subscribe to the same server and topic in your ntfy client.
+
+```bash
+NTFY_URL=https://ntfy.example.com
+NTFY_TOPIC=jellydash
+NTFY_TOKEN=your-access-token
+```
+
+`NTFY_URL` is the server base URL, without the topic. `NTFY_TOPIC` accepts 1-64 letters, digits, underscores or hyphens; ntfy's reserved route names are not valid topics. An access token needs permission to publish to that topic. Leave `NTFY_TOKEN` empty only if the server allows anonymous publishing. Username/password authentication is not supported by this channel.
+
+Use an access-controlled topic for viewing activity. A publishing token alone does not make a topic private: its read permissions must also restrict who can subscribe. Jellydash does not choose a server or topic for you.
+
+### Gotify
+
+Create an application in your [Gotify server](https://gotify.net/docs/) and copy its application token. Subscribe through the Gotify web interface or a compatible client.
+
+```bash
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_APP_TOKEN=your-application-token
+```
+
+`GOTIFY_URL` is the server base URL, without `/message`. Use an application token, not a client token. Alerts use priority 5 and plain text. Notification links open the dashboard on clients that support Gotify's click action.
+
+Both channels support custom ports and base-path prefixes. Use the final service URL: Jellydash does not follow redirects. HTTPS certificates must be valid and trusted by the app container. Explicit HTTP URLs are allowed for trusted private networks, but messages and tokens then travel unencrypted.
+
+For these two channels, Jellydash limits titles to 1,024 UTF-8 bytes and message text to 4,096 bytes, adding an ellipsis if shortened. This keeps ordinary alerts within ntfy's default text limits. A server can enforce lower limits or rate limits; failures appear in `var/log/app.log` without the token or message content. The test command reports server acceptance, so also check that the notification reaches your client.
+
 ### Web Push (browser and the installed app)
 
 The no-third-party option: notifications go straight to your browser or the installed PWA. It needs the dashboard served over HTTPS. Generate a keypair once:
@@ -269,6 +312,8 @@ If an installation has no owner or administrator, use `docker compose exec app p
 
 On the login page, **Keep me signed in** lets that browser restore your login for up to 90 days. The remembered login is renewed when you return and removed when you sign out or change your password.
 
+Both supplied Compose setups keep ordinary sessions in a named volume, so later container recreations do not sign you out early. When you first adopt an updated Compose file, the new volume starts empty and you may need to sign in once. Sessions still expire after one hour idle or eight hours since login.
+
 ## Exclusions in Settings or the environment
 
 Open **Settings > Exclusions** to manage these options:
@@ -277,7 +322,7 @@ Open **Settings > Exclusions** to manage these options:
 | --- | --- | --- |
 | Monitoring | Selected users from Now Playing, History, Statistics, library playback summaries and CSV exports. New plays and history imports for those users are skipped. | `IGNORE_USERS` |
 | Notifications | Playback alerts for selected users. Their activity is still recorded unless they are also excluded from monitoring. | `PUSH_IGNORE_USERS` |
-| Statistics | Selected libraries from Trending and Most Watched. Other statistics and History remain visible. | `TRENDING_EXCLUDE_LIBRARIES` |
+| Statistics | Selected libraries from Trending, Most Watched and Monthly recap title rankings. Viewing totals and History remain visible. | `TRENDING_EXCLUDE_LIBRARIES` |
 
 Environment values are comma-separated names, for example `IGNORE_USERS=Admin,Test`. Saved Settings values take priority over the environment, including an empty selection. To change a saved exclusion, use Settings. For Docker environment changes, recreate the app container so it receives the new values.
 
@@ -300,6 +345,8 @@ The plugin backup is a TSV file with no header row. You can also provide `playba
 Use **Import history** on the History page, or open the importer directly from Settings. Drop a TSV backup or `playback_reporting.db` (20 MB max) there. The file type is detected automatically. Jellydash counts the plays first, then asks you to confirm before writing anything. If the plugin is still installed, **Import from server plugin** appears too.
 
 User names are resolved through the connected server's `/Users` API. Media runtime is looked up through `/Items` (`RunTimeTicks`) so the completion bar matches live history; plays are marked finished at 95% of that runtime, same as the poller. If an item no longer exists, runtime stays empty and the play is left unfinished. `PlayDuration` is elapsed session time, not playback position. When an Emby backup includes `PauseDuration`, Jellydash excludes that paused time from the watched total. Dates are kept as the plugin recorded them in the server's local time. Each play is attached to the library that currently owns the item from its file path; if the item is gone, the type is used as a fallback (Movie → Movies, Episode → TV Shows). Imported plays never trigger notifications. Re-importing skips duplicates, but will fill in a missing runtime and replace a generic library label if the server is reachable the second time.
+
+If you have ignored users configured, the import stops before writing a play whose user name cannot be resolved. Check the server connection and retry. With no ignored users, offline imports can still keep unnamed plays.
 
 This compatibility only covers Playback Reporting imports from Emby. Jellydash is still built and tested for Jellyfin, so Emby is not a fully supported server yet.
 

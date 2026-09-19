@@ -77,6 +77,20 @@ final class PlayHistoryRepository implements LibraryHistorySource
         return $this->themePlaybackExclusions;
     }
 
+    /**
+     * Resolve settings-backed exclusions before an import transaction starts.
+     * Their first read can create app_settings, and MariaDB DDL commits transactions.
+     */
+    public function prepareHistoryImport(): void
+    {
+        $this->exclusions();
+    }
+
+    public function hasIgnoredUsers(): bool
+    {
+        return $this->exclusions()->names() !== [];
+    }
+
     public function visibleHistorySql(string $historyAlias = 'play_history', bool $alsoPending = false): string
     {
         return $this->themePlaybackExclusions->visibilitySql($historyAlias, $alsoPending);
@@ -659,6 +673,23 @@ final class PlayHistoryRepository implements LibraryHistorySource
         return $selection->orderBy('started_at')->asc()->fetchAll();
     }
 
+    public function firstStatisticsStartedAt(): ?\DateTimeImmutable
+    {
+        $selection = $this->db->select('MIN(started_at)')->from('play_history');
+        $this->excludeConfiguredUsers($selection);
+        $this->excludeThemePlayback($selection);
+        $value = trim((string) $selection->fetchSingle());
+        if ($value === '') {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($value, new \DateTimeZone(date_default_timezone_get()));
+        } catch (\Exception) {
+            return null;
+        }
+    }
+
     public static function isPlayFinished(int $watchedSec, int $runtimeSec): bool
     {
         return $runtimeSec > 0 && $watchedSec >= (int) floor($runtimeSec * 0.95);
@@ -683,6 +714,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
             return $this->importHistoricalPlaysBatch($rows, true, $onProgress);
         }
 
+        $this->prepareHistoryImport();
         $this->db->begin();
         try {
             $result = $this->importHistoricalPlaysBatch($rows, false, null);
@@ -1313,9 +1345,9 @@ final class PlayHistoryRepository implements LibraryHistorySource
         }
 
         if ($filters->search !== '') {
-            $like = '%' . $filters->search . '%';
+            $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $filters->search) . '%';
             $selection->where(
-                '(series_name LIKE %s OR item_name LIKE %s OR user_name LIKE %s OR client LIKE %s OR device LIKE %s)',
+                "(series_name LIKE %s ESCAPE '!' OR item_name LIKE %s ESCAPE '!' OR user_name LIKE %s ESCAPE '!' OR client LIKE %s ESCAPE '!' OR device LIKE %s ESCAPE '!')",
                 $like,
                 $like,
                 $like,

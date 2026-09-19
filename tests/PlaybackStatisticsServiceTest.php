@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Mk\Framework\Jellyfin\HistoryFilters;
 use Mk\Framework\Jellyfin\PlaybackStatisticsService;
 use Mk\Framework\Jellyfin\StatisticsPeriod;
 use PHPUnit\Framework\TestCase;
@@ -15,6 +16,24 @@ final class PlaybackStatisticsServiceTest extends TestCase
         $this->assertSame('month', StatisticsPeriod::normalizeRange('month'));
         $this->assertSame('year', StatisticsPeriod::normalizeRange(null, 'year'));
         $this->assertSame('week', StatisticsPeriod::normalizeRange('decade', 'invalid'));
+    }
+
+    public function testOverviewLabelsShowTheInclusiveRollingDates(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $service = new PlaybackStatisticsService(new \Mk\Framework\Jellyfin\PlayHistoryRepository($database));
+        $now = new DateTimeImmutable('2026-09-15 12:00:00');
+        foreach ([
+            'week' => ['7 days', '9 Sep 2026 to 15 Sep 2026'],
+            'month' => ['30 days', '17 Aug 2026 to 15 Sep 2026'],
+            'year' => ['12 months', '1 Oct 2025 to 15 Sep 2026'],
+            'all' => ['All time', 'All recorded history'],
+        ] as $range => [$label, $dates]) {
+            $data = $service->data($range, $now);
+            self::assertSame($label, $data['rangeLabel']);
+            self::assertSame($dates . ' - all libraries', $data['subLabel']);
+            self::assertSame(['7 days', '30 days', '12 months', 'All time'], array_column($data['ranges'], 'label'));
+        }
     }
 
     public function testYearTrendAlwaysBuildsTwelveCalendarMonthsAtMonthEnd(): void
@@ -550,6 +569,20 @@ final class PlaybackStatisticsServiceTest extends TestCase
         foreach ($cards as $card) {
             $this->assertArrayNotHasKey('href', $card);
         }
+    }
+
+    public function testEpisodeWithoutSeriesLinksToItsExactHistoryItem(): void
+    {
+        $service = new PlaybackStatisticsService();
+        $groups = (new ReflectionMethod($service, 'groupTitles'))->invoke($service, [
+            $this->titleRow('2026-08-20 10:00:00', 'episode-a', 'TV', '', 'Episode', '', 'Pilot'),
+        ]);
+        $cards = (new ReflectionMethod($service, 'titleCards'))->invoke($service, $groups, 'all');
+
+        $this->assertSame('/history?media_type=item&media_id=episode-a&media_item_type=Episode&media_title=Pilot&range=all', $cards[0]['href'] ?? null);
+        $query = [];
+        parse_str((string) parse_url($cards[0]['href'], PHP_URL_QUERY), $query);
+        $this->assertTrue(HistoryFilters::fromQuery($query)->hasMediaScope());
     }
 
     public function testExclusionsRemoveRowsBeforeSameTitleGroupsAreBuilt(): void

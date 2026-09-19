@@ -34,8 +34,9 @@ final class Phase7AuthorizationSurfaceTest extends TestCase
         $this->assertStringContainsString('PushSubscriptionOwnershipException', $subscribe);
         $this->assertStringContainsString('CAPABILITY_MANAGE_OWN_PUSH', $unsubscribe);
         $this->assertStringContainsString('revokeCurrentEndpoint', $unsubscribe);
+        $this->assertStringContainsString('revokeCurrentEndpointWithKeys', $unsubscribe);
         $this->assertStringContainsString("\$scope === 'all'", $test);
-        $this->assertStringContainsString('CAPABILITY_MANAGE_GLOBAL', $test);
+        $this->assertStringContainsString('canSendGlobalNotificationTest', $test);
         $this->assertStringContainsString('currentSubscription', $test);
         $this->assertStringContainsString('sendCurrentDeviceTest', $test);
     }

@@ -20,6 +20,9 @@ final class SystemStatusServiceTest extends TestCase
             'PUSHOVER_USER_KEY' => '', 'PUSH_ENABLED' => 'true', 'SEERR_NOTIFY_ENABLED' => 'true',
             'POLLER_ENABLED' => 'true', 'POLL_INTERVAL' => '30', 'SEERR_POLL_INTERVAL' => '120',
             'LIBRARIES_CACHE_TTL' => '300',
+            'NTFY_URL' => '', 'NTFY_TOPIC' => '', 'NTFY_TOKEN' => '',
+            'GOTIFY_URL' => '', 'GOTIFY_APP_TOKEN' => '',
+            'APP_URL' => '',
         ] as $key => $value) {
             $this->environment[$key] = getenv($key);
             putenv($key . '=' . $value);
@@ -56,6 +59,11 @@ final class SystemStatusServiceTest extends TestCase
         self::assertSame('unknown', $this->history([])['state']);
         putenv('POLLER_ENABLED=false');
         self::assertSame('disabled', $this->history([])['state']);
+        putenv('POLLER_ENABLED=invalid');
+        self::assertSame('disabled', $this->history([])['state']);
+        putenv('POLLER_ENABLED=1');
+        self::assertSame('unknown', $this->history([])['state']);
+        putenv('POLLER_ENABLED=false');
         self::assertSame('healthy', $this->history($this->success())['state'], 'External scheduling can still run workers.');
     }
 
@@ -65,6 +73,8 @@ final class SystemStatusServiceTest extends TestCase
         self::assertSame('delayed', $this->history($row)['state']);
         putenv('POLL_INTERVAL=120');
         self::assertSame('healthy', $this->history($row)['state']);
+        putenv('POLL_INTERVAL=0');
+        self::assertSame('delayed', $this->history($row)['state']);
     }
 
     public function testRunningStalledFailedRecoveredAndFutureClockStates(): void
@@ -142,6 +152,67 @@ final class SystemStatusServiceTest extends TestCase
         self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
     }
 
+    public function testConfigurationWarningNamesOnlyAffectedProvidersAndClearsWhenRemoved(): void
+    {
+        putenv('GOTIFY_URL=https://gotify.fixture.invalid');
+        putenv('GOTIFY_APP_TOKEN=private-gotify-token');
+        putenv('NTFY_TOKEN=leftover-private-token');
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success(), 'playback_delivery' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+        );
+        $component = $service->snapshot(1000)['components'][3];
+        self::assertSame('failed', $component['state']);
+        self::assertSame(990, $component['last_success_at']);
+        self::assertSame('Incomplete or invalid notification settings: ntfy. Complete these settings or clear them if unused.', $component['message']);
+
+        putenv('TELEGRAM_BOT_TOKEN=private-telegram-token');
+        putenv('PUSHOVER_USER_KEY=private-pushover-key');
+        putenv('VAPID_PUBLIC_KEY=private-public-key');
+        $result = $service->snapshot(1000);
+        self::assertStringContainsString('ntfy, Web Push, Telegram, Pushover.', $result['components'][3]['message']);
+        self::assertStringNotContainsString('private-', json_encode($result, JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('fixture.invalid', json_encode($result, JSON_THROW_ON_ERROR));
+        foreach (['NTFY_TOKEN', 'TELEGRAM_BOT_TOKEN', 'PUSHOVER_USER_KEY', 'VAPID_PUBLIC_KEY'] as $key) {
+            putenv($key . '=');
+        }
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+    }
+
+    public function testInvalidDiscordAndAppUrlAreNamedWithoutTheirValues(): void
+    {
+        putenv('DISCORD_WEBHOOK_URL=private-webhook.invalid/secret');
+        putenv('APP_URL=private-dashboard.invalid');
+        putenv('PUSHOVER_APP_TOKEN=private-app-token');
+        putenv('PUSHOVER_USER_KEY=private-user-key');
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+        );
+
+        $component = $service->snapshot(1000)['components'][3];
+        self::assertSame('failed', $component['state']);
+        self::assertStringContainsString('Discord', $component['message']);
+        self::assertStringContainsString('APP_URL', $component['message']);
+        self::assertStringNotContainsString('private-', json_encode($service->snapshot(1000), JSON_THROW_ON_ERROR));
+
+        putenv('DISCORD_WEBHOOK_URL=');
+        putenv('APP_URL=');
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+    }
+
+    public function testInvalidGotifySettingsAreNamedAlongsideWorkingNtfy(): void
+    {
+        putenv('NTFY_URL=https://ntfy.fixture.invalid');
+        putenv('NTFY_TOPIC=fixture-topic');
+        putenv('GOTIFY_APP_TOKEN=leftover-private-token');
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+        );
+        self::assertSame('Incomplete or invalid notification settings: Gotify. Complete these settings or clear them if unused.', $service->snapshot(1000)['components'][3]['message']);
+    }
+
     public function testExportUsesAnAllowlistAndDoesNotExposeSecretsOrRawErrors(): void
     {
         $row = $this->success() + ['token' => 'lease-secret', 'error_code' => 'https://private.invalid/token', 'username' => 'private-person', 'item_title' => 'private-title'];
@@ -151,6 +222,35 @@ final class SystemStatusServiceTest extends TestCase
             self::assertStringNotContainsString($secret, $json);
         }
         self::assertSame(['id', 'state', 'last_attempt_at', 'last_success_at', 'interval_seconds'], array_keys($result['diagnostics']['components'][0]));
+    }
+
+    public function testSelfHostedChannelsAreRecognizedWithoutSubscriptionOrNetworkProbes(): void
+    {
+        $service = new StatusService(
+            fn (): array => ['playback_notifications' => $this->success()],
+            static fn (): array => ['pending_retries' => 0, 'in_flight' => 0, 'stalled' => 0],
+            static function (): never {
+                throw new RuntimeException('No Web Push subscription read expected.');
+            },
+        );
+        putenv('NTFY_URL=https://private-notify.invalid');
+        self::assertSame('failed', $service->snapshot(1000)['components'][3]['state']);
+        putenv('NTFY_TOPIC=private-topic');
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+        putenv('NTFY_TOKEN=private-token');
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+        putenv('GOTIFY_APP_TOKEN=private-app-token');
+        self::assertSame('failed', $service->snapshot(1000)['components'][3]['state']);
+        putenv('GOTIFY_URL=http://gotify:80');
+        self::assertSame('healthy', $service->snapshot(1000)['components'][3]['state']);
+        foreach (['NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN'] as $key) {
+            putenv($key . '=');
+        }
+        $result = $service->snapshot(1000);
+        self::assertSame('healthy', $result['components'][3]['state']);
+        self::assertStringNotContainsString('private-', json_encode($result));
+        putenv('GOTIFY_URL=file:///tmp/no');
+        self::assertSame('failed', $service->snapshot(1000)['components'][3]['state']);
     }
 
     /** @return array<string, mixed> */

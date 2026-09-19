@@ -13,6 +13,11 @@ use Mk\Framework\Log;
  */
 final class TelegramChannel implements NotificationChannel
 {
+    /** @param (\Closure(string, array<string, string>): array{status: int, body: string})|null $sender */
+    public function __construct(private ?\Closure $sender = null)
+    {
+    }
+
     public function name(): string
     {
         return 'telegram';
@@ -33,20 +38,21 @@ final class TelegramChannel implements NotificationChannel
             $text .= "\n" . $body;
         }
         $absolute = trim((string) ($notification['absolute_url'] ?? ''));
-        if ($absolute !== '') {
-            $text .= "\n" . $absolute;
+        if (NotificationEndpoint::validUrl($absolute) && mb_strlen($absolute) < 4096) {
+            $text = NotificationEndpoint::characters($text, 4096 - mb_strlen($absolute) - 1) . "\n" . $absolute;
         }
+        $text = NotificationEndpoint::characters($text, 4096);
 
         // Plain text on purpose: titles can contain characters that Markdown
         // parse modes would reject.
-        $result = HttpSender::postForm('https://api.telegram.org/bot' . $token . '/sendMessage', [
+        $result = ($this->sender ?? HttpSender::postForm(...))('https://api.telegram.org/bot' . $token . '/sendMessage', [
             'chat_id' => (string) Config::get('TELEGRAM_CHAT_ID'),
             'text' => $text,
             'disable_web_page_preview' => 'true',
         ]);
 
         if ($result['status'] !== 200) {
-            Log::logDebugMessage('Telegram notification failed (HTTP ' . $result['status'] . '): ' . mb_substr($result['body'], 0, 300), $this);
+            Log::logErrorMessage('Telegram notification failed (HTTP ' . $result['status'] . '). Check the channel settings.', $this);
 
             return false;
         }

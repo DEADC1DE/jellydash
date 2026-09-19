@@ -7,6 +7,7 @@ use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Jellyseerr\JellyseerrClient;
 use Mk\Framework\Jellyseerr\RequestSyncService;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class RequestSyncServiceTest extends TestCase
@@ -74,6 +75,49 @@ final class RequestSyncServiceTest extends TestCase
         $this->assertSame(61, $this->repository->count());
         $this->assertSame(0, (int) $this->database->getDibi()->select('notified')->from('seerr_requests')->where('request_id = 101')->fetchSingle());
         $this->assertSame(1, (int) $this->database->getDibi()->select('request_status')->from('seerr_requests')->where('request_id = 100')->fetchSingle());
+
+        $claims = $this->repository->claimUnnotified((new DateTimeImmutable('2026-09-17T12:00:00Z'))->getTimestamp());
+        $this->assertSame([], $claims);
+        $this->assertSame(60, (int) $this->database->getDibi()->select('COUNT(*)')
+            ->from('seerr_requests')->where('notified = 1')->where('request_id > %i', 100)->fetchSingle());
+    }
+
+    #[DataProvider('disabledNotificationSwitches')]
+    public function testDisabledNotificationsRetirePendingAndNewRequestsBeforeReenable(string $switch): void
+    {
+        $this->insertKnown(100, 1);
+        $this->repository->insert([
+            'request_id' => 99,
+            'media_type' => 'movie',
+            'tmdb_id' => 10099,
+            'title' => 'Pending request',
+            'requested_at' => '2026-09-17 12:00:00',
+            'created_at' => '2026-09-17 12:00:00',
+            'notified' => 0,
+        ]);
+        $client = new FakePagedJellyseerrClient([
+            0 => $this->requests(101, 100, '2026-09-17T12:00:00Z'),
+        ]);
+        $previous = getenv($switch);
+
+        try {
+            putenv($switch . '=false');
+            $this->assertSame(1, (new RequestSyncService($client, $this->repository))->sync());
+        } finally {
+            putenv($previous === false ? $switch : $switch . '=' . $previous);
+        }
+
+        $this->assertSame(1, (int) $this->database->getDibi()->select('notified')
+            ->from('seerr_requests')->where('request_id = %i', 99)->fetchSingle());
+        $this->assertSame(1, (int) $this->database->getDibi()->select('notified')
+            ->from('seerr_requests')->where('request_id = %i', 101)->fetchSingle());
+        $this->assertSame([], $this->repository->claimUnnotified((new DateTimeImmutable('2026-09-17T12:01:00Z'))->getTimestamp()));
+    }
+
+    /** @return array<string, array{string}> */
+    public static function disabledNotificationSwitches(): array
+    {
+        return ['master' => ['PUSH_ENABLED'], 'requests' => ['SEERR_NOTIFY_ENABLED']];
     }
 
     public function testFailedLaterPageMakesNoPartialWrites(): void
@@ -151,6 +195,83 @@ final class RequestSyncServiceTest extends TestCase
         });
     }
 
+    #[DataProvider('notificationTimingCases')]
+    public function testFreshRequestClaimsUseElapsedTimeAndPollingCadence(string $createdAt, string $now, string $interval): void
+    {
+        $this->withTimezoneEnvironment('Europe/Prague', null, function () use ($createdAt, $now, $interval): void {
+            $previous = getenv('SEERR_POLL_INTERVAL');
+            putenv('SEERR_POLL_INTERVAL=' . $interval);
+            try {
+                $this->insertKnown(100, 1);
+                $client = new FakePagedJellyseerrClient([0 => $this->requests(101, 100, $createdAt)]);
+                self::assertSame(1, (new RequestSyncService($client, $this->repository))->sync());
+                $claims = $this->repository->claimUnnotified((new DateTimeImmutable($now))->getTimestamp());
+                self::assertCount(1, $claims);
+                self::assertSame(101, (int) $claims[0]['request_id']);
+            } finally {
+                putenv($previous === false ? 'SEERR_POLL_INTERVAL' : 'SEERR_POLL_INTERVAL=' . $previous);
+            }
+        });
+    }
+
+    /** @return array<string, array{string, string, string}> */
+    public static function notificationTimingCases(): array
+    {
+        return [
+            'fall back' => ['2026-10-25T01:04:00Z', '2026-10-25T01:05:00Z', '120'],
+            'spring forward' => ['2026-03-29T00:59:00Z', '2026-03-29T01:01:00Z', '120'],
+            'fifteen minute poll' => ['2026-09-17T12:01:00Z', '2026-09-17T12:15:00Z', '900'],
+            'daily poll with processing time' => ['2026-09-16T12:00:01Z', '2026-09-17T12:00:30Z', '86400'],
+        ];
+    }
+
+    public function testRepeatedLocalHourDoesNotMakeAnOldRequestFresh(): void
+    {
+        $this->withTimezoneEnvironment('Europe/Prague', null, function (): void {
+            $this->insertKnown(100, 1);
+            $client = new FakePagedJellyseerrClient([0 => $this->requests(101, 100, '2026-10-25T00:20:00Z')]);
+            (new RequestSyncService($client, $this->repository))->sync();
+            self::assertSame([], $this->repository->claimUnnotified((new DateTimeImmutable('2026-10-25T01:21:00Z'))->getTimestamp()));
+        });
+    }
+
+    public function testSyncRestoresTheExactInstantForPendingLegacyRows(): void
+    {
+        $this->withTimezoneEnvironment('Europe/Prague', null, function (): void {
+            $this->insertKnown(100, 1);
+            $this->database->getDibi()->update('seerr_requests', ['notified' => 0])->execute();
+            $client = new FakePagedJellyseerrClient([0 => $this->requests(100, 100, '2026-10-25T01:04:00Z')]);
+            self::assertSame(0, (new RequestSyncService($client, $this->repository))->sync());
+            $claims = $this->repository->claimUnnotified((new DateTimeImmutable('2026-10-25T01:05:00Z'))->getTimestamp());
+            self::assertCount(1, $claims);
+            self::assertSame(100, (int) $claims[0]['request_id']);
+            self::assertSame('Known request', (string) $claims[0]['title']);
+        });
+    }
+
+    public function testLegacyRowsWithoutAnExactInstantDoNotReplay(): void
+    {
+        $this->insertKnown(100, 1);
+        $this->database->getDibi()->update('seerr_requests', ['notified' => 0])->execute();
+        self::assertSame([], $this->repository->claimUnnotified());
+        self::assertSame(1, $this->repository->count());
+        self::assertSame('Known request', (string) $this->repository->latest()[0]['title']);
+    }
+
+    public function testSlowPollingStillRetiresRequestsOlderThanItsFreshnessWindow(): void
+    {
+        $previous = getenv('SEERR_POLL_INTERVAL');
+        putenv('SEERR_POLL_INTERVAL=900');
+        try {
+            $this->insertKnown(100, 1);
+            $client = new FakePagedJellyseerrClient([0 => $this->requests(101, 100, '2026-09-17T11:00:00Z')]);
+            (new RequestSyncService($client, $this->repository))->sync();
+            self::assertSame([], $this->repository->claimUnnotified((new DateTimeImmutable('2026-09-17T12:15:00Z'))->getTimestamp()));
+        } finally {
+            putenv($previous === false ? 'SEERR_POLL_INTERVAL' : 'SEERR_POLL_INTERVAL=' . $previous);
+        }
+    }
+
     public function testRequestedAtUsesDockerTimezoneWhenAppTimezoneIsMissing(): void
     {
         $this->withTimezoneEnvironment(null, 'America/New_York', function (): void {
@@ -217,7 +338,7 @@ final class RequestSyncServiceTest extends TestCase
     }
 
     /** @return array<int, array<string, mixed>> */
-    private function requests(int $newest, int $oldest): array
+    private function requests(int $newest, int $oldest, string $createdAt = '2026-09-08T12:00:00Z'): array
     {
         $requests = [];
         for ($id = $newest; $id >= $oldest; --$id) {
@@ -225,7 +346,7 @@ final class RequestSyncServiceTest extends TestCase
                 'id' => $id,
                 'status' => 1,
                 'media' => ['mediaType' => 'movie', 'tmdbId' => 10000 + $id, 'status' => 2],
-                'createdAt' => '2026-09-08T12:00:00Z',
+                'createdAt' => $createdAt,
             ];
         }
 

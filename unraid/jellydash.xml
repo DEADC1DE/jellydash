@@ -1,0 +1,32 @@
+<Container version="2">
+  <Name>Jellydash</Name>
+  <Repository>ghcr.io/themartz90/jellydash:latest</Repository>
+  <Registry>https://github.com/themartz90/jellydash/pkgs/container/jellydash</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Icon>https://raw.githubusercontent.com/themartz90/jellydash/main/public/assets/img/icon-512.png</Icon>
+  <WebUI>http://[IP]:[PORT:80]</WebUI>
+  <Overview>A Jellyfin dashboard for current streams, play history, statistics, and optional notifications. This template runs Jellydash with SQLite. The mascot is based on an icon by Magnific from Flaticon.</Overview>
+  <Category>MediaApp:Other</Category>
+  <Requires>Jellyfin server and API key</Requires>
+  <Support>https://github.com/themartz90/jellydash/discussions</Support>
+  <Project>https://github.com/themartz90/jellydash</Project>
+  <TemplateURL>https://raw.githubusercontent.com/themartz90/jellydash/main/unraid/jellydash.xml</TemplateURL>
+  <ReadMe>https://raw.githubusercontent.com/themartz90/jellydash/main/unraid/README.md</ReadMe>
+  <License>MIT</License>
+  <Screenshot>https://raw.githubusercontent.com/themartz90/jellydash/main/docs/assets/now-playing-active.png</Screenshot>
+
+  <Config Name="Web UI port" Target="80" Default="8080" Mode="tcp" Description="Host port for the Jellydash web interface." Type="Port" Display="always" Required="true" Mask="false"/>
+  <Config Name="Appdata" Target="/var/www/html/var" Default="/mnt/user/appdata/jellydash/var" Mode="rw" Description="SQLite database, logs, and runtime files. Back up this path." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Uploads" Target="/var/www/html/public/uploads" Default="/mnt/user/appdata/jellydash/uploads" Mode="rw" Description="Uploaded images and other user files. Back up this path." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Jellyfin URL" Target="JELLYFIN_URL" Default="" Description="Jellyfin address reachable from this container. Use a server IP or hostname, not localhost." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Jellyfin API key" Target="JELLYFIN_API_TOKEN" Default="" Description="API key from Jellyfin Dashboard, API Keys. Some statistics need an admin key." Type="Variable" Display="always" Required="true" Mask="true"/>
+  <Config Name="Timezone" Target="APP_TIMEZONE" Default="UTC" Description="IANA timezone, for example Europe/Prague. Used for History and Statistics dates." Type="Variable" Display="always" Required="true" Mask="false"/>
+
+  <Config Name="Database driver" Target="DB_DRIVER" Default="sqlite3" Description="SQLite mode for this single-container template. Leave as sqlite3." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Database file" Target="DB_NAME" Default="/var/www/html/var/data/jellydash.sqlite" Description="SQLite file inside the Appdata mount. Leave at this path for a new install." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Login enabled" Target="AUTH_ENABLED" Default="false" Description="Set to true only after filling in both initial admin fields below." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Initial admin user" Target="AUTH_ADMIN_USER" Default="" Description="Initial username if login is enabled. Existing users are not changed on restart." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+  <Config Name="Initial admin password" Target="AUTH_ADMIN_PASSWORD" Default="" Description="Initial password if login is enabled. Change it inside Jellydash after setup." Type="Variable" Display="advanced" Required="false" Mask="true"/>
+</Container>

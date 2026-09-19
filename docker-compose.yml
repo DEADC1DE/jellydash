@@ -50,6 +50,11 @@ services:
       PUSHOVER_APP_TOKEN: "${PUSHOVER_APP_TOKEN:-}"
       PUSHOVER_USER_KEY: "${PUSHOVER_USER_KEY:-}"
       DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      NTFY_URL: "${NTFY_URL:-}"
+      NTFY_TOPIC: "${NTFY_TOPIC:-}"
+      NTFY_TOKEN: "${NTFY_TOKEN:-}"
+      GOTIFY_URL: "${GOTIFY_URL:-}"
+      GOTIFY_APP_TOKEN: "${GOTIFY_APP_TOKEN:-}"
       # Libraries hidden from Trending/Most Watched (also editable in Settings)
       TRENDING_EXCLUDE_LIBRARIES: "${TRENDING_EXCLUDE_LIBRARIES:-}"
       # Optional login gate (recommended when internet-facing)
@@ -63,6 +68,7 @@ services:
       - app_cache:/var/www/html/cache
       - app_runtime_cache:/var/www/html/var/cache
       - app_logs:/var/www/html/var/log
+      - app_sessions:/var/www/html/var/sessions
       - app_uploads:/var/www/html/public/uploads
       # Drop-in feature modules (see docs/MODULES.md), e.g.:
       # - ./my-modules/downloads:/var/www/html/modules/downloads:ro
@@ -87,5 +93,6 @@ volumes:
   app_cache:
   app_runtime_cache:
   app_logs:
+  app_sessions:
   app_uploads:
   db_data:

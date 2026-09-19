@@ -1,0 +1,5 @@
+<CommunityApplications>
+  <Profile>Jellydash is a self-hosted dashboard for Jellyfin. This repository contains its Unraid Docker template. Setup and support information is in the Jellydash repository and GitHub Discussions. The mascot is based on an icon by Magnific from Flaticon.</Profile>
+  <Icon>https://raw.githubusercontent.com/themartz90/jellydash/main/public/assets/img/icon-512.png</Icon>
+  <WebPage>https://github.com/themartz90/jellydash</WebPage>
+</CommunityApplications>

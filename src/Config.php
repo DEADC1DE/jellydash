@@ -39,6 +39,13 @@ class Config
         return $value === null ? $default : filter_var($value, FILTER_VALIDATE_BOOL);
     }
 
+    public static function interval(string $key, int $default): int
+    {
+        $value = filter_var(self::get($key, (string) $default), FILTER_VALIDATE_INT);
+
+        return $value !== false && $value >= 1 && $value <= 86400 ? $value : $default;
+    }
+
     // Current application environment, e.g. "local" or "production".
     public static function env(): string
     {

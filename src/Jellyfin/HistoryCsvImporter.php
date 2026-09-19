@@ -50,6 +50,7 @@ final class HistoryCsvImporter
         $total = iterator_count($this->parser->iterateFile($path));
         $this->emit($onProgress, 'preparing', 0, $total, 0, 0);
 
+        $this->repository->prepareHistoryImport();
         $connection = $this->database->getDibi();
         $connection->begin();
         try {

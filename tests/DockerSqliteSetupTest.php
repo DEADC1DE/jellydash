@@ -43,6 +43,17 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertStringNotContainsString('depends_on:', $compose);
     }
 
+    public function testBothComposeSetupsPersistOrdinarySessions(): void
+    {
+        foreach (['docker-compose.yml', 'docker-compose.sqlite.yml'] as $path) {
+            $compose = (string) file_get_contents(ROOT_DIR . '/' . $path);
+            $this->assertStringContainsString('app_sessions:/var/www/html/var/sessions', $compose, $path);
+            $this->assertMatchesRegularExpression('/^  app_sessions:\s*$/m', $compose, $path);
+        }
+        $settings = (string) file_get_contents(ROOT_DIR . '/utils/@settings.php');
+        $this->assertStringContainsString("ROOT_DIR . '/var/sessions'", $settings);
+    }
+
     public function testMainComposeForwardsBothSupportedTimezoneVariables(): void
     {
         $compose = file_get_contents(ROOT_DIR . '/docker-compose.yml');
@@ -50,6 +61,19 @@ final class DockerSqliteSetupTest extends TestCase
         $this->assertIsString($compose);
         $this->assertStringContainsString('APP_TIMEZONE: "${APP_TIMEZONE:-}"', $compose);
         $this->assertStringContainsString('TZ: "${TZ:-}"', $compose);
+    }
+
+    public function testSelfHostedNotificationSettingsReachBothComposeSetups(): void
+    {
+        $compose = file_get_contents(ROOT_DIR . '/docker-compose.yml');
+        $sqlite = file_get_contents(ROOT_DIR . '/docker-compose.sqlite.yml');
+        $example = file_get_contents(ROOT_DIR . '/.env.example');
+        self::assertMatchesRegularExpression('/env_file:\s*\n\s*- \.env/', $sqlite);
+        foreach (['NTFY_URL', 'NTFY_TOPIC', 'NTFY_TOKEN', 'GOTIFY_URL', 'GOTIFY_APP_TOKEN'] as $key) {
+            self::assertStringContainsString($key . ': "${' . $key . ':-}"', $compose);
+            self::assertStringContainsString($key . '=', $example);
+            self::assertStringNotContainsString($key . ':', $sqlite, 'SQLite must not shadow its env_file settings.');
+        }
     }
 
     public function testReadmeMakesTheSelectedComposeSetupTheDefault(): void

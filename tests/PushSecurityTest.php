@@ -88,11 +88,16 @@ final class PushSecurityTest extends TestCase
 
         $this->assertCount(1, $transport->subscriptions);
         $this->assertSame('https://fcm.googleapis.com/wp/valid', $transport->subscriptions[0]['endpoint']);
+        $this->assertSame(['https://fcm.googleapis.com/wp/valid'], $result['succeeded']);
+        $this->assertSame(['https://attacker.invalid/stored-row'], $result['ineligible_endpoints']);
         $this->assertSame([
             'sent' => 1,
             'failed' => 1,
             'expired' => [],
             'ineligible' => 1,
+            'succeeded' => ['https://fcm.googleapis.com/wp/valid'],
+            'failed_endpoints' => [],
+            'ineligible_endpoints' => ['https://attacker.invalid/stored-row'],
         ], $result);
     }
 
@@ -110,7 +115,39 @@ final class PushSecurityTest extends TestCase
             'failed' => 1,
             'expired' => [],
             'ineligible' => 0,
+            'succeeded' => [],
+            'failed_endpoints' => [],
+            'ineligible_endpoints' => [],
         ], $result);
+    }
+
+    public function testProviderFailureIdentifiesTheAffectedEndpoint(): void
+    {
+        $endpoint = 'https://fcm.googleapis.com/wp/temporary-failure';
+        $transport = new RecordingWebPushTransport([
+            ['endpoint' => $endpoint, 'success' => false, 'expired' => false],
+        ]);
+        $result = (new WebPushSender($transport, 'public', 'private'))->send(
+            [$this->subscription($endpoint)],
+            ['title' => 'Fixture'],
+        );
+
+        $this->assertSame([$endpoint], $result['failed_endpoints']);
+        $this->assertSame([], $result['expired']);
+    }
+
+    public function testInvalidUtf8PayloadIsNotSentAsAnEmptyNotification(): void
+    {
+        $transport = new RecordingWebPushTransport([
+            ['endpoint' => 'https://fcm.googleapis.com/wp/valid', 'success' => true, 'expired' => false],
+        ]);
+        $sender = new WebPushSender($transport, 'public', 'private', 'mailto:test@example.test');
+
+        $result = $sender->send([$this->subscription('https://fcm.googleapis.com/wp/valid')], ['title' => "\xff"]);
+
+        self::assertSame(0, $result['sent']);
+        self::assertSame(1, $result['failed']);
+        self::assertSame([], $transport->subscriptions);
     }
 
     /** @return array{endpoint: string, p256dh: string, auth: string} */

@@ -26,6 +26,7 @@
     {% for href in module_styles %}
         <link rel="stylesheet" href="{{ href }}">
     {% endfor %}
+    {% block page_styles %}{% endblock %}
 </head>
 <body>
 <div class="app-shell">
