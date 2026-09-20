@@ -63,6 +63,7 @@ final class JellyfinSessionMapperTest extends TestCase
         $this->assertSame('MKV → TS', $stream['containerPath']);
         $this->assertSame('HEVC · AC3 · MKV', $stream['sourceMediaLabel']);
         $this->assertSame('HEVC · AAC · TS', $stream['outputMediaLabel']);
+        $this->assertSame('media/series', $stream['storage']);
         $this->assertContains('Audio codec not supported', $stream['transcodeReasons']);
         $this->assertSame('stream-diagnostics-84097828fc31', $stream['diagnosticsId']);
     }
@@ -85,6 +86,61 @@ final class JellyfinSessionMapperTest extends TestCase
         $this->assertFalse($stream['libraryResolved']);
         $this->assertSame('', $stream['avatarUrl']);
         $this->assertStringContainsString('/api/image.php?item=item-2&type=Backdrop', $stream['backdrop']);
+        $this->assertSame('mount/nas-01', $stream['storage']);
+    }
+
+    public function testStorageLabelUsesMountPointAndHandlesWindowsAndUrls(): void
+    {
+        $mapper = new JellyfinSessionMapper();
+
+        $windows = $this->movieSession();
+        $windows['NowPlayingItem']['MediaSources'][0]['Path'] = 'E:\Filme\Great Movie (2019)\movie.mkv';
+        $this->assertSame('E:/Filme', $mapper->map([$windows])['streams'][0]['storage']);
+
+        $url = $this->movieSession();
+        $url['NowPlayingItem']['MediaSources'][0]['Path'] = 'http://192.168.1.10:8096/Videos/stream.mkv';
+        $this->assertSame('192.168.1.10', $mapper->map([$url])['streams'][0]['storage']);
+
+        $longMount = $this->movieSession();
+        $longMount['NowPlayingItem']['MediaSources'][0]['Path'] = '/srv/dev-disk-by-uuid-9f3e12ab/filme/movie.mkv';
+        $this->assertSame('srv/dev-disk-by-uuid-9f3…', $mapper->map([$longMount])['streams'][0]['storage']);
+    }
+
+    public function testStorageLabelFallsBackToItemPathAndStaysEmptyWithoutAny(): void
+    {
+        $mapper = new JellyfinSessionMapper();
+
+        $fromItem = $this->movieSession();
+        unset($fromItem['NowPlayingItem']['MediaSources'][0]['Path']);
+        $fromItem['NowPlayingItem']['Path'] = '/media/filme/Arrival (2016)/arrival.mkv';
+        $this->assertSame('media/filme', $mapper->map([$fromItem])['streams'][0]['storage']);
+
+        $withoutPath = $this->movieSession();
+        unset($withoutPath['NowPlayingItem']['MediaSources'][0]['Path']);
+        $this->assertSame('', $mapper->map([$withoutPath])['streams'][0]['storage']);
+    }
+
+    public function testStreamsSortStableAcrossRefreshesRegardlessOfSessionOrder(): void
+    {
+        $mapper = new JellyfinSessionMapper();
+
+        $zed = $this->movieSession();
+        $zed['Id'] = 'session-z';
+        $zed['UserName'] = 'Zed';
+
+        $amy = $this->movieSession();
+        $amy['Id'] = 'session-a';
+        $amy['UserName'] = 'amy';
+
+        $first = $mapper->map([$zed, $amy])['streams'];
+        $second = $mapper->map([$amy, $zed])['streams'];
+
+        $this->assertSame(['amy', 'Zed'], [$first[0]['user'], $first[1]['user']]);
+        $this->assertSame(
+            [$first[0]['id'], $first[1]['id']],
+            [$second[0]['id'], $second[1]['id']],
+            'Same sessions must map to the same card order regardless of /Sessions order'
+        );
     }
 
     public function testFallbackStreamIdentityDistinguishesDevicesPlayingTheSameItem(): void
@@ -207,6 +263,7 @@ final class JellyfinSessionMapperTest extends TestCase
                 'MediaSources' => [
                     [
                         'Container' => 'mkv',
+                        'Path' => '/media/series/the-expanse/S03/E08.mkv',
                     ],
                 ],
             ],
@@ -247,6 +304,7 @@ final class JellyfinSessionMapperTest extends TestCase
                     [
                         'Bitrate' => 18000000,
                         'Container' => 'mkv',
+                        'Path' => '/mount/nas-01/filme/Great Movie (2019)/great.movie.2019.1080p.bluray.mkv',
                     ],
                 ],
             ],

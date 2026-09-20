@@ -166,6 +166,7 @@
                         <div class="playback-stack">
                             ${methodBadge(stream)}
                             <span class="quality-chip">${escapeHtml(stream.quality || '')}</span>
+                            ${stream.storage ? `<span class="quality-chip storage-chip">Storage: ${escapeHtml(stream.storage)}</span>` : ''}
                         </div>
                     </div>
 

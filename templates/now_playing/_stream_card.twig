@@ -9,6 +9,7 @@
             <div class="playback-stack">
                 {% include "_badge.twig" with { item: stream } %}
                 <span class="quality-chip">{{ stream.quality }}</span>
+                {% if stream.storage %}<span class="quality-chip storage-chip">Storage: {{ stream.storage }}</span>{% endif %}
             </div>
         </div>
 
