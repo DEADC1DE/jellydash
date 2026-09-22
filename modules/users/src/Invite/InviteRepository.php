@@ -75,7 +75,8 @@ final class InviteRepository
                 `disabled_at` datetime DEFAULT NULL,
                 `invited_at` datetime NOT NULL,
                 PRIMARY KEY (`id`),
-                UNIQUE KEY `uniq_invite_account_user` (`jellyfin_user_id`)
+                UNIQUE KEY `uniq_invite_account_user` (`jellyfin_user_id`),
+                KEY `idx_invite_accounts_expires` (`expires_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
             'CREATE TABLE IF NOT EXISTS `invite_accounts` (
                 `id` INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,6 +86,23 @@ final class InviteRepository
                 `disabled_at` TEXT DEFAULT NULL,
                 `invited_at` TEXT NOT NULL,
                 UNIQUE (`jellyfin_user_id`)
+            )'
+        );
+        $this->platform->createSqliteIndex('idx_invite_accounts_expires', 'invite_accounts', ['expires_at']);
+
+        // Redeem attempts per client IP: cheap brute-force/enum throttle for
+        // the public join page.
+        $this->platform->createTable(
+            'CREATE TABLE IF NOT EXISTS `invite_attempts` (
+                `ip` varchar(45) NOT NULL,
+                `window_started_at` datetime NOT NULL,
+                `attempts` int NOT NULL DEFAULT 0,
+                PRIMARY KEY (`ip`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+            'CREATE TABLE IF NOT EXISTS `invite_attempts` (
+                `ip` TEXT NOT NULL PRIMARY KEY,
+                `window_started_at` TEXT NOT NULL,
+                `attempts` INTEGER NOT NULL DEFAULT 0
             )'
         );
 
@@ -112,6 +130,17 @@ final class InviteRepository
             'allow_downloads' => $allowDownloads ? 1 : 0,
             'allow_live_tv' => $allowLiveTv ? 1 : 0,
         ])->execute(\dibi::IDENTIFIER);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    public function invitationById(int $id): ?array
+    {
+        $row = $this->db->select('*')->from('invite_invitations')
+            ->where('id = %i', $id)->limit(1)->fetch();
+
+        return $row !== null ? $row->toArray() : null;
     }
 
     /**
@@ -143,12 +172,47 @@ final class InviteRepository
         $this->db->delete('invite_invitations')->where('id = %i', $id)->execute();
     }
 
+    /**
+     * Atomically claim an unused invitation for $username: only wins when
+     * the code is still unused, so two concurrent redeems cannot both
+     * proceed. Returns the claimed row, or null when the code is unknown,
+     * used, or expired.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function claimCode(string $code, string $username): ?array
+    {
+        $invitation = $this->invitationByCode($code);
+        if ($invitation === null
+            || $invitation['used_by'] !== null
+            || ($invitation['link_expires_at'] !== null && strtotime((string) $invitation['link_expires_at']) < time())
+        ) {
+            return null;
+        }
+
+        $this->db->update('invite_invitations', ['used_by' => $username, 'used_at' => date('Y-m-d H:i:s')])
+            ->where('id = %i AND used_by IS NULL', $invitation['id'])->execute();
+
+        if ($this->db->getAffectedRows() === 0) {
+            return null;
+        }
+
+        return $this->invitationById((int) $invitation['id']);
+    }
+
+    /**
+     * Undo a claim when provisioning failed — the code stays redeemable.
+     */
+    public function releaseClaim(int $invitationId): void
+    {
+        $this->db->update('invite_invitations', ['used_by' => null, 'used_at' => null])
+            ->where('id = %i', $invitationId)->execute();
+    }
+
     public function markUsed(int $invitationId, string $username): void
     {
-        $this->db->update('invite_invitations', [
-            'used_by' => $username,
-            'used_at' => date('Y-m-d H:i:s'),
-        ])->where('id = %i', $invitationId)->execute();
+        $this->db->update('invite_invitations', ['used_by' => $username])
+            ->where('id = %i', $invitationId)->execute();
     }
 
     public function trackAccount(string $jellyfinUserId, string $username, ?string $expiresAt): void
@@ -229,5 +293,37 @@ final class InviteRepository
     {
         $this->db->update('invite_accounts', ['disabled_at' => null])
             ->where('jellyfin_user_id = %s', $jellyfinUserId)->execute();
+    }
+
+    /**
+     * Count a redeem attempt from $ip and return the total in the current
+     * one-hour window (the window restarts with the first attempt after it
+     * expired). The join page refuses once the caller exceeds the limit.
+     */
+    public function recordAttempt(string $ip): int
+    {
+        $now = date('Y-m-d H:i:s');
+        $windowStart = date('Y-m-d H:i:s', time() - 3600);
+
+        // Upsert syntax differs between backends; both reset the counter
+        // when the stored window has expired.
+        if ($this->platform->isSqlite()) {
+            $this->db->query('INSERT INTO `invite_attempts` (`ip`, `window_started_at`, `attempts`)
+                VALUES (%s, %s, 1)
+                ON CONFLICT (`ip`) DO UPDATE SET
+                    `attempts` = CASE WHEN `invite_attempts`.`window_started_at` < %s THEN 1 ELSE `invite_attempts`.`attempts` + 1 END,
+                    `window_started_at` = CASE WHEN `invite_attempts`.`window_started_at` < %s THEN %s ELSE `invite_attempts`.`window_started_at` END',
+                $ip, $now, $windowStart, $windowStart, $now);
+        } else {
+            $this->db->query('INSERT INTO `invite_attempts` (`ip`, `window_started_at`, `attempts`)
+                VALUES (%s, %s, 1)
+                ON DUPLICATE KEY UPDATE
+                    `attempts` = IF(`window_started_at` < %s, 1, `attempts` + 1),
+                    `window_started_at` = IF(`window_started_at` < %s, %s, `window_started_at`)',
+                $ip, $now, $windowStart, $windowStart, $now);
+        }
+
+        return (int) $this->db->select('attempts')->from('invite_attempts')
+            ->where('ip = %s', $ip)->fetchSingle();
     }
 }

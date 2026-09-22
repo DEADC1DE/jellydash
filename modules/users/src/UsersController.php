@@ -27,7 +27,7 @@ final class UsersController extends Controller
         // POST), and errors come back as a short-lived query flag rendered by
         // the page below. Csrf::check() exits with 419 on a bad token.
         $inviteError = Main::captureGetString('invite_error');
-        $inviteNotice = Main::captureGetString('invite_notice');
+        $inviteNotice = Main::captureSessionNotice();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::check();
             try {
@@ -37,13 +37,13 @@ final class UsersController extends Controller
                 Log::logException($e);
             }
 
-            $redirect = '#invitations';
-            if ($error !== null) {
-                $redirect = '?' . http_build_query(['invite_error' => $error]) . '#invitations';
-            } elseif ($inviteNotice !== null) {
-                $redirect = '?' . http_build_query(['invite_notice' => $inviteNotice]) . '#invitations';
+            // Success notices (freshly reset passwords) travel in the session,
+            // never in the URL — query strings end up in browser history and
+            // access logs.
+            if ($inviteNotice !== null) {
+                Main::putSessionNotice($inviteNotice);
             }
-            header('Location: /users' . $redirect);
+            header('Location: /users' . ($error !== null ? '?' . http_build_query(['invite_error' => $error]) . '#invitations' : '#invitations'));
             exit;
         }
 
@@ -144,7 +144,7 @@ final class UsersController extends Controller
         try {
             $manager = new InviteManager();
             $state['usersByName'] = $manager->repository()->accountsByName();
-            $state['invitations'] = $manager->invitations($_SERVER['HTTP_HOST'] ?? null);
+            $state['invitations'] = $manager->invitations(InviteManager::publicBaseUrl());
             $state['libraries'] = array_map(
                 static fn (array $folder): array => [
                     'id' => (string) ($folder['Id'] ?? ''),

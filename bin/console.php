@@ -323,6 +323,11 @@ try {
                     continue;
                 }
                 $expires = null;
+                $username = (string) ($entry['username'] ?? '');
+                if ($username === '') {
+                    $skipped++;
+                    continue;
+                }
                 foreach (['expires', 'expires_at', 'expiry'] as $field) {
                     $value = $entry[$field] ?? null;
                     if (is_string($value) && trim($value) !== '') {
@@ -333,7 +338,7 @@ try {
                         break;
                     }
                 }
-                $manager->repository()->trackAccount($jellyfinId, (string) $entry['username'], $expires);
+                $manager->repository()->trackAccount($jellyfinId, $username, $expires);
                 $migrated++;
             }
             echo "invites:migrate-wizarr - migrated {$migrated} account(s), skipped {$skipped} without a matching Jellyfin user.\n";

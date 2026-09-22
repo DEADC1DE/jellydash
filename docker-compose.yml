@@ -28,6 +28,9 @@ services:
       SEERR_POLL_INTERVAL: "${SEERR_POLL_INTERVAL:-120}"
       SEERR_NOTIFY_ENABLED: "${SEERR_NOTIFY_ENABLED:-true}"
       # Invite service (optional; the page hides until these are set)
+      # Public base URL for absolute invite links (recommended behind a proxy)
+      APP_PUBLIC_URL: "${APP_PUBLIC_URL:-}"
+      # Legacy Wizarr bridge (invites:migrate-wizarr only)
       INVITE_URL: "${INVITE_URL:-}"
       INVITE_API_TOKEN: "${INVITE_API_TOKEN:-}"
       INVITE_VERIFY_SSL: "${INVITE_VERIFY_SSL:-true}"

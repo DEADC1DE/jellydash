@@ -8,6 +8,7 @@ require_once __DIR__ . '/bootstrap.php';
 // same way InviteClientTest always has.
 require_once __DIR__ . '/../modules/users/src/Invite/InviteRepository.php';
 require_once __DIR__ . '/../modules/users/src/Invite/InviteManager.php';
+require_once __DIR__ . '/../modules/users/src/Invite/RedeemError.php';
 
 use Mk\Framework\Database;
 use Mk\Framework\Jellyfin\JellyfinClient;
@@ -46,8 +47,8 @@ final class InviteManagerTest extends TestCase
             if ($path === '/Users/New' && $method === 'POST') {
                 return ['Id' => 'jf-new-1', 'Name' => (string) ($payload['Name'] ?? '')];
             }
-            if ($path === '/Users?Id=admin-1' || $path === '/Users?Id=jf-new-1') {
-                return [['Id' => 'jf-new-1', 'Name' => 'x', 'Policy' => ['EnableAllFolders' => true, 'IsAdministrator' => true]]];
+            if ($path === '/Users/admin-1' || $path === '/Users/jf-new-1') {
+                return ['Id' => 'jf-new-1', 'Name' => 'x', 'Policy' => ['EnableAllFolders' => true, 'IsAdministrator' => true]];
             }
             return [];
         };
@@ -63,24 +64,80 @@ final class InviteManagerTest extends TestCase
 
         $invitation = $manager->createInvitation(7, 30, ['lib-1', 'lib-2'], true, false);
 
-        $this->assertMatchesRegularExpression('/^[a-z2-9]{8}$/', (string) $invitation['code']);
+        $this->assertMatchesRegularExpression('/^[a-z2-9]{12}$/', (string) $invitation['code']);
         $this->assertSame(['lib-1', 'lib-2'], json_decode((string) $invitation['libraries'], true));
         $this->assertSame(30, (int) $invitation['duration_days']);
         $this->assertSame(1, (int) $invitation['allow_downloads']);
         $this->assertNotSame('1970', substr((string) $invitation['link_expires_at'], 0, 4));
     }
 
-    public function testJoinUrlPrefixesHostOnlyWhenKnown(): void
+    public function testJoinUrlPrefixesBaseOnlyWhenKnown(): void
     {
         $manager = $this->manager();
 
         $this->assertSame('/?page=join&code=abc', $manager->joinUrl('abc', null));
-        $_SERVER['HTTPS'] = 'on';
-        try {
-            $this->assertSame('https://dash.example.com/?page=join&code=abc', $manager->joinUrl('abc', 'dash.example.com'));
-        } finally {
-            unset($_SERVER['HTTPS']);
+        $this->assertSame('https://dash.example.com/?page=join&code=abc', $manager->joinUrl('abc', 'https://dash.example.com'));
+    }
+
+    public function testPublicBaseUrlPrefersConfigThenProxyHeaders(): void
+    {
+        unset($_SERVER['HTTP_HOST'], $_SERVER['HTTPS'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
+        putenv('APP_PUBLIC_URL=');
+
+        $this->assertNull(InviteManager::publicBaseUrl());
+
+        $_SERVER['HTTP_HOST'] = 'dash.example.com';
+        $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
+        $this->assertSame('https://dash.example.com', InviteManager::publicBaseUrl());
+
+        putenv('APP_PUBLIC_URL=https://invite.example.org');
+        $_ENV['APP_PUBLIC_URL'] = 'https://invite.example.org';
+        $_SERVER['APP_PUBLIC_URL'] = 'https://invite.example.org';
+        $_SERVER['HTTP_HOST'] = 'evil.example.com';
+        $this->assertSame('https://invite.example.org', InviteManager::publicBaseUrl());
+
+        putenv('APP_PUBLIC_URL=');
+        unset($_ENV['APP_PUBLIC_URL'], $_SERVER['APP_PUBLIC_URL'], $_SERVER['HTTP_HOST'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
+    }
+
+    public function testRedeemIsRateLimitedPerIp(): void
+    {
+        $manager = $this->manager();
+
+        $allowed = 0;
+        for ($i = 0; $i < 12; $i++) {
+            if ($manager->withinRateLimit('203.0.113.7')) {
+                $allowed++;
+            }
         }
+        $this->assertSame(10, $allowed);
+        $this->assertFalse($manager->withinRateLimit('203.0.113.7'));
+        $this->assertTrue($manager->withinRateLimit('203.0.113.8'));
+    }
+
+    public function testFailedProvisioningReleasesTheClaim(): void
+    {
+        $requester = function (string $path, string $method): mixed {
+            if ($path === '/Users' && $method === 'GET') {
+                return []; // no username collision
+            }
+            if ($path === '/Users/New') {
+                throw new RuntimeException('Jellyfin request failed with HTTP 500.');
+            }
+            return [];
+        };
+        $manager = new InviteManager($this->repository(), new JellyfinClient('http://jellyfin.example', 'token', true, $requester));
+        $code = (string) $manager->createInvitation(null, null, [], false, false)['code'];
+
+        try {
+            $manager->redeem($code, ['username' => 'user1', 'password' => 'longenough', 'password2' => 'longenough']);
+            $this->fail('expected provisioning failure');
+        } catch (RuntimeException) {
+            // expected
+        }
+
+        $row = $this->repository()->invitationByCode($code);
+        $this->assertNull($row['used_by'], 'claim must be released so the code stays redeemable');
     }
 
     public function testRedeemCreatesJellyfinUserWithPolicyAndStartsExpiry(): void

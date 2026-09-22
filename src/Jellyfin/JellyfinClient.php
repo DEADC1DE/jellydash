@@ -159,14 +159,9 @@ final class JellyfinClient implements LibraryOverviewClient
      */
     public function userById(string $userId): ?array
     {
-        $payload = $this->getJson('/Users?' . http_build_query(['Id' => $userId]));
-        foreach (is_array($payload) ? $payload : [] as $user) {
-            if (is_array($user) && strcasecmp((string) ($user['Id'] ?? ''), $userId) === 0) {
-                return $user;
-            }
-        }
+        $payload = $this->getJson('/Users/' . rawurlencode($userId));
 
-        return null;
+        return is_array($payload) ? $payload : null;
     }
 
     /**
