@@ -92,7 +92,7 @@
     function showError(message) {
         stopPolling();
         hideButton.hidden = true;
-        title.textContent = 'We couldn\'t finish the update';
+        title.textContent = 'Could not finish the History update';
         summary.textContent = message;
         completeActions.hidden = true;
         errorActions.hidden = false;

@@ -57,7 +57,7 @@
             <section class="trending-section" aria-label="Trending media">
                 <header class="stats-section-header">
                     <h2>Trending</h2>
-                    <span>Most-watched this period</span>
+                    <span>Most viewers this period</span>
                     <i></i>
                 </header>
                 <div class="trending-row">
@@ -82,7 +82,7 @@
                     </span>
                     <span class="most-watched-copy">
                         <strong>Most Watched</strong>
-                        <small>All-time favourites</small>
+                        <small>Ranked by total plays</small>
                     </span>
                     <span class="most-watched-context" aria-hidden="true">
                         {% if stats.mostWatched.series is not empty %}<span>TV Shows</span>{% endif %}
@@ -190,8 +190,8 @@
         <section class="stats-transcoding-grid">
             <article class="stats-card stats-donut-card">
                 <div>
-                    <strong>Playback Directness</strong>
-                    <span>session mix</span>
+                    <strong>Playback methods</strong>
+                    <span>Share of sessions</span>
                 </div>
                 <div class="stats-donut-layout">
                     <div class="stats-donut" style="background: {{ stats.directnessConic }}">
@@ -246,7 +246,7 @@
 
         <header class="stats-section-header">
             <h2>Clients</h2>
-            <span>Breakdown - popularity - transcoding - usage</span>
+            <span>Sessions, transcoding and watch time by client</span>
             <i></i>
         </header>
 

@@ -125,7 +125,7 @@ final class PlaybackStatisticsService
                     $this->delta($plays, $previousPlays, $range, 'plays'),
                     $this->historyUrl($range, $periodStart, $periodEnd),
                 ),
-                $this->kpi('Active Users', '#34d8a6', (string) count($users), ['text' => 'unique viewers', 'color' => 'rgba(255,255,255,0.42)']),
+                $this->kpi('Viewers', '#34d8a6', (string) count($users), ['text' => count($users) === 1 ? 'unique viewer' : 'unique viewers', 'color' => 'rgba(255,255,255,0.42)']),
                 $this->kpi(
                     'Transcode Rate',
                     '#f7b955',

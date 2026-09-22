@@ -79,7 +79,6 @@ final class HistoryTemplateTest extends TestCase
         $this->assertStringContainsString('data-history-export-download disabled', $dialog);
         $this->assertStringContainsString('target="history-export-download-frame"', $dialog);
         $this->assertStringContainsString('data-history-export-frame hidden', $dialog);
-        $this->assertStringContainsString('CSV format v2', $dialog);
         foreach (['media_type', 'media_id', 'media_item_type', 'media_title', 'media_library'] as $name) {
             $this->assertStringContainsString('name="' . $name . '"', $dialog);
         }

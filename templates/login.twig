@@ -24,10 +24,10 @@
 
     {% if no_users %}
         <div class="login-notice" role="alert">
-            No user account exists yet, so signing in cannot work. Set
-            AUTH_ADMIN_USER and AUTH_ADMIN_PASSWORD (at least 8 characters)
-            in your .env and restart the container. The container log shows
-            the reason when the account could not be created.
+            No user account has been created yet. Set AUTH_ADMIN_USER and
+            AUTH_ADMIN_PASSWORD in .env, using a password of at least 8 characters,
+            then recreate the container. If the account still isn't created,
+            check the container logs.
         </div>
     {% elseif error_msg %}
         <div class="login-error" role="alert">{{ error_msg }}</div>

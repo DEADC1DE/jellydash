@@ -13,7 +13,7 @@ use Twig\Loader\FilesystemLoader;
  */
 class View
 {
-    public const ASSET_REVISION = '20260917-mixed-items';
+    public const ASSET_REVISION = '20260922-ui-copy';
 
     private Environment $twig;
 

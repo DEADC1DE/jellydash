@@ -77,9 +77,9 @@ final class SettingsTemplateTest extends TestCase
         $this->assertStringContainsString('<legend>Monitoring</legend>', $template);
         $this->assertStringContainsString('name="monitoring_ignore[]"', $template);
         $this->assertStringContainsString('name="monitoring_ignore_extra"', $template);
-        $this->assertStringContainsString('Existing rows stay in the database.', $template);
-        $this->assertStringContainsString('activity skipped while excluded cannot be reconstructed.', $template);
-        $this->assertStringContainsString('Names match exactly and are case-insensitive.', $template);
+        $this->assertStringContainsString('Earlier activity stays saved and will reappear when you remove the exclusion.', $template);
+        $this->assertStringContainsString('Activity skipped while the user was excluded cannot be recovered.', $template);
+        $this->assertStringContainsString('Names must match exactly, but case does not matter.', $template);
         $this->assertStringContainsString('<legend>Notifications</legend>', $template);
         $this->assertStringContainsString('name="push_ignore[]"', $template);
         $this->assertStringContainsString('name="push_ignore_extra"', $template);

@@ -4,7 +4,7 @@
     <div class="settings-page-header">
         <div class="header-copy">
             <h1>Settings</h1>
-            <p>Preferences stored in the database; infrastructure stays in <code>.env</code></p>
+            <p>Choose what Jellydash shows and which activity it records.</p>
         </div>
         {% if can_manage_global %}
             <button type="submit" class="settings-save-btn settings-header-save" form="settings-form">Save settings</button>
@@ -89,7 +89,7 @@
                     <input type="text" name="monitoring_ignore_extra" value="{{ monitoring_ignored_users|join(', ') }}" placeholder="e.g. a private profile">
                 </label>
             {% endif %}
-            <small class="settings-note">Existing rows stay in the database. Removing an exclusion restores that earlier activity, but activity skipped while excluded cannot be reconstructed. Names match exactly and are case-insensitive.</small>
+            <small class="settings-note">Earlier activity stays saved and will reappear when you remove the exclusion. Activity skipped while the user was excluded cannot be recovered. Names must match exactly, but case does not matter.</small>
             </fieldset>
             <fieldset class="settings-exclusion-group">
                 <legend>Notifications</legend>

@@ -146,7 +146,7 @@
             details.push(`<span class="stream-detail"><small>Audio</small>${escapeHtml(stream.audioPath)}</span>`);
         }
         if (stream.containerPath) {
-            details.push(`<span class="stream-detail"><small>Out</small>${escapeHtml(stream.containerPath)}</span>`);
+            details.push(`<span class="stream-detail"><small>Output</small>${escapeHtml(stream.containerPath)}</span>`);
         }
         return details.length > 0
             ? `<div class="stream-details" aria-label="Playback details">${details.join('')}</div>`
@@ -196,8 +196,8 @@
                     </svg>
                 </div>
                 <h2>All quiet on the server</h2>
-                <p>No active playback right now. Streams appear here the moment someone hits play.</p>
-                <small><span class="status-dot"></span>listening for sessions...</small>
+                <p>No active playback right now. New streams appear here automatically.</p>
+                <small><span class="status-dot"></span>Checking for sessions...</small>
             </div>
         `;
     }
