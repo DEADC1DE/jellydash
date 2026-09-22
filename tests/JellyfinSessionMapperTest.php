@@ -98,8 +98,8 @@ final class JellyfinSessionMapperTest extends TestCase
         $this->assertSame('E:/Filme', $mapper->map([$windows])['streams'][0]['storage']);
 
         $url = $this->movieSession();
-        $url['NowPlayingItem']['MediaSources'][0]['Path'] = 'http://192.168.1.10:8096/Videos/stream.mkv';
-        $this->assertSame('192.168.1.10', $mapper->map([$url])['streams'][0]['storage']);
+        $url['NowPlayingItem']['MediaSources'][0]['Path'] = 'http://203.0.113.10:8096/Videos/stream.mkv';
+        $this->assertSame('203.0.113.10', $mapper->map([$url])['streams'][0]['storage']);
 
         $longMount = $this->movieSession();
         $longMount['NowPlayingItem']['MediaSources'][0]['Path'] = '/srv/dev-disk-by-uuid-9f3e12ab/filme/movie.mkv';
