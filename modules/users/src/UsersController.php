@@ -21,15 +21,22 @@ final class UsersController extends Controller
         $selected = trim((string) ($_GET['user'] ?? ''));
         $repository = new UserStatsRepository();
 
-        $wizarrError = null;
+        // Post/Redirect/Get, same pattern as the settings operations: a
+        // successful action redirects (so a browser refresh cannot replay the
+        // POST), and errors come back as a short-lived query flag rendered by
+        // the page below. Csrf::check() exits with 419 on a bad token.
+        $wizarrError = Main::captureGetString('wizarr_error');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Csrf::check();
             try {
-                Csrf::check();
-                $wizarrError = $this->handleWizarrAction();
+                $error = $this->handleWizarrAction();
             } catch (\Throwable $e) {
-                $wizarrError = $e->getMessage() !== '' ? $e->getMessage() : 'Wizarr action failed.';
+                $error = $e->getMessage() !== '' ? $e->getMessage() : 'Wizarr action failed.';
                 Log::logException($e);
             }
+
+            header('Location: /users' . ($error !== null ? '?' . http_build_query(['wizarr_error' => $error]) . '#invitations' : '#invitations'));
+            exit;
         }
 
         if ($selected !== '') {
