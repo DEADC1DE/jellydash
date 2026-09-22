@@ -18,4 +18,5 @@ return [
         'Mk\\Modules\\Users\\' => 'src/',
     ],
     'styles' => ['users.css'],
+    'scripts' => ['users.js'],
 ];

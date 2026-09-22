@@ -376,3 +376,231 @@
     color: transparent;
     background: rgba(255, 255, 255, .02);
 }
+
+/* ── Wizarr integration (invitations + account actions) ─────────────────── */
+
+.users-card-name {
+    display: block;
+}
+
+.users-card:hover .users-card-name {
+    color: #fff;
+}
+
+.users-card-wizarr {
+    margin-top: 4px;
+    color: rgba(247, 185, 85, .8);
+}
+
+.users-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border);
+}
+
+.users-card-actions form {
+    display: contents;
+}
+
+.wizarr-mini {
+    padding: 5px 9px;
+    color: rgba(255, 255, 255, .78);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: rgba(8, 7, 12, .48);
+}
+
+.wizarr-mini:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, .22);
+    background: rgba(124, 92, 255, .16);
+}
+
+.wizarr-mini.is-danger:hover {
+    border-color: rgba(255, 99, 99, .45);
+    background: rgba(255, 80, 80, .14);
+}
+
+.wizarr-note {
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    font-size: 13px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-card);
+}
+
+.wizarr-note.is-muted {
+    color: var(--color-muted);
+}
+
+.wizarr-note.is-error {
+    color: #ffb0b0;
+    border-color: rgba(255, 99, 99, .35);
+}
+
+.wizarr-note code {
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, .07);
+}
+
+.wizarr-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 26px;
+}
+
+@media (max-width: 900px) {
+    .wizarr-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.wizarr-create,
+.wizarr-invite {
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-card);
+}
+
+.wizarr-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+}
+
+.wizarr-form > label {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--color-muted);
+    font-size: 12.5px;
+}
+
+.wizarr-form select {
+    padding: 7px 9px;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: rgba(8, 7, 12, .6);
+}
+
+.wizarr-libraries {
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+}
+
+.wizarr-libraries legend {
+    padding: 0 6px;
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.wizarr-libraries legend small {
+    color: rgba(255, 255, 255, .3);
+}
+
+.wizarr-check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 0;
+    color: var(--color-text);
+    font-size: 13px;
+}
+
+.wizarr-form-toggles {
+    display: flex;
+    gap: 18px;
+}
+
+.wizarr-button {
+    padding: 9px 14px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid rgba(124, 92, 255, .5);
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(124, 92, 255, .55), rgba(176, 107, 255, .45));
+}
+
+.wizarr-button:hover {
+    background: linear-gradient(135deg, rgba(124, 92, 255, .75), rgba(176, 107, 255, .6));
+}
+
+.wizarr-invites {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.wizarr-invite {
+    padding: 14px 16px;
+}
+
+.wizarr-invite-head {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.wizarr-invite-head code {
+    color: #e4dcff;
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+.wizarr-invite-status {
+    padding: 3px 8px;
+    color: rgba(52, 216, 166, .9);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border: 1px solid rgba(52, 216, 166, .3);
+    border-radius: 999px;
+}
+
+.wizarr-invite-meta {
+    display: block;
+    margin-top: 5px;
+    color: var(--color-muted);
+}
+
+.wizarr-invite-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.wizarr-invite-url {
+    overflow: hidden;
+    max-width: 100%;
+    color: rgba(59, 158, 255, .85);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wizarr-invite-foot form {
+    margin-left: auto;
+}

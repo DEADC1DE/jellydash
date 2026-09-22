@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Mk\Modules\Users;
 
 use Mk\Framework\Controller;
+use Mk\Framework\Csrf;
 use Mk\Framework\Jellyfin\JellyfinClient;
 use Mk\Framework\Jellyfin\StatisticsPeriod;
+use Mk\Framework\Log;
 use Mk\Framework\Main;
 use Mk\Modules\Devices\DeviceService;
 
@@ -18,6 +20,17 @@ final class UsersController extends Controller
     {
         $selected = trim((string) ($_GET['user'] ?? ''));
         $repository = new UserStatsRepository();
+
+        $wizarrError = null;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            try {
+                Csrf::check();
+                $wizarrError = $this->handleWizarrAction();
+            } catch (\Throwable $e) {
+                $wizarrError = $e->getMessage() !== '' ? $e->getMessage() : 'Wizarr action failed.';
+                Log::logException($e);
+            }
+        }
 
         if ($selected !== '') {
             $allDevices = array_values(array_filter(
@@ -79,11 +92,115 @@ final class UsersController extends Controller
             $overview['titles']
         );
 
+        $wizarr = $this->wizarrState($wizarrError);
+
+        // Wizarr expiry data keyed by lowercase username; Wizarr accounts and
+        // Jellyfin accounts are the same accounts, so names are the join key.
+        foreach ($rows as &$row) {
+            $row['wizarr'] = $wizarr['usersByName'][mb_strtolower((string) $row['name'])] ?? null;
+        }
+        unset($row);
+
         $this->render('@users/index', [
             'layout' => $this->layout(['title' => 'Users', 'page' => 'users']),
             'rows' => $rows,
             'overview' => $overview,
+            'wizarr' => $wizarr,
         ]);
+    }
+
+    /**
+     * Wizarr user/invitation data plus the state the template needs to decide
+     * between full UI, quiet hint (not configured), or an error note. Any
+     * Wizarr failure must never break the Users page itself.
+     *
+     * @return array{configured: bool, error: string|null, usersByName: array<string, array<string, mixed>>, invitations: array<int, array<string, mixed>>, libraries: array<int, array<string, mixed>>}
+     */
+    private function wizarrState(?string $error): array
+    {
+        $state = [
+            'configured' => false,
+            'error' => $error,
+            'usersByName' => [],
+            'invitations' => [],
+            'libraries' => [],
+        ];
+
+        $client = new WizarrClient();
+        if (!$client->isConfigured()) {
+            return $state;
+        }
+
+        $state['configured'] = true;
+        if ($error !== null) {
+            return $state;
+        }
+
+        try {
+            $state['usersByName'] = $client->usersByName();
+            $state['invitations'] = $client->invitations();
+            $state['libraries'] = $client->libraries();
+        } catch (\Throwable $e) {
+            $state['error'] = $e->getMessage() !== '' ? $e->getMessage() : 'Wizarr is unreachable.';
+            Log::logException($e);
+        }
+
+        return $state;
+    }
+
+    /**
+     * Dispatch the Wizarr form actions POSTed from the Users page. Returns
+     * null on success; a message string becomes the page error note.
+     */
+    private function handleWizarrAction(): ?string
+    {
+        $client = new WizarrClient();
+        if (!$client->isConfigured()) {
+            return 'Wizarr is not configured (WIZARR_URL / WIZARR_API_TOKEN missing).';
+        }
+
+        $id = (int) ($_POST['id'] ?? 0);
+
+        switch ((string) ($_POST['do'] ?? '')) {
+            case 'create-invite':
+                $linkExpires = (string) ($_POST['linkExpires'] ?? '');
+                $access = (string) ($_POST['access'] ?? 'unlimited');
+                $client->createInvitation(
+                    $linkExpires !== '' ? (int) $linkExpires : null,
+                    $access === 'unlimited' ? null : max(1, (int) $access),
+                    array_map('intval', (array) ($_POST['libraries'] ?? [])),
+                    ($_POST['downloads'] ?? '') === '1',
+                    ($_POST['livetv'] ?? '') === '1',
+                );
+                return null;
+            case 'delete-invite':
+                if ($id > 0) {
+                    $client->deleteInvitation($id);
+                }
+                return null;
+            case 'disable-user':
+                if ($id > 0) {
+                    $client->disableUser($id);
+                }
+                return null;
+            case 'enable-user':
+                if ($id > 0) {
+                    $client->enableUser($id);
+                }
+                return null;
+            case 'extend-user':
+                if ($id > 0) {
+                    $client->extendUser($id, (int) ($_POST['days'] ?? 30));
+                }
+                return null;
+            case 'reset-password':
+                if ($id > 0) {
+                    $client->resetPassword($id);
+                }
+                return null;
+            default:
+                return 'Unknown Wizarr action.';
+        }
     }
 
     /**
