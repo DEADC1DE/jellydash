@@ -7,14 +7,14 @@ namespace Mk\Modules\Users;
 use Mk\Framework\Config;
 
 /**
- * Thin client over the Wizarr (v4) HTTP API for the user-management parts of
- * the Users page: accounts with their expiry, invitations, and the account
- * actions Wizarr performs against the media server.
+ * Thin client over the invite-service (Wizarr-compatible v4 API) for the
+ * user-management parts of the Users page: accounts with their expiry,
+ * invitations, and the account actions performed against the media server.
  *
  * Authenticates with an `X-API-Key` header; the key stays server-side and
- * never reaches the browser. Endpoints live under /api on the Wizarr base URL.
+ * never reaches the browser. Endpoints live under /api on the base URL.
  */
-class WizarrClient
+class InviteClient
 {
     private string $baseUrl;
     private string $apiKey;
@@ -22,9 +22,9 @@ class WizarrClient
 
     public function __construct(?string $baseUrl = null, ?string $apiKey = null, ?bool $verifySsl = null)
     {
-        $this->baseUrl = rtrim((string) ($baseUrl ?? Config::get('WIZARR_URL', '')), '/');
-        $this->apiKey = (string) ($apiKey ?? Config::get('WIZARR_API_TOKEN', ''));
-        $this->verifySsl = $verifySsl ?? Config::bool('WIZARR_VERIFY_SSL', true);
+        $this->baseUrl = rtrim((string) ($baseUrl ?? Config::get('INVITE_URL', '')), '/');
+        $this->apiKey = (string) ($apiKey ?? Config::get('INVITE_API_TOKEN', ''));
+        $this->verifySsl = $verifySsl ?? Config::bool('INVITE_VERIFY_SSL', true);
     }
 
     public function isConfigured(): bool
@@ -33,8 +33,8 @@ class WizarrClient
     }
 
     /**
-     * All accounts Wizarr knows, keyed by lowercase username for merging with
-     * the Jellyfin user list.
+     * All accounts the service knows, keyed by lowercase username for merging
+     * with the Jellyfin user list.
      *
      * @return array<string, array<string, mixed>>
      */
@@ -66,9 +66,9 @@ class WizarrClient
     }
 
     /**
-     * Libraries available for invitations. Wizarr sometimes keeps duplicate
-     * sync rows per library (same external_id), which would render repeated
-     * checkboxes, so collapse them here.
+     * Libraries available for invitations. The service sometimes keeps
+     * duplicate sync rows per library (same external_id), which would render
+     * repeated checkboxes, so collapse them here.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -173,7 +173,7 @@ class WizarrClient
     protected function request(string $method, string $path, ?array $body = null): array
     {
         if (!$this->isConfigured()) {
-            throw new \RuntimeException('Wizarr URL or API key is missing.');
+            throw new \RuntimeException('Invite service URL or API key is missing.');
         }
 
         if (!function_exists('curl_init')) {
@@ -207,11 +207,11 @@ class WizarrClient
         curl_close($handle);
 
         if ($response === false) {
-            throw new \RuntimeException('Wizarr request failed: ' . $error);
+            throw new \RuntimeException('Invite service request failed: ' . $error);
         }
 
         if ($status < 200 || $status >= 300) {
-            throw new \RuntimeException('Wizarr request failed with HTTP ' . $status . '.');
+            throw new \RuntimeException('Invite service request failed with HTTP ' . $status . '.');
         }
 
         if (trim((string) $response) === '') {
@@ -221,11 +221,11 @@ class WizarrClient
         try {
             $decoded = json_decode((string) $response, true, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
-            throw new \RuntimeException('Wizarr returned invalid JSON.', previous: $e);
+            throw new \RuntimeException('Invite service returned invalid JSON.', previous: $e);
         }
 
         if (!is_array($decoded)) {
-            throw new \RuntimeException('Wizarr returned an unexpected payload.');
+            throw new \RuntimeException('Invite service returned an unexpected payload.');
         }
 
         return $decoded;

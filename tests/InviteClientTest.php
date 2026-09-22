@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../modules/users/src/WizarrClient.php';
+require_once __DIR__ . '/../modules/users/src/InviteClient.php';
 
-use Mk\Modules\Users\WizarrClient;
+use Mk\Modules\Users\InviteClient;
 use PHPUnit\Framework\TestCase;
 
-final class WizarrClientTest extends TestCase
+final class InviteClientTest extends TestCase
 {
     public function testUsersByNameLowercasesAndUnwrapsTheUserList(): void
     {
-        $client = new CapturingWizarrClient();
+        $client = new CapturingInviteClient();
 
         $client->nextResponse = ['users' => [
             ['id' => 1, 'username' => 'Alice', 'expires' => null],
@@ -26,7 +26,7 @@ final class WizarrClientTest extends TestCase
 
     public function testInvitationsSortNewestFirst(): void
     {
-        $client = new CapturingWizarrClient();
+        $client = new CapturingInviteClient();
         $client->nextResponse = ['invitations' => [
             ['id' => 4, 'code' => 'old'],
             ['id' => 9, 'code' => 'new'],
@@ -39,7 +39,7 @@ final class WizarrClientTest extends TestCase
 
     public function testCreateInvitationSeparatesLinkExpiryFromAccessDuration(): void
     {
-        $client = new CapturingWizarrClient();
+        $client = new CapturingInviteClient();
         $client->nextResponse = ['invitation' => ['code' => 'JOIN-1']];
 
         $client->createInvitation(7, null, [2, 3], true, false);
@@ -59,7 +59,7 @@ final class WizarrClientTest extends TestCase
 
     public function testCreateInvitationOmitsLinkExpiryWithoutIt(): void
     {
-        $client = new CapturingWizarrClient();
+        $client = new CapturingInviteClient();
         $client->nextResponse = ['invitation' => []];
 
         $client->createInvitation(null, 30, []);
@@ -71,7 +71,7 @@ final class WizarrClientTest extends TestCase
 
     public function testAccountActionsHitTheRightEndpoints(): void
     {
-        $client = new CapturingWizarrClient();
+        $client = new CapturingInviteClient();
         $client->nextResponse = [];
 
         $client->disableUser(5);
@@ -91,7 +91,7 @@ final class WizarrClientTest extends TestCase
     }
 }
 
-final class CapturingWizarrClient extends WizarrClient
+final class CapturingInviteClient extends InviteClient
 {
     public string $method = '';
     public string $path = '';
@@ -102,7 +102,7 @@ final class CapturingWizarrClient extends WizarrClient
 
     public function __construct()
     {
-        parent::__construct('http://wizarr.test', 'token');
+        parent::__construct('http://invite.test', 'token');
     }
 
     /**

@@ -115,18 +115,18 @@
 
         <header class="stats-section-header" id="invitations">
             <strong>Invitations</strong>
-            <span>Create invite links and manage account expiry - powered by Wizarr</span>
+            <span>Create invite links and manage account expiry</span>
             <i></i>
         </header>
 
-        {% if not wizarr.configured %}
-            <div class="wizarr-note is-muted">Wizarr is not connected. Set <code>WIZARR_URL</code> and <code>WIZARR_API_TOKEN</code> to manage invitations here.</div>
-        {% elseif wizarr.error %}
-            <div class="wizarr-note is-error">Wizarr: {{ wizarr.error }}</div>
+        {% if not invite.configured %}
+            <div class="invite-note is-muted">Invite service is not connected. Set <code>INVITE_URL</code> and <code>INVITE_API_TOKEN</code> to manage invitations here.</div>
+        {% elseif invite.error %}
+            <div class="invite-note is-error">Invite service: {{ invite.error }}</div>
         {% else %}
-            <div class="wizarr-grid">
-                <section class="wizarr-create" aria-label="Create invitation">
-                    <form method="post" action="/users#invitations" class="wizarr-form">
+            <div class="invite-grid">
+                <section class="invite-create" aria-label="Create invitation">
+                    <form method="post" action="/users#invitations" class="invite-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <input type="hidden" name="do" value="create-invite">
                         <label>Link validity
@@ -145,45 +145,45 @@
                                 <option value="365">1 year</option>
                             </select>
                         </label>
-                        <fieldset class="wizarr-libraries">
+                        <fieldset class="invite-libraries">
                             <legend>Libraries <small>none selected = all</small></legend>
-                            {% for lib in wizarr.libraries %}
-                                <label class="wizarr-check"><input type="checkbox" name="libraries[]" value="{{ lib.id }}"> {{ lib.name }}</label>
+                            {% for lib in invite.libraries %}
+                                <label class="invite-check"><input type="checkbox" name="libraries[]" value="{{ lib.id }}"> {{ lib.name }}</label>
                             {% endfor %}
                         </fieldset>
-                        <div class="wizarr-form-toggles">
-                            <label class="wizarr-check"><input type="checkbox" name="downloads" value="1"> Allow downloads</label>
-                            <label class="wizarr-check"><input type="checkbox" name="livetv" value="1"> Allow live TV</label>
+                        <div class="invite-form-toggles">
+                            <label class="invite-check"><input type="checkbox" name="downloads" value="1"> Allow downloads</label>
+                            <label class="invite-check"><input type="checkbox" name="livetv" value="1"> Allow live TV</label>
                         </div>
-                        <button type="submit" class="wizarr-button">Create invitation</button>
+                        <button type="submit" class="invite-button">Create invitation</button>
                     </form>
                 </section>
 
-                <section class="wizarr-invites" aria-label="Existing invitations">
-                    {% for inv in wizarr.invitations %}
-                        <article class="wizarr-invite">
-                            <div class="wizarr-invite-head">
+                <section class="invite-invites" aria-label="Existing invitations">
+                    {% for inv in invite.invitations %}
+                        <article class="invite-invite">
+                            <div class="invite-invite-head">
                                 <code>{{ inv.code }}</code>
-                                {% if inv.status %}<span class="wizarr-invite-status">{{ inv.status }}</span>{% endif %}
+                                {% if inv.status %}<span class="invite-invite-status">{{ inv.status }}</span>{% endif %}
                             </div>
-                            <small class="wizarr-invite-meta">
+                            <small class="invite-invite-meta">
                                 {% if inv.expires %}Link expires {{ inv.expires|date('Y-m-d') }}{% else %}Link without expiry{% endif %}
                                 · Access: {{ inv.unlimited ? 'unlimited' : (inv.duration ?: '?') ~ ' days' }}
                                 {% if inv.used_by %} · Used by {{ inv.used_by }}{% if inv.used_at %} on {{ inv.used_at|date('Y-m-d') }}{% endif %}{% endif %}
                             </small>
-                            <div class="wizarr-invite-foot">
-                                <a class="wizarr-invite-url" href="{{ inv.url }}" target="_blank" rel="noreferrer">{{ inv.url }}</a>
-                                <button type="button" class="wizarr-mini" data-copy-invite="{{ inv.url }}">Copy link</button>
+                            <div class="invite-invite-foot">
+                                <a class="invite-invite-url" href="{{ inv.url }}" target="_blank" rel="noreferrer">{{ inv.url }}</a>
+                                <button type="button" class="invite-mini" data-copy-invite="{{ inv.url }}">Copy link</button>
                                 <form method="post" action="/users#invitations">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <input type="hidden" name="do" value="delete-invite">
                                     <input type="hidden" name="id" value="{{ inv.id }}">
-                                    <button type="submit" class="wizarr-mini is-danger">Delete</button>
+                                    <button type="submit" class="invite-mini is-danger">Delete</button>
                                 </form>
                             </div>
                         </article>
                     {% else %}
-                        <div class="wizarr-note is-muted">No open invitations.</div>
+                        <div class="invite-note is-muted">No open invitations.</div>
                     {% endfor %}
                 </section>
             </div>
@@ -202,35 +202,35 @@
                     <span class="users-card-stat">{{ row.plays }} plays</span>
                     <span class="users-card-stat">{{ (row.watchSec / 3600)|round(1) }}h watched</span>
                     <small class="users-card-lastseen">{{ row.lastSeen ? 'Last seen ' ~ row.lastSeen|date('Y-m-d') : 'No plays recorded' }}</small>
-                    {% if row.wizarr %}
-                        <small class="users-card-wizarr">
-                            {% if row.wizarr.expires %}Expires {{ row.wizarr.expires|date('Y-m-d') }}{% else %}Unlimited access{% endif %}
+                    {% if row.invite %}
+                        <small class="users-card-invite">
+                            {% if row.invite.expires %}Expires {{ row.invite.expires|date('Y-m-d') }}{% else %}Unlimited access{% endif %}
                         </small>
                         <div class="users-card-actions">
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="disable-user">
-                                <input type="hidden" name="id" value="{{ row.wizarr.id }}">
-                                <button type="submit" class="wizarr-mini is-danger">Disable</button>
+                                <input type="hidden" name="id" value="{{ row.invite.id }}">
+                                <button type="submit" class="invite-mini is-danger">Disable</button>
                             </form>
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="enable-user">
-                                <input type="hidden" name="id" value="{{ row.wizarr.id }}">
-                                <button type="submit" class="wizarr-mini">Enable</button>
+                                <input type="hidden" name="id" value="{{ row.invite.id }}">
+                                <button type="submit" class="invite-mini">Enable</button>
                             </form>
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="extend-user">
-                                <input type="hidden" name="id" value="{{ row.wizarr.id }}">
+                                <input type="hidden" name="id" value="{{ row.invite.id }}">
                                 <input type="hidden" name="days" value="30">
-                                <button type="submit" class="wizarr-mini">+30 days</button>
+                                <button type="submit" class="invite-mini">+30 days</button>
                             </form>
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="reset-password">
-                                <input type="hidden" name="id" value="{{ row.wizarr.id }}">
-                                <button type="submit" class="wizarr-mini">Reset password</button>
+                                <input type="hidden" name="id" value="{{ row.invite.id }}">
+                                <button type="submit" class="invite-mini">Reset password</button>
                             </form>
                         </div>
                     {% endif %}

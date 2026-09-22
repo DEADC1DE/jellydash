@@ -25,17 +25,17 @@ final class UsersController extends Controller
         // successful action redirects (so a browser refresh cannot replay the
         // POST), and errors come back as a short-lived query flag rendered by
         // the page below. Csrf::check() exits with 419 on a bad token.
-        $wizarrError = Main::captureGetString('wizarr_error');
+        $inviteError = Main::captureGetString('invite_error');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::check();
             try {
-                $error = $this->handleWizarrAction();
+                $error = $this->handleInviteAction();
             } catch (\Throwable $e) {
-                $error = $e->getMessage() !== '' ? $e->getMessage() : 'Wizarr action failed.';
+                $error = $e->getMessage() !== '' ? $e->getMessage() : 'Invite action failed.';
                 Log::logException($e);
             }
 
-            header('Location: /users' . ($error !== null ? '?' . http_build_query(['wizarr_error' => $error]) . '#invitations' : '#invitations'));
+            header('Location: /users' . ($error !== null ? '?' . http_build_query(['invite_error' => $error]) . '#invitations' : '#invitations'));
             exit;
         }
 
@@ -99,12 +99,12 @@ final class UsersController extends Controller
             $overview['titles']
         );
 
-        $wizarr = $this->wizarrState($wizarrError);
+        $invite = $this->inviteState($inviteError);
 
-        // Wizarr expiry data keyed by lowercase username; Wizarr accounts and
+        // Invite expiry data keyed by lowercase username; invite accounts and
         // Jellyfin accounts are the same accounts, so names are the join key.
         foreach ($rows as &$row) {
-            $row['wizarr'] = $wizarr['usersByName'][mb_strtolower((string) $row['name'])] ?? null;
+            $row['invite'] = $invite['usersByName'][mb_strtolower((string) $row['name'])] ?? null;
         }
         unset($row);
 
@@ -112,18 +112,18 @@ final class UsersController extends Controller
             'layout' => $this->layout(['title' => 'Users', 'page' => 'users']),
             'rows' => $rows,
             'overview' => $overview,
-            'wizarr' => $wizarr,
+            'invite' => $invite,
         ]);
     }
 
     /**
-     * Wizarr user/invitation data plus the state the template needs to decide
-     * between full UI, quiet hint (not configured), or an error note. Any
-     * Wizarr failure must never break the Users page itself.
+     * Invite-service user/invitation data plus the state the template needs
+     * to decide between full UI, quiet hint (not configured), or an error
+     * note. Any service failure must never break the Users page itself.
      *
      * @return array{configured: bool, error: string|null, usersByName: array<string, array<string, mixed>>, invitations: array<int, array<string, mixed>>, libraries: array<int, array<string, mixed>>}
      */
-    private function wizarrState(?string $error): array
+    private function inviteState(?string $error): array
     {
         $state = [
             'configured' => false,
@@ -133,7 +133,7 @@ final class UsersController extends Controller
             'libraries' => [],
         ];
 
-        $client = new WizarrClient();
+        $client = new InviteClient();
         if (!$client->isConfigured()) {
             return $state;
         }
@@ -148,7 +148,7 @@ final class UsersController extends Controller
             $state['invitations'] = $client->invitations();
             $state['libraries'] = $client->libraries();
         } catch (\Throwable $e) {
-            $state['error'] = $e->getMessage() !== '' ? $e->getMessage() : 'Wizarr is unreachable.';
+            $state['error'] = $e->getMessage() !== '' ? $e->getMessage() : 'Invite service is unreachable.';
             Log::logException($e);
         }
 
@@ -156,14 +156,14 @@ final class UsersController extends Controller
     }
 
     /**
-     * Dispatch the Wizarr form actions POSTed from the Users page. Returns
-     * null on success; a message string becomes the page error note.
+     * Dispatch the invite/account form actions POSTed from the Users page.
+     * Returns null on success; a message string becomes the page error note.
      */
-    private function handleWizarrAction(): ?string
+    private function handleInviteAction(): ?string
     {
-        $client = new WizarrClient();
+        $client = new InviteClient();
         if (!$client->isConfigured()) {
-            return 'Wizarr is not configured (WIZARR_URL / WIZARR_API_TOKEN missing).';
+            return 'Invite service is not configured (INVITE_URL / INVITE_API_TOKEN missing).';
         }
 
         $id = (int) ($_POST['id'] ?? 0);
@@ -206,7 +206,7 @@ final class UsersController extends Controller
                 }
                 return null;
             default:
-                return 'Unknown Wizarr action.';
+                return 'Unknown invite action.';
         }
     }
 
