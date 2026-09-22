@@ -119,11 +119,12 @@
             <i></i>
         </header>
 
-        {% if not invite.configured %}
-            <div class="invite-note is-muted">Invite service is not connected. Set <code>INVITE_URL</code> and <code>INVITE_API_TOKEN</code> to manage invitations here.</div>
-        {% elseif invite.error %}
-            <div class="invite-note is-error">Invite service: {{ invite.error }}</div>
+        {% if invite.error %}
+            <div class="invite-note is-error">Invitations: {{ invite.error }}</div>
         {% else %}
+            {% if invite.notice %}
+                <div class="invite-note is-muted">{{ invite.notice }}</div>
+            {% endif %}
             <div class="invite-grid">
                 <section class="invite-create" aria-label="Create invitation">
                     <form method="post" action="/users#invitations" class="invite-form">
@@ -167,13 +168,17 @@
                                 {% if inv.status %}<span class="invite-invite-status">{{ inv.status }}</span>{% endif %}
                             </div>
                             <small class="invite-invite-meta">
-                                {% if inv.expires %}Link expires {{ inv.expires|date('Y-m-d') }}{% else %}Link without expiry{% endif %}
-                                · Access: {{ inv.unlimited ? 'unlimited' : (inv.duration ?: '?') ~ ' days' }}
+                                {% if inv.link_expires_at %}Link expires {{ inv.link_expires_at|date('Y-m-d') }}{% else %}Link without expiry{% endif %}
+                                · Access: {{ inv.duration_days ? (inv.duration_days ~ ' days') : 'unlimited' }}
                                 {% if inv.used_by %} · Used by {{ inv.used_by }}{% if inv.used_at %} on {{ inv.used_at|date('Y-m-d') }}{% endif %}{% endif %}
                             </small>
                             <div class="invite-invite-foot">
-                                <a class="invite-invite-url" href="{{ inv.url }}" target="_blank" rel="noreferrer">{{ inv.url }}</a>
-                                <button type="button" class="invite-mini" data-copy-invite="{{ inv.url }}">Copy link</button>
+                                {% if inv.join_url %}
+                                    <a class="invite-invite-url" href="{{ inv.join_url }}" target="_blank" rel="noreferrer">{{ inv.join_url }}</a>
+                                    <button type="button" class="invite-mini" data-copy-invite="{{ inv.join_url }}">Copy link</button>
+                                {% else %}
+                                    <span class="invite-invite-url">{{ inv.code }}</span>
+                                {% endif %}
                                 <form method="post" action="/users#invitations">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <input type="hidden" name="do" value="delete-invite">
@@ -204,32 +209,33 @@
                     <small class="users-card-lastseen">{{ row.lastSeen ? 'Last seen ' ~ row.lastSeen|date('Y-m-d') : 'No plays recorded' }}</small>
                     {% if row.invite %}
                         <small class="users-card-invite">
-                            {% if row.invite.expires %}Expires {{ row.invite.expires|date('Y-m-d') }}{% else %}Unlimited access{% endif %}
+                            {% if row.invite.expires_at %}Expires {{ row.invite.expires_at|date('Y-m-d') }}{% else %}Unlimited access{% endif %}
+                            {% if row.invite.disabled_at %} · Disabled{% endif %}
                         </small>
                         <div class="users-card-actions">
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="disable-user">
-                                <input type="hidden" name="id" value="{{ row.invite.id }}">
+                                <input type="hidden" name="id" value="{{ row.id }}">
                                 <button type="submit" class="invite-mini is-danger">Disable</button>
                             </form>
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="enable-user">
-                                <input type="hidden" name="id" value="{{ row.invite.id }}">
+                                <input type="hidden" name="id" value="{{ row.id }}">
                                 <button type="submit" class="invite-mini">Enable</button>
                             </form>
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="extend-user">
-                                <input type="hidden" name="id" value="{{ row.invite.id }}">
+                                <input type="hidden" name="id" value="{{ row.id }}">
                                 <input type="hidden" name="days" value="30">
                                 <button type="submit" class="invite-mini">+30 days</button>
                             </form>
                             <form method="post" action="/users">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                 <input type="hidden" name="do" value="reset-password">
-                                <input type="hidden" name="id" value="{{ row.invite.id }}">
+                                <input type="hidden" name="id" value="{{ row.id }}">
                                 <button type="submit" class="invite-mini">Reset password</button>
                             </form>
                         </div>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Join | Jellydash</title>
+
+    <link rel="icon" type="image/x-icon" sizes="32x32" href="/favicon_32.ico">
+    <meta name="theme-color" content="#0a0910">
+
+    <link rel="stylesheet" href="/assets/css/dashboard.css?v={{ asset_revision }}">
+</head>
+<body class="login-body">
+<main class="login-card">
+    <div class="login-brand">
+        <span class="brand-mark" aria-hidden="true">
+            <img src="/assets/img/jellydash_logo.png" alt="">
+        </span>
+        <strong>Jellydash</strong>
+    </div>
+
+    {% if success %}
+        <p class="login-hint">Your account is ready — sign in to Jellyfin with the username and password you just chose.</p>
+    {% else %}
+        <p class="login-hint">You have been invited. Pick a username and password for your media server account.</p>
+
+        {% if error %}
+            <div class="login-error" role="alert">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" action="/?page=join">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="code" value="{{ code }}">
+            <label class="settings-field">
+                <span>Username</span>
+                <input type="text" name="username" maxlength="100" required autofocus autocomplete="username">
+            </label>
+            <label class="settings-field">
+                <span>Password</span>
+                <input type="password" name="password" minlength="8" required autocomplete="new-password">
+            </label>
+            <label class="settings-field">
+                <span>Repeat password</span>
+                <input type="password" name="password2" minlength="8" required autocomplete="new-password">
+            </label>
+            <button type="submit" class="settings-save-btn login-submit">Create account</button>
+        </form>
+    {% endif %}
+</main>
+</body>
+</html>

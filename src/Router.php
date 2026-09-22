@@ -34,6 +34,9 @@ final class Router
         'login' => LoginController::class,
     ];
 
+    /** Pages reachable without a session when AUTH_ENABLED is on. */
+    private const PUBLIC_ROUTES = ['login', 'join'];
+
     public function __construct(private View $view)
     {
     }
@@ -47,7 +50,7 @@ final class Router
         // stay frictionless; anything internet-facing should turn it on.
         if (
             Config::bool('AUTH_ENABLED', false)
-            && $key !== LOGIN_PAGE
+            && !in_array($key, self::PUBLIC_ROUTES, true)
             && !(new Authorization())->isUserLoggedIn()
         ) {
             Pager::login();

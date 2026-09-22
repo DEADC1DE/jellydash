@@ -13,6 +13,7 @@ return [
     ],
     'routes' => [
         'users' => \Mk\Modules\Users\UsersController::class,
+        'join' => \Mk\Modules\Users\JoinController::class,
     ],
     'autoload' => [
         'Mk\\Modules\\Users\\' => 'src/',

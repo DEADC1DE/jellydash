@@ -27,6 +27,11 @@ services:
       JELLYSEER_VERIFY_SSL: "${JELLYSEER_VERIFY_SSL:-true}"
       SEERR_POLL_INTERVAL: "${SEERR_POLL_INTERVAL:-120}"
       SEERR_NOTIFY_ENABLED: "${SEERR_NOTIFY_ENABLED:-true}"
+      # Invite service (optional; the page hides until these are set)
+      INVITE_URL: "${INVITE_URL:-}"
+      INVITE_API_TOKEN: "${INVITE_API_TOKEN:-}"
+      INVITE_VERIFY_SSL: "${INVITE_VERIFY_SSL:-true}"
+      INVITE_PUBLIC_URL: "${INVITE_PUBLIC_URL:-}"
       # Background poller (history recording, cache warming, alerts)
       POLLER_ENABLED: "${POLLER_ENABLED:-true}"
       POLL_INTERVAL: "${POLL_INTERVAL:-30}"

@@ -11,6 +11,7 @@ use Mk\Framework\Jellyfin\StatisticsPeriod;
 use Mk\Framework\Log;
 use Mk\Framework\Main;
 use Mk\Modules\Devices\DeviceService;
+use Mk\Modules\Users\Invite\InviteManager;
 
 final class UsersController extends Controller
 {
@@ -26,16 +27,23 @@ final class UsersController extends Controller
         // POST), and errors come back as a short-lived query flag rendered by
         // the page below. Csrf::check() exits with 419 on a bad token.
         $inviteError = Main::captureGetString('invite_error');
+        $inviteNotice = Main::captureGetString('invite_notice');
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Csrf::check();
             try {
-                $error = $this->handleInviteAction();
+                $error = $this->handleInviteAction($inviteNotice);
             } catch (\Throwable $e) {
                 $error = $e->getMessage() !== '' ? $e->getMessage() : 'Invite action failed.';
                 Log::logException($e);
             }
 
-            header('Location: /users' . ($error !== null ? '?' . http_build_query(['invite_error' => $error]) . '#invitations' : '#invitations'));
+            $redirect = '#invitations';
+            if ($error !== null) {
+                $redirect = '?' . http_build_query(['invite_error' => $error]) . '#invitations';
+            } elseif ($inviteNotice !== null) {
+                $redirect = '?' . http_build_query(['invite_notice' => $inviteNotice]) . '#invitations';
+            }
+            header('Location: /users' . $redirect);
             exit;
         }
 
@@ -99,7 +107,7 @@ final class UsersController extends Controller
             $overview['titles']
         );
 
-        $invite = $this->inviteState($inviteError);
+        $invite = $this->inviteState($inviteError, $inviteNotice);
 
         // Invite expiry data keyed by lowercase username; invite accounts and
         // Jellyfin accounts are the same accounts, so names are the join key.
@@ -117,38 +125,38 @@ final class UsersController extends Controller
     }
 
     /**
-     * Invite-service user/invitation data plus the state the template needs
-     * to decide between full UI, quiet hint (not configured), or an error
-     * note. Any service failure must never break the Users page itself.
+     * Native invite data (local tables + Jellyfin libraries) plus the state
+     * the template needs. A Jellyfin failure must never break the Users page
+     * itself, so it degrades to an error note.
      *
-     * @return array{configured: bool, error: string|null, usersByName: array<string, array<string, mixed>>, invitations: array<int, array<string, mixed>>, libraries: array<int, array<string, mixed>>}
+     * @return array{error: string|null, notice: string|null, usersByName: array<string, array<string, mixed>>, invitations: array<int, array<string, mixed>>, libraries: array<int, array<string, mixed>>}
      */
-    private function inviteState(?string $error): array
+    private function inviteState(?string $error, ?string $notice): array
     {
         $state = [
-            'configured' => false,
             'error' => $error,
+            'notice' => $notice,
             'usersByName' => [],
             'invitations' => [],
             'libraries' => [],
         ];
 
-        $client = new InviteClient();
-        if (!$client->isConfigured()) {
-            return $state;
-        }
-
-        $state['configured'] = true;
-        if ($error !== null) {
-            return $state;
-        }
-
         try {
-            $state['usersByName'] = $client->usersByName();
-            $state['invitations'] = $client->invitations();
-            $state['libraries'] = $client->libraries();
+            $manager = new InviteManager();
+            $state['usersByName'] = $manager->repository()->accountsByName();
+            $state['invitations'] = $manager->invitations($_SERVER['HTTP_HOST'] ?? null);
+            $state['libraries'] = array_map(
+                static fn (array $folder): array => [
+                    'id' => (string) ($folder['Id'] ?? ''),
+                    'name' => (string) ($folder['Name'] ?? $folder['Id']),
+                ],
+                array_values(array_filter(
+                    (new JellyfinClient())->mediaFolders(),
+                    static fn (array $folder): bool => (string) ($folder['Id'] ?? '') !== ''
+                ))
+            );
         } catch (\Throwable $e) {
-            $state['error'] = $e->getMessage() !== '' ? $e->getMessage() : 'Invite service is unreachable.';
+            $state['error'] = $e->getMessage() !== '' ? $e->getMessage() : 'Invites are unavailable.';
             Log::logException($e);
         }
 
@@ -158,51 +166,52 @@ final class UsersController extends Controller
     /**
      * Dispatch the invite/account form actions POSTed from the Users page.
      * Returns null on success; a message string becomes the page error note.
+     * Account ids are Jellyfin user ids; expiry bookkeeping lives locally.
      */
-    private function handleInviteAction(): ?string
+    private function handleInviteAction(?string &$notice): ?string
     {
-        $client = new InviteClient();
-        if (!$client->isConfigured()) {
-            return 'Invite service is not configured (INVITE_URL / INVITE_API_TOKEN missing).';
-        }
-
-        $id = (int) ($_POST['id'] ?? 0);
+        $manager = new InviteManager();
+        $id = (string) ($_POST['id'] ?? '');
 
         switch ((string) ($_POST['do'] ?? '')) {
             case 'create-invite':
                 $linkExpires = (string) ($_POST['linkExpires'] ?? '');
                 $access = (string) ($_POST['access'] ?? 'unlimited');
-                $client->createInvitation(
+                $manager->createInvitation(
                     $linkExpires !== '' ? (int) $linkExpires : null,
                     $access === 'unlimited' ? null : max(1, (int) $access),
-                    array_map('intval', (array) ($_POST['libraries'] ?? [])),
+                    array_map('strval', (array) ($_POST['libraries'] ?? [])),
                     ($_POST['downloads'] ?? '') === '1',
                     ($_POST['livetv'] ?? '') === '1',
                 );
                 return null;
             case 'delete-invite':
-                if ($id > 0) {
-                    $client->deleteInvitation($id);
+                if ($id !== '') {
+                    $manager->deleteInvitation((int) $id);
                 }
                 return null;
             case 'disable-user':
-                if ($id > 0) {
-                    $client->disableUser($id);
+                if ($id !== '') {
+                    $manager->setDisabled($id, true);
                 }
                 return null;
             case 'enable-user':
-                if ($id > 0) {
-                    $client->enableUser($id);
+                if ($id !== '') {
+                    $manager->setDisabled($id, false);
                 }
                 return null;
             case 'extend-user':
-                if ($id > 0) {
-                    $client->extendUser($id, (int) ($_POST['days'] ?? 30));
+                if ($id !== '') {
+                    $manager->extend($id, (int) ($_POST['days'] ?? 30));
                 }
                 return null;
             case 'reset-password':
-                if ($id > 0) {
-                    $client->resetPassword($id);
+                if ($id !== '') {
+                    // A reset the admin never sees is useless, so the fresh
+                    // password travels back through the notice flash.
+                    $password = bin2hex(random_bytes(6));
+                    (new JellyfinClient())->setPassword($id, $password);
+                    $notice = 'New password: ' . $password;
                 }
                 return null;
             default:

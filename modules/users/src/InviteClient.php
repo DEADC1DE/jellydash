@@ -17,14 +17,47 @@ use Mk\Framework\Config;
 class InviteClient
 {
     private string $baseUrl;
+    private ?string $publicUrl;
     private string $apiKey;
     private bool $verifySsl;
 
-    public function __construct(?string $baseUrl = null, ?string $apiKey = null, ?bool $verifySsl = null)
+    public function __construct(?string $baseUrl = null, ?string $apiKey = null, ?bool $verifySsl = null, ?string $publicUrl = null)
     {
         $this->baseUrl = rtrim((string) ($baseUrl ?? Config::get('INVITE_URL', '')), '/');
+        $this->publicUrl = self::normalizePublicUrl((string) ($publicUrl ?? Config::get('INVITE_PUBLIC_URL', '')));
         $this->apiKey = (string) ($apiKey ?? Config::get('INVITE_API_TOKEN', ''));
         $this->verifySsl = $verifySsl ?? Config::bool('INVITE_VERIFY_SSL', true);
+    }
+
+    /**
+     * The service answers with relative invitation paths (e.g. /j/CODE) — its
+     * own base URL is a Docker-internal name no visitor could resolve.
+     * INVITE_PUBLIC_URL provides the address users can actually open.
+     */
+    private static function normalizePublicUrl(string $value): ?string
+    {
+        $trimmed = rtrim(trim($value), '/');
+
+        return $trimmed !== '' ? $trimmed : null;
+    }
+
+    /**
+     * Clickable invitation URL: absolute URLs pass through untouched, relative
+     * paths are prefixed with INVITE_PUBLIC_URL. Falls back to null when the
+     * public URL is unset or the service returned nothing usable — the
+     * template then renders the raw code instead of a broken link.
+     */
+    public function invitationUrl(?string $url): ?string
+    {
+        if ($url === null || trim($url) === '') {
+            return null;
+        }
+
+        if (preg_match('#^https?://#i', $url) === 1) {
+            return $url;
+        }
+
+        return $this->publicUrl !== null ? $this->publicUrl . '/' . ltrim($url, '/') : null;
     }
 
     public function isConfigured(): bool

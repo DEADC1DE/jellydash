@@ -29,6 +29,10 @@ define('DATABASE_PASSWORD', Config::get('DB_PASS', ''));
 // Match the web app's timezone so CLI-written timestamps line up with the UI.
 date_default_timezone_set(Config::timezone());
 
+// Register module autoloaders (commands reach into module classes).
+\Mk\Framework\Modules::boot();
+
+
 $command = $argv[1] ?? '';
 
 try {
@@ -277,6 +281,64 @@ try {
                 : "No notification device found: #{$deviceId}\n";
             break;
 
+        case 'invites:enforce':
+            // Disable every invite-managed account past its expiry. Runs in
+            // the entrypoint poll loop; a no-op query when nothing lapsed.
+            try {
+                $disabled = (new \Mk\Modules\Users\Invite\InviteManager())->enforceExpiry();
+                if ($disabled > 0) {
+                    echo date('c') . " invites:enforce - disabled {$disabled} expired account(s)\n";
+                }
+            } catch (\Throwable $e) {
+                Log::logException($e);
+                fwrite(STDERR, date('c') . ' invites:enforce failed: ' . $e->getMessage() . "\n");
+            }
+            break;
+
+        case 'invites:migrate-wizarr':
+            // One-shot: copy expiry bookkeeping for accounts created through
+            // the former Wizarr service into the local invite_accounts table,
+            // so enforce/extend keep working for them. Wizarr stays the source
+            // of truth it already was; nothing is written back.
+            $legacy = new \Mk\Modules\Users\InviteClient();
+            if (!$legacy->isConfigured()) {
+                exit("invites:migrate-wizarr: set INVITE_URL and INVITE_API_TOKEN in .env first.\n");
+            }
+
+            $manager = new \Mk\Modules\Users\Invite\InviteManager();
+            $jellyfinUsers = [];
+            foreach ((new Jellyfin\JellyfinClient())->users() as $user) {
+                $jellyfinUsers[mb_strtolower((string) $user['name'])] = (string) $user['id'];
+            }
+
+            $migrated = 0;
+            $skipped = 0;
+            foreach ($legacy->usersByName() as $name => $entry) {
+                $jellyfinId = $jellyfinUsers[$name] ?? null;
+                if ($jellyfinId === null) {
+                    $skipped++;
+                    continue;
+                }
+                if ($manager->repository()->accountByUserId($jellyfinId) !== null) {
+                    continue;
+                }
+                $expires = null;
+                foreach (['expires', 'expires_at', 'expiry'] as $field) {
+                    $value = $entry[$field] ?? null;
+                    if (is_string($value) && trim($value) !== '') {
+                        $stamp = strtotime($value);
+                        if ($stamp !== false) {
+                            $expires = date('Y-m-d H:i:s', $stamp);
+                        }
+                        break;
+                    }
+                }
+                $manager->repository()->trackAccount($jellyfinId, (string) $entry['username'], $expires);
+                $migrated++;
+            }
+            echo "invites:migrate-wizarr - migrated {$migrated} account(s), skipped {$skipped} without a matching Jellyfin user.\n";
+            break;
+
         case 'libraries:warm':
             // Refresh the cached library overview so the Libraries page never
             // triggers a cold multi-second scan inside a visitor's request.
@@ -367,6 +429,8 @@ try {
             echo "  php bin/console.php libraries:warm (refresh the cached library overview)\n";
             echo "  php bin/console.php database:migrate-to-sqlite <file> --confirm-stopped\n";
             echo "  php bin/console.php seerr:poll     (sync Jellyseerr requests + alert on new ones)\n";
+            echo "  php bin/console.php invites:enforce (disable expired invite accounts)\n";
+            echo "  php bin/console.php invites:migrate-wizarr (copy Wizarr expiry data locally)\n";
             echo "  php bin/console.php push:vapid     (generate a Web Push VAPID keypair)\n";
             echo "  php bin/console.php push:test      (send a test notification to subscribers)\n\n";
             echo "  php bin/console.php push:devices   (list safe notification device metadata)\n";

@@ -137,6 +137,65 @@ final class JellyfinClient implements LibraryOverviewClient
     }
 
     /**
+     * Create a Jellyfin user. Returns the created user payload (Id, Name).
+     *
+     * @return array<string, mixed>
+     */
+    public function createUser(string $name, string $password): array
+    {
+        $payload = $this->postJson('/Users/New', ['Name' => $name, 'Password' => $password]);
+        if (!is_array($payload) || (string) ($payload['Id'] ?? '') === '') {
+            throw new \RuntimeException('Jellyfin user creation returned an unexpected payload.');
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Full user record including the current Policy (needed because
+     * /Users/{id}/Policy replaces the whole policy, not a patch).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function userById(string $userId): ?array
+    {
+        $payload = $this->getJson('/Users?' . http_build_query(['Id' => $userId]));
+        foreach (is_array($payload) ? $payload : [] as $user) {
+            if (is_array($user) && strcasecmp((string) ($user['Id'] ?? ''), $userId) === 0) {
+                return $user;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Merge $patch into the user's current policy and PUT it back. Jellyfin
+     * treats the POST as a full replacement, so patching avoids clobbering
+     * unrelated policy settings.
+     * @param array<string, mixed> $patch
+     */
+    public function updatePolicy(string $userId, array $patch): void
+    {
+        $user = $this->userById($userId);
+        $policy = is_array($user['Policy'] ?? null) ? $user['Policy'] : [];
+        $this->postJson('/Users/' . rawurlencode($userId) . '/Policy', array_merge($policy, $patch));
+    }
+
+    /**
+     * Admin password reset: Jellyfin lets a token holder set a new password
+     * without knowing the old one.
+     */
+    public function setPassword(string $userId, string $password): void
+    {
+        $this->postJson('/Users/' . rawurlencode($userId) . '/Password', [
+            'Id' => $userId,
+            'NewPw' => $password,
+            'ResetPassword' => false,
+        ]);
+    }
+
+    /**
      * Map of lowercased library name => its physical folder locations, from
      * Jellyfin's VirtualFolders. Used to map an item's path back to a library.
      * Cached per process. Requires an admin API token.
@@ -486,6 +545,11 @@ final class JellyfinClient implements LibraryOverviewClient
 
         if ($status < 200 || $status >= 300) {
             throw new \RuntimeException($this->httpErrorMessage($path, $status));
+        }
+
+        // Policy/password writes answer 204 with an empty body — nothing to decode.
+        if (trim((string) $body) === '') {
+            return null;
         }
 
         try {

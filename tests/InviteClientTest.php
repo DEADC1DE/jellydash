@@ -89,6 +89,30 @@ final class InviteClientTest extends TestCase
         $client->deleteInvitation(9);
         $this->assertSame(['DELETE', '/api/invitations/9', null], [$client->method, $client->path, $client->body]);
     }
+    public function testInvitationUrlPrefixesRelativePathsWithThePublicUrl(): void
+    {
+        $client = new CapturingInviteClient('https://invite.example.com');
+
+        $this->assertSame('https://invite.example.com/j/ABC123', $client->invitationUrl('/j/ABC123'));
+        $this->assertSame('https://invite.example.com/j/ABC123', $client->invitationUrl('j/ABC123'));
+    }
+
+    public function testInvitationUrlKeepsAbsoluteUrlsUntouched(): void
+    {
+        $client = new CapturingInviteClient('https://invite.example.com');
+
+        $this->assertSame('https://other.example.org/i/XYZ', $client->invitationUrl('https://other.example.org/i/XYZ'));
+        $this->assertSame('http://other.example.org/i/XYZ', $client->invitationUrl('http://other.example.org/i/XYZ'));
+    }
+
+    public function testInvitationUrlReturnsNullWithoutPublicUrlConfigured(): void
+    {
+        $client = new CapturingInviteClient(null);
+
+        $this->assertNull($client->invitationUrl('/j/ABC123'));
+        $this->assertNull($client->invitationUrl(null));
+        $this->assertNull($client->invitationUrl('  '));
+    }
 }
 
 final class CapturingInviteClient extends InviteClient
@@ -100,9 +124,9 @@ final class CapturingInviteClient extends InviteClient
     /** @var array<string, mixed> */
     public array $nextResponse = [];
 
-    public function __construct()
+    public function __construct(?string $publicUrl = null)
     {
-        parent::__construct('http://invite.test', 'token');
+        parent::__construct('http://invite.test', 'token', null, $publicUrl);
     }
 
     /**

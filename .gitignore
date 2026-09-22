@@ -54,6 +54,12 @@ Thumbs.db
 # the empty directory is tracked via .gitkeep.
 /modules/*
 !/modules/.gitkeep
+# This deployment treats its own modules as core code, not drop-ins.
+!/modules/users/
+!/modules/session-control/
+!/modules/devices/
+!/modules/activity-feed/
+!/modules/server-health/
 
 # Local design scratchpad (raw exports, drafts). Final README images are
 # committed under docs/assets/ instead.
