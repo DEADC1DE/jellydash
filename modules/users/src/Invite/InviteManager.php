@@ -9,9 +9,8 @@ use Mk\Framework\Jellyfin\JellyfinClient;
 
 /**
  * Native invitation engine: creates invite codes, serves the public join
- * flow, and provisions Jellyfin accounts for redeemed invites. Replaces the
- * external Wizarr service — everything lives in the local database and the
- * Jellyfin API.
+ * flow, and provisions Jellyfin accounts for redeemed invites — everything
+ * lives in the local database and the Jellyfin API.
  */
 final class InviteManager
 {
