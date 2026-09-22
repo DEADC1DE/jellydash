@@ -30,11 +30,6 @@ services:
       # Invite service (optional; the page hides until these are set)
       # Public base URL for absolute invite links (recommended behind a proxy)
       APP_PUBLIC_URL: "${APP_PUBLIC_URL:-}"
-      # Legacy Wizarr bridge (invites:migrate-wizarr only)
-      INVITE_URL: "${INVITE_URL:-}"
-      INVITE_API_TOKEN: "${INVITE_API_TOKEN:-}"
-      INVITE_VERIFY_SSL: "${INVITE_VERIFY_SSL:-true}"
-      INVITE_PUBLIC_URL: "${INVITE_PUBLIC_URL:-}"
       # Background poller (history recording, cache warming, alerts)
       POLLER_ENABLED: "${POLLER_ENABLED:-true}"
       POLL_INTERVAL: "${POLL_INTERVAL:-30}"
