@@ -2,7 +2,7 @@
 
 Jellydash can be extended with drop-in modules: self-contained folders under
 `modules/` that add pages, nav entries, API endpoints, and assets without
-touching the core. With no modules present the app runs core-only.
+touching the core. Jellydash runs without any modules installed.
 
 In Docker, mount a module into the container:
 

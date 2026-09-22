@@ -55,7 +55,7 @@ library_resolved_at_epoch
 `jellydash_timezone` contains an IANA name such as `Europe/Prague`. Optional
 values are empty. Boolean values are `1`, `0`, or empty when Jellyfin did not
 report them.
-Transcode reasons remain JSON so a future Jellydash importer can restore the
+Transcode reasons remain JSON so the Jellydash importer can restore the
 original list without guessing where one reason ends and another starts.
 
 `watched_sec` keeps the existing value used for progress calculations. New live
@@ -97,6 +97,5 @@ restore it using the source timezone. Converting that row to another timezone
 is rejected because the file cannot identify which occurrence was intended.
 Version 2 rows with Unix timestamps can distinguish those occurrences.
 
-Only the exact documented headers and supported format versions are accepted.
-This keeps restores predictable and lets future versions reject files they
-cannot reproduce safely.
+Jellydash accepts only the exact documented headers and supported format
+versions. It rejects files it cannot restore safely.
