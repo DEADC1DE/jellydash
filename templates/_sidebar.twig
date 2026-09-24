@@ -25,6 +25,13 @@
             <span class="nav-pill {{ has_nav_count ? '' : 'is-loading' }}" data-nav-count>{{ has_nav_count ? streams|length : '' }}</span>
         </a>
 
+        {% if downloads_configured %}
+        <a class="nav-item {{ active_page == 'downloads' ? 'is-active' : '' }}" href="/downloads">
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3v12m-5 -5l5 5l5 -5M4 16v4h16v-4"></path></svg></span>
+            <span>Downloads</span>
+        </a>
+        {% endif %}
+
         {% for item in module_nav %}
             <a class="nav-item {{ active_page == item.route ? 'is-active' : '' }}" href="/{{ item.route }}">
                 <span class="nav-icon" aria-hidden="true">
@@ -152,7 +159,7 @@
         </button>
     </div>
 
-    {% if auth_enabled and layout.user %}
+    {% if layout.user %}
         <form class="logout-form" action="?auth=logout" method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button type="submit" class="settings-row logout-row">

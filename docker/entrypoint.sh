@@ -41,7 +41,7 @@ fi
 # Resolve the same boolean and interval rules used by the status page. This
 # also prevents invalid or zero sleep values from stopping or spinning workers.
 worker_config="$(php /var/www/html/bin/worker-config.php)"
-read -r workers_enabled POLL_INTERVAL LIBRARIES_CACHE_TTL SEERR_POLL_INTERVAL <<EOF
+read -r workers_enabled POLL_INTERVAL LIBRARIES_CACHE_TTL SEERR_POLL_INTERVAL DOWNLOADS_POLL_INTERVAL <<EOF
 $worker_config
 EOF
 
@@ -75,6 +75,13 @@ if [ "$workers_enabled" = "1" ]; then
         while true; do
             gosu www-data php /var/www/html/bin/console.php seerr:poll || true
             sleep "${SEERR_POLL_INTERVAL}"
+        done
+    ) &
+    # Reads enabled download clients into the local monitor cache.
+    (
+        while true; do
+            gosu www-data php /var/www/html/bin/console.php downloads:poll || true
+            sleep "${DOWNLOADS_POLL_INTERVAL}"
         done
     ) &
 else

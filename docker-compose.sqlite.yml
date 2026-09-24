@@ -27,7 +27,7 @@ services:
       - app_uploads:/var/www/html/public/uploads
       - ./sqlite-data:/var/www/html/var/data
       # Drop-in feature modules (see docs/MODULES.md), e.g.:
-      # - ./my-modules/downloads:/var/www/html/modules/downloads:ro
+      # - ./my-modules/example:/var/www/html/modules/example:ro
 
 volumes:
   app_cache:

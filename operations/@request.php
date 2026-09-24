@@ -93,6 +93,9 @@ use Mk\Framework\View;
         \Mk\Framework\AppSettings::set('server_label', mb_substr(trim((string) ($_POST['server_label'] ?? '')), 0, 64));
         \Mk\Framework\AppSettings::set('show_server_stats', isset($_POST['show_server_stats']) ? '1' : '0');
         \Mk\Framework\AppSettings::set('show_recently_added', isset($_POST['show_recently_added']) ? '1' : '0');
+        if (($_POST['downloads_settings_present'] ?? null) === '1') {
+            \Mk\Framework\AppSettings::set('downloads_enabled', isset($_POST['downloads_enabled']) ? '1' : '0');
+        }
         \Mk\Framework\AppSettings::set('trending_exclude_libraries', $csv($exclude, 'trending_exclude_extra'));
         \Mk\Framework\AppSettings::set('push_ignore_users', $csv($ignore, 'push_ignore_extra'));
         \Mk\Framework\AppSettings::set('ignore_users', $csv($monitoringIgnore, 'monitoring_ignore_extra'));

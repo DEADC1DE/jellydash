@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mk\Framework\Health;
 
 use Mk\Framework\Config;
+use Mk\Framework\Downloads\Feature;
 use Mk\Framework\Notifications\DiscordChannel;
 use Mk\Framework\Notifications\GotifyChannel;
 use Mk\Framework\Notifications\NotificationEndpoint;
@@ -27,6 +28,7 @@ final class StatusService
         private ?\Closure $readWorkers = null,
         private ?\Closure $readQueue = null,
         private ?\Closure $countSubscriptions = null,
+        private ?\Closure $readDownloads = null,
     ) {
     }
 
@@ -48,6 +50,49 @@ final class StatusService
             $this->worker('jellyseerr', 'Jellyseerr sync', $rows, $jellyseerr, $requestInterval, $workersEnabled, $now),
             $this->worker('libraries', 'Library refresh', $rows, $jellyfin, Config::interval('LIBRARIES_CACHE_TTL', 300), $workersEnabled, $now),
         ];
+
+        try {
+            if (!Feature::enabled()) {
+                if ((new \Mk\Framework\Integrations\ConnectionRepository())->all() !== []) {
+                    $components[] = ['id' => 'downloads', 'label' => 'Downloads collection', 'state' => 'disabled',
+                        'message' => 'Downloads is turned off in Settings.',
+                        'last_attempt_at' => null, 'last_success_at' => null,
+                        'interval_seconds' => \Mk\Framework\Downloads\Collector::INTERVAL];
+                }
+            } else {
+                $downloads = ($this->readDownloads ?? static fn (): array => (new \Mk\Framework\Downloads\OverviewService(
+                    new \Mk\Framework\Integrations\ConnectionRepository(),
+                    new \Mk\Framework\Downloads\DownloadRepository(),
+                ))->snapshot($now, true))();
+                if ($downloads['configured'] ?? false) {
+                    $enabledClients = array_values(array_filter($downloads['connections'], static fn (array $client): bool => $client['enabled']));
+                    $component = $this->worker('downloads', 'Downloads collection', $rows,
+                        $enabledClients === [] ? 'disabled' : 'configured',
+                        \Mk\Framework\Downloads\Collector::INTERVAL, $workersEnabled, $now);
+                    $healthy = count(array_filter($enabledClients, static fn (array $client): bool => $client['status'] === 'connected'));
+                    if ($enabledClients === []) {
+                        $component['message'] = 'All download clients are disabled.';
+                    } elseif ($healthy > 0 && $healthy < count($enabledClients)) {
+                        $component['state'] = 'delayed';
+                        $component['message'] = 'Some download clients have no current status. Open Downloads for details.';
+                    } elseif ($healthy === count($enabledClients)) {
+                        $component['state'] = $downloads['partial'] ? 'delayed' : 'healthy';
+                        $component['message'] = $downloads['partial'] ? 'Some current downloads may be missing. Open Downloads for details.' : 'All enabled download clients have current status.';
+                    } elseif (array_intersect(array_column($enabledClients, 'status'), ['offline', 'stale']) !== []) {
+                        $component['state'] = 'failed';
+                        $component['message'] = 'Download clients have no current status. Open Downloads for details.';
+                    } else {
+                        $component['state'] = $workersEnabled ? 'unknown' : 'disabled';
+                        $component['message'] = 'Waiting for the first download update. Check the collector schedule if this continues.';
+                    }
+                    $components[] = $component;
+                }
+            }
+        } catch (\Throwable) {
+            $components[] = ['id' => 'downloads', 'label' => 'Downloads collection', 'state' => 'failed',
+                'message' => 'Download status could not be read from the database.',
+                'last_attempt_at' => null, 'last_success_at' => null, 'interval_seconds' => \Mk\Framework\Downloads\Collector::INTERVAL];
+        }
 
         $discord = new DiscordChannel();
         $httpChannel = (new TelegramChannel())->isConfigured()

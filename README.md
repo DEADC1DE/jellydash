@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  A self-hosted dashboard for your Jellyfin server. See who's watching, keep a play history, explore viewing statistics and get notifications on your phone.
+  A self-hosted dashboard for your Jellyfin server. See who's watching, keep a play history, follow downloads, explore viewing statistics and get notifications on your phone.
 </p>
 
 <p align="center">
@@ -23,6 +23,7 @@ Jellydash is a monitoring dashboard for [Jellyfin](https://jellyfin.org). If you
 - What did people watch this week?
 - Which shows and movies are the most popular on my server?
 - Did someone just request something new in Jellyseerr?
+- What is downloading, and did the latest downloads finish?
 
 It's supposed to be lightweight, without too much bloat and (hopefully) nice looking!
 
@@ -44,6 +45,10 @@ The project is still young and under active development.
 | Trending and Most Watched | Statistics |
 | --- | --- |
 | ![Trending](docs/assets/statistics-trending.png) | ![Statistics](docs/assets/statistics-overview.png) |
+
+![Downloads with active transfers, a waiting queue and recent activity](docs/assets/downloads.png)
+
+*Downloads with sample activity using Blender Open Movie titles.*
 
 <p align="center">
   <img src="docs/assets/mobile-idle.png" width="270" alt="Jellydash idle view on Android">
@@ -78,6 +83,8 @@ The project is still young and under active development.
 - **Monitoring exclusions.** Hide selected Jellyfin users from Now Playing, History, Statistics, and history exports, and stop collecting new activity for them. Existing rows are kept. See [Monitoring exclusions](docs/MONITORING_EXCLUSIONS.md) before enabling this setting.
 
 - **Jellyseerr requests** (optional). The latest requests with their current status, plus a push notification when a new request comes in. The page only appears once you connect your Jellyseerr instance.
+
+- **Downloads** (optional). Follow SABnzbd, qBittorrent, Transmission, Deluge and NZBGet clients on one page. See current jobs and up to 20 recent matching results. Jellydash only reads their status; queue changes still happen in the downloader. See [Downloads setup](docs/DOWNLOADS.md).
 
 - **Notifications** (optional). "Anna started watching The Office" straight to your phone or desktop, even with the app closed. Delivered through Telegram, Pushover, a Discord webhook, ntfy, Gotify, Web Push, or any combination of them.
 
@@ -201,6 +208,14 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Updating then means `git pull` and running the same command again. For a source-built SQLite install, replace `docker-compose.yml` with `docker-compose.sqlite.yml`.
+
+## Downloads
+
+Open the Downloads card in Settings, then select **Manage clients** to add a client, test its connection and choose which categories, tags or labels to monitor. You can add up to ten clients. The Downloads page appears once a client is configured, and Now Playing shows a small activity indicator. With Jellydash login enabled, an owner or admin manages these settings.
+
+**Enable Downloads** is checked by default. Clear it in Settings to hide the page and stop collecting updates. Your saved connections and recorded results stay in Jellydash for when you turn it back on. Disabling one client affects only that client; removing a client also removes its locally stored download history.
+
+The Docker app already runs the Downloads collector. If you run Jellydash locally without Docker, schedule `php bin/console.php downloads:poll` yourself. Keep `/var/www/html/var/data` persistent in Docker: it holds the integration key needed to read saved downloader credentials after a container replacement. See [Downloads setup](docs/DOWNLOADS.md) for client-specific settings, filters, persistence and the monitor's limits.
 
 ## Notifications
 

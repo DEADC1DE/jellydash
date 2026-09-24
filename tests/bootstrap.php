@@ -69,6 +69,8 @@ foreach ([
     'GOTIFY_URL',
     'GOTIFY_APP_TOKEN',
     'IGNORE_USERS',
+    'SAB_API_URL',
+    'SAB_API_KEY',
 ] as $key) {
     putenv($key . '=');
     $_ENV[$key] = '';

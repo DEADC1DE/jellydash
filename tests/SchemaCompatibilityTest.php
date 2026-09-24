@@ -7,7 +7,9 @@ use Mk\Framework\Config;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
+use Mk\Framework\Downloads\DownloadRepository;
 use Mk\Framework\Health\WorkerStatusRepository;
+use Mk\Framework\Integrations\ConnectionRepository;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
@@ -80,6 +82,9 @@ final class SchemaCompatibilityTest extends TestCase
         $this->assertSame([
             'app_settings',
             'auth_remember_tokens',
+            'download_completions',
+            'download_connection_state',
+            'integration_connections',
             'login_attempts',
             'play_history',
             'push_subscriptions',
@@ -300,6 +305,8 @@ final class SchemaCompatibilityTest extends TestCase
         new PushSubscriptionRepository($this->database);
         new SeerrRequestRepository($this->database);
         WorkerStatusRepository::ensureSchema($this->database);
+        ConnectionRepository::ensureSchema($this->database);
+        DownloadRepository::ensureSchema($this->database);
     }
 
     private function renderSidebar(): string

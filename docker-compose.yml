@@ -27,6 +27,10 @@ services:
       JELLYSEER_VERIFY_SSL: "${JELLYSEER_VERIFY_SSL:-true}"
       SEERR_POLL_INTERVAL: "${SEERR_POLL_INTERVAL:-120}"
       SEERR_NOTIFY_ENABLED: "${SEERR_NOTIFY_ENABLED:-true}"
+      # Optional compatibility settings; new download clients use Settings.
+      SAB_API_URL: "${SAB_API_URL:-}"
+      SAB_API_KEY: "${SAB_API_KEY:-}"
+      SAB_VERIFY_SSL: "${SAB_VERIFY_SSL:-true}"
       # Background poller (history recording, cache warming, alerts)
       POLLER_ENABLED: "${POLLER_ENABLED:-true}"
       POLL_INTERVAL: "${POLL_INTERVAL:-30}"
@@ -67,11 +71,12 @@ services:
     volumes:
       - app_cache:/var/www/html/cache
       - app_runtime_cache:/var/www/html/var/cache
+      - app_data:/var/www/html/var/data
       - app_logs:/var/www/html/var/log
       - app_sessions:/var/www/html/var/sessions
       - app_uploads:/var/www/html/public/uploads
       # Drop-in feature modules (see docs/MODULES.md), e.g.:
-      # - ./my-modules/downloads:/var/www/html/modules/downloads:ro
+      # - ./my-modules/example:/var/www/html/modules/example:ro
 
   db:
     image: mariadb:11
@@ -92,6 +97,7 @@ services:
 volumes:
   app_cache:
   app_runtime_cache:
+  app_data:
   app_logs:
   app_sessions:
   app_uploads:

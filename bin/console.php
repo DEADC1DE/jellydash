@@ -127,6 +127,20 @@ try {
             }
             break;
 
+        case 'downloads:poll':
+            if (!Downloads\Feature::enabled(true)) {
+                break;
+            }
+            $connections = new Integrations\ConnectionRepository();
+            if (array_filter($connections->all(), static fn ($connection): bool => $connection->enabled) === []) {
+                break;
+            }
+            (new Health\WorkerMonitor())->observe('downloads', static function () use ($connections): bool {
+                $result = (new Downloads\Collector($connections, new Downloads\DownloadRepository()))->run();
+                return $result['failed'] === 0;
+            }, 'request_failed');
+            break;
+
         case 'history:poll':
             $monitor = new Health\WorkerMonitor();
             // Once a browser has introduced the one-time library repair, keep
@@ -349,6 +363,7 @@ try {
             echo "  php bin/console.php user:role <username> <role 1-4>\n";
             echo "  php bin/console.php user:list\n";
             echo "  php bin/console.php history:poll   (record currently-playing sessions)\n";
+            echo "  php bin/console.php downloads:poll (refresh configured download clients)\n";
             echo "  php bin/console.php libraries:warm (refresh the cached library overview)\n";
             echo "  php bin/console.php database:migrate-to-sqlite <file> --confirm-stopped\n";
             echo "  php bin/console.php seerr:poll     (sync Jellyseerr requests + alert on new ones)\n";

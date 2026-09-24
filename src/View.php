@@ -22,7 +22,7 @@ class View
         $loader = new FilesystemLoader(TEMPLATES_DIR);
 
         // Module templates live under a namespace matching the module name,
-        // e.g. "@downloads/index.twig".
+        // e.g. "@example/index.twig".
         foreach (Modules::templatePaths() as $namespace => $dir) {
             $loader->addPath($dir, $namespace);
         }
@@ -51,9 +51,22 @@ class View
         $this->twig->addGlobal('server_label', AppSettings::get('server_label', 'Jellyfin dashboard'));
         $this->twig->addGlobal('show_server_stats', AppSettings::bool('show_server_stats', true));
         $this->twig->addGlobal('show_recently_added', AppSettings::bool('show_recently_added', true));
+        $downloadsEnabled = Downloads\Feature::enabled();
+        $this->twig->addGlobal('downloads_enabled', $downloadsEnabled);
 
         // Jellyseerr nav entry only shows once the integration is configured.
         $this->twig->addGlobal('seerr_enabled', (new Jellyseerr\JellyseerrClient())->isConfigured());
+
+        $downloadsConfigured = false;
+        if ($downloadsEnabled) {
+            try {
+                $downloadsConfigured = (new Integrations\ConnectionRepository())->all() !== [];
+            } catch (\Throwable) {
+                $downloadsConfigured = false;
+            }
+        }
+        $this->twig->addGlobal('downloads_configured', $downloadsConfigured);
+        $this->twig->addGlobal('downloads_can_manage', Downloads\DownloadAccess::canManage());
 
         // App version (VERSION file at the repo root), shown in the sidebar.
         $this->twig->addGlobal('app_version', self::version());

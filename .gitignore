@@ -43,6 +43,10 @@ Thumbs.db
 /var/sessions/*
 !/var/sessions/.gitkeep
 
+# Persistent integration key and local application data
+/var/data/*
+!/var/data/.gitkeep
+
 # SQLite database from the optional Docker setup
 /sqlite-data/
 

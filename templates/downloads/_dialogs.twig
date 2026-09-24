@@ -1,0 +1,131 @@
+{% if downloads_can_manage %}
+<dialog class="downloads-dialog downloads-manager-dialog" data-downloads-manager aria-labelledby="downloads-manager-title">
+    <div class="downloads-dialog-head">
+        <div>
+            <h2 id="downloads-manager-title">Download clients</h2>
+            <p>Choose which downloads appear in Jellydash.</p>
+        </div>
+        <button class="downloads-icon-button" type="button" data-downloads-close="manager" aria-label="Close download clients">×</button>
+    </div>
+    <div class="downloads-client-list" data-downloads-client-list aria-live="polite"></div>
+    <p class="downloads-dialog-error" data-downloads-manager-error role="alert" hidden></p>
+    <div class="downloads-dialog-actions downloads-dialog-actions-split">
+        <button class="downloads-button" type="button" data-downloads-close="manager">Done</button>
+        <button class="downloads-button downloads-button-primary" type="button" data-downloads-add-client>+ Add client</button>
+    </div>
+</dialog>
+
+<dialog class="downloads-dialog downloads-editor-dialog" data-downloads-editor aria-labelledby="downloads-editor-title">
+    <form data-downloads-client-form novalidate>
+        <div class="downloads-dialog-head">
+            <div>
+                <h2 id="downloads-editor-title" data-downloads-editor-title>Add a download client</h2>
+                <p data-downloads-editor-description>Connect a client to start watching its downloads.</p>
+            </div>
+            <button class="downloads-icon-button" type="button" data-downloads-close="editor" aria-label="Close client form">×</button>
+        </div>
+
+        <div class="downloads-provider-choice" data-downloads-provider-choice>
+            <button type="button" data-downloads-provider="qbittorrent">
+                <span class="downloads-provider-mark downloads-provider-qbittorrent" aria-hidden="true"><img src="/assets/img/download-clients/qbittorrent.svg" alt=""></span>
+                <span><strong>qBittorrent</strong><small>Torrents</small></span>
+                <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-downloads-provider="sabnzbd">
+                <span class="downloads-provider-mark downloads-provider-sabnzbd" aria-hidden="true"><img src="/assets/img/download-clients/sabnzbd.svg" alt=""></span>
+                <span><strong>SABnzbd</strong><small>Usenet</small></span>
+                <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-downloads-provider="transmission">
+                <span class="downloads-provider-mark downloads-provider-transmission" aria-hidden="true"><img src="/assets/img/download-clients/transmission.svg" alt=""></span>
+                <span><strong>Transmission</strong><small>Torrents</small></span>
+                <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-downloads-provider="deluge">
+                <span class="downloads-provider-mark downloads-provider-deluge" aria-hidden="true"><img src="/assets/img/download-clients/deluge.svg" alt=""></span>
+                <span><strong>Deluge</strong><small>Torrents</small></span>
+                <span aria-hidden="true">→</span>
+            </button>
+            <button type="button" data-downloads-provider="nzbget">
+                <span class="downloads-provider-mark downloads-provider-nzbget" aria-hidden="true"><img src="/assets/img/download-clients/nzbget.svg" alt=""></span>
+                <span><strong>NZBGet</strong><small>Usenet</small></span>
+                <span aria-hidden="true">→</span>
+            </button>
+        </div>
+
+        <div data-downloads-editor-fields hidden>
+            <div class="downloads-form-grid">
+                <label class="downloads-field">
+                    <span>Name</span>
+                    <input name="name" maxlength="80" required placeholder="My download client">
+                </label>
+                <label class="downloads-field downloads-field-wide">
+                    <span>Client URL</span>
+                    <input name="url" type="url" maxlength="2048" required placeholder="http://downloader.local:8080" autocomplete="off" inputmode="url">
+                    <small>Include the base path if your client uses one.</small>
+                </label>
+                <label class="downloads-field" data-downloads-username-field>
+                    <span data-downloads-username-label>Username</span>
+                    <input name="username" maxlength="256" autocomplete="username">
+                </label>
+                <label class="downloads-field" data-downloads-secret-field>
+                    <span data-downloads-secret-label>Password</span>
+                    <input name="secret" type="password" maxlength="4096" autocomplete="new-password">
+                    <small data-downloads-secret-help>Saved credentials stay on your Jellydash server.</small>
+                </label>
+            </div>
+
+            <fieldset class="downloads-filter-fieldset">
+                <legend>Show downloads</legend>
+                <label class="downloads-choice"><input type="radio" name="filter_mode" value="all" checked> <span>All downloads</span></label>
+                <label class="downloads-choice"><input type="radio" name="filter_mode" value="selected"> <span data-downloads-selected-label>Only selected categories or tags</span></label>
+                <div class="downloads-filter-fields" data-downloads-filter-fields hidden>
+                    <label class="downloads-field">
+                        <span data-downloads-category-label>Categories</span>
+                        <input name="categories" placeholder="sonarr, radarr">
+                        <small data-downloads-category-help>Separate names with commas. Names must match the client exactly.</small>
+                    </label>
+                    <div class="downloads-suggestions" data-downloads-category-suggestions hidden></div>
+                    <p class="downloads-form-note" data-downloads-deluge-label-note hidden>Deluge labels require its built-in Label plugin to be enabled.</p>
+                    <label class="downloads-field" data-downloads-tags-field>
+                        <span>Tags</span>
+                        <input name="tags" placeholder="jellyfin">
+                        <small>A download appears if its category or any tag matches.</small>
+                    </label>
+                    <div class="downloads-suggestions" data-downloads-tag-suggestions hidden></div>
+                </div>
+            </fieldset>
+
+            <label class="downloads-choice"><input name="verify_tls" type="checkbox" checked> <span>Verify HTTPS certificate</span></label>
+            <label class="downloads-choice downloads-relocation" data-downloads-relocation hidden>
+                <input name="confirm_relocation" type="checkbox">
+                <span>This is the same client at a new URL. Keep its recorded history.</span>
+            </label>
+
+            <p class="downloads-form-note">Jellydash monitors downloads. It does not add, pause, or remove them.</p>
+            <p class="downloads-test-result" data-downloads-test-result role="status" aria-live="polite" hidden></p>
+            <p class="downloads-dialog-error" data-downloads-editor-error role="alert" hidden></p>
+            <div class="downloads-dialog-actions">
+                <button class="downloads-button" type="button" data-downloads-test>Test connection</button>
+                <button class="downloads-button downloads-button-primary" type="submit" data-downloads-save>Add client</button>
+            </div>
+        </div>
+    </form>
+</dialog>
+
+<dialog class="downloads-dialog downloads-remove-dialog" data-downloads-remove-dialog aria-labelledby="downloads-remove-title">
+    <div class="downloads-dialog-head">
+        <div>
+            <h2 id="downloads-remove-title" data-downloads-remove-title>Remove this client?</h2>
+            <p data-downloads-remove-copy>Its saved connection and recorded download history will be removed from Jellydash. Downloads in the client are untouched.</p>
+        </div>
+    </div>
+    <p class="downloads-dialog-error" data-downloads-remove-error role="alert" hidden></p>
+    <div class="downloads-dialog-actions">
+        <button class="downloads-button" type="button" data-downloads-close="remove">Cancel</button>
+        <button class="downloads-button downloads-button-danger" type="button" data-downloads-confirm-remove>Remove client</button>
+    </div>
+</dialog>
+
+<div class="downloads-toast" data-downloads-toast role="status" aria-live="polite" hidden></div>
+{% endif %}

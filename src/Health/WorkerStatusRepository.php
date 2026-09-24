@@ -18,6 +18,7 @@ final class WorkerStatusRepository
         'playback_delivery',
         'request_delivery',
         'libraries',
+        'downloads',
     ];
 
     /** @var list<string> */

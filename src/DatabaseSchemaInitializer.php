@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Mk\Framework;
 
+use Mk\Framework\Downloads\DownloadRepository;
+use Mk\Framework\Health\WorkerStatusRepository;
+use Mk\Framework\Integrations\ConnectionRepository;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
 use Mk\Framework\Push\PushSubscriptionRepository;
-use Mk\Framework\Health\WorkerStatusRepository;
 
 final class DatabaseSchemaInitializer
 {
@@ -21,5 +23,7 @@ final class DatabaseSchemaInitializer
         new PushSubscriptionRepository($database);
         new SeerrRequestRepository($database);
         WorkerStatusRepository::ensureSchema($database);
+        ConnectionRepository::ensureSchema($database);
+        DownloadRepository::ensureSchema($database);
     }
 }
