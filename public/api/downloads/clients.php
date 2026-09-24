@@ -139,6 +139,6 @@ try {
     echo json_encode(['error' => $error->getMessage()]);
 } catch (\Throwable $error) {
     http_response_code(500);
-    Log::logException(new \RuntimeException('Download client management failed. Check the database and persistent integration key.'));
-    echo json_encode(['error' => 'Could not save or unlock the client. Check the database and persistent integration key.']);
+    Log::logException(new \RuntimeException('Download client management failed. Check the application database.'));
+    echo json_encode(['error' => 'Could not save the client. Check the application database.']);
 }

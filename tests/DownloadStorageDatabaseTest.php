@@ -75,6 +75,139 @@ final class DownloadStorageDatabaseTest extends TestCase
         $this->environment('SAB_API_KEY', null);
     }
 
+    public function testCredentialsAndSessionsSurviveContainerReplacementWithOnlyTheDatabase(): void
+    {
+        $connections = new ConnectionRepository($this->database, new CredentialStore($this->keyPath));
+        $downloads = new DownloadRepository($this->database, new CredentialStore($this->keyPath));
+        $connection = $connections->save(new Connection(
+            'replacement-client', 'qbittorrent', 'Replacement client', 'https://replacement.example.test', 'admin',
+        ), 'replacement-secret');
+        $token = $downloads->claim($connection, 1_800_100_000);
+        self::assertNotNull($token);
+        self::assertTrue($downloads->succeed($connection, $token, new CollectionBatch(
+            session: ['sid' => 'replacement-session'],
+        ), 1_800_100_001));
+        self::assertFileDoesNotExist($this->keyPath);
+        self::assertFileDoesNotExist($this->keyPath . '.lock');
+
+        $db = $this->database->getDibi();
+        $credentialRow = (string) $db->select('credential_envelope')->from('integration_connections')
+            ->where('id = %s', $connection->id)->fetchSingle();
+        $sessionRow = (string) $db->select('session_envelope')->from('download_connection_state')
+            ->where('connection_id = %s', $connection->id)->fetchSingle();
+        self::assertSame(2, json_decode($credentialRow, true, flags: JSON_THROW_ON_ERROR)['v']);
+        self::assertSame(2, json_decode($sessionRow, true, flags: JSON_THROW_ON_ERROR)['v']);
+
+        $replacementStore = new CredentialStore($this->keyPath . '-different');
+        $replacementConnections = new ConnectionRepository($this->database, $replacementStore);
+        $replacementDownloads = new DownloadRepository($this->database, $replacementStore);
+        $loaded = $replacementConnections->find($connection->id);
+        self::assertNotNull($loaded);
+        self::assertSame('replacement-secret', $replacementConnections->credentials($loaded)['secret']);
+        self::assertSame(['sid' => 'replacement-session'], $replacementDownloads->session($loaded));
+        self::assertStringNotContainsString('replacement-secret', json_encode($loaded->managementData(), JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString('replacement-session', json_encode($replacementDownloads->state($loaded->id), JSON_THROW_ON_ERROR));
+        self::assertFileDoesNotExist($this->keyPath . '-different');
+    }
+
+    public function testExistingEncryptedRowsMigrateWhenTheOldKeyIsAvailable(): void
+    {
+        $store = new CredentialStore($this->keyPath);
+        $connections = new ConnectionRepository($this->database, $store);
+        $downloads = new DownloadRepository($this->database, $store);
+        $connection = $connections->save(new Connection(
+            'legacy-migration-client', 'qbittorrent', 'Legacy client', 'https://legacy.example.test', 'admin',
+            enabled: false,
+        ), 'current-secret');
+        $db = $this->database->getDibi();
+        $db->update('integration_connections', ['credential_envelope' => $this->legacyEnvelope(
+            'old-secret', 'connection:' . $connection->id . ':' . $connection->provider,
+        )])->where('id = %s', $connection->id)->execute();
+
+        // all() also visits disabled connections, before their old key disappears on an update.
+        $connections->all();
+        $migrated = (string) $db->select('credential_envelope')->from('integration_connections')
+            ->where('id = %s', $connection->id)->fetchSingle();
+        self::assertSame(2, json_decode($migrated, true, flags: JSON_THROW_ON_ERROR)['v']);
+        unlink($this->keyPath);
+        self::assertSame('old-secret', (new ConnectionRepository($this->database, new CredentialStore($this->keyPath)))
+            ->credentials($connection)['secret']);
+
+        $active = $connections->save(new Connection(
+            'legacy-session-client', 'qbittorrent', 'Session client', 'https://session.example.test', 'admin',
+        ), 'session-secret');
+        $token = $downloads->claim($active, 1_800_100_000);
+        self::assertNotNull($token);
+        self::assertTrue($downloads->succeed($active, $token, new CollectionBatch(session: ['sid' => 'new']), 1_800_100_001));
+        $db->update('download_connection_state', ['session_envelope' => $this->legacyEnvelope(
+            '{"sid":"old"}', sprintf('session:%s:%s:%d', $active->id, $active->provider, $active->revision),
+        )])->where('connection_id = %s', $active->id)->execute();
+        self::assertSame(['sid' => 'old'], $downloads->session($active));
+        unlink($this->keyPath);
+        self::assertSame(['sid' => 'old'], (new DownloadRepository($this->database, new CredentialStore($this->keyPath)))
+            ->session($active));
+    }
+
+    public function testMissingOldKeyAffectsOnlyItsClientAndDisposableSession(): void
+    {
+        $store = new CredentialStore($this->keyPath);
+        $connections = new ConnectionRepository($this->database, $store);
+        $downloads = new DownloadRepository($this->database, $store);
+        $old = $connections->save(new Connection(
+            'missing-key-client', 'qbittorrent', 'Missing key', 'https://missing.example.test', 'admin',
+        ), 'old-secret');
+        $db = $this->database->getDibi();
+        $db->update('integration_connections', ['credential_envelope' => $this->legacyEnvelope(
+            'old-secret', 'connection:' . $old->id . ':' . $old->provider,
+        )])->where('id = %s', $old->id)->execute();
+        $token = $downloads->claim($old, 1_800_100_000);
+        self::assertNotNull($token);
+        self::assertTrue($downloads->succeed($old, $token, new CollectionBatch(session: ['sid' => 'new']), 1_800_100_001));
+        $db->update('download_connection_state', ['session_envelope' => $this->legacyEnvelope(
+            '{"sid":"old"}', sprintf('session:%s:%s:%d', $old->id, $old->provider, $old->revision),
+        )])->where('connection_id = %s', $old->id)->execute();
+        unlink($this->keyPath);
+
+        $fresh = new ConnectionRepository($this->database, new CredentialStore($this->keyPath));
+        $new = $fresh->save(new Connection(
+            'new-client', 'qbittorrent', 'New client', 'https://new.example.test', 'admin',
+        ), 'new-secret');
+        self::assertSame('new-secret', $fresh->credentials($new)['secret']);
+        self::assertSame([], (new DownloadRepository($this->database, new CredentialStore($this->keyPath)))->session($old));
+        self::assertNull($db->select('session_envelope')->from('download_connection_state')
+            ->where('connection_id = %s', $old->id)->fetchSingle());
+
+        $repaired = $fresh->save(new Connection(
+            $old->id, $old->provider, $old->name, $old->url, $old->username,
+            revision: $old->revision, hasSecret: true,
+        ), 'replacement-secret', $old->revision);
+        self::assertSame('replacement-secret', $fresh->credentials($repaired)['secret']);
+        self::assertFileDoesNotExist($this->keyPath);
+    }
+
+    public function testOversizedOldEnvelopeDoesNotBlockOtherClients(): void
+    {
+        $connections = new ConnectionRepository($this->database, new CredentialStore($this->keyPath));
+        $broken = $connections->save(new Connection(
+            'broken-old-client', 'qbittorrent', 'Broken old client', 'https://broken.example.test', 'admin',
+        ), 'old-secret');
+        $healthy = $connections->save(new Connection(
+            'healthy-client', 'qbittorrent', 'Healthy client', 'https://healthy.example.test', 'admin',
+        ), 'healthy-secret');
+        $this->database->getDibi()->update('integration_connections', [
+            'credential_envelope' => json_encode(['v' => 1, 'pad' => str_repeat('x', 1048576)], JSON_THROW_ON_ERROR),
+        ])->where('id = %s', $broken->id)->execute();
+
+        $replacement = new ConnectionRepository($this->database, new CredentialStore($this->keyPath . '-new'));
+        self::assertCount(2, $replacement->all());
+        self::assertNotNull($replacement->find($broken->id));
+        self::assertSame('healthy-secret', $replacement->credentials($healthy)['secret']);
+        $added = $replacement->save(new Connection(
+            'another-client', 'qbittorrent', 'Another client', 'https://another.example.test', 'admin',
+        ), 'another-secret');
+        self::assertSame('another-secret', $replacement->credentials($added)['secret']);
+    }
+
     public function testConnectionLeaseCompletionAndCleanupUseTheConfiguredDriver(): void
     {
         DatabaseSchemaInitializer::initialize($this->database);
@@ -302,7 +435,7 @@ final class DownloadStorageDatabaseTest extends TestCase
         }
     }
 
-    public function testAdditionalProvidersPersistFilteredCompletionsAndEncryptedSessions(): void
+    public function testAdditionalProvidersPersistFilteredCompletionsAndServerOnlySessions(): void
     {
         $store = new CredentialStore($this->keyPath);
         $connections = new ConnectionRepository($this->database, $store);
@@ -335,7 +468,8 @@ final class DownloadStorageDatabaseTest extends TestCase
             self::assertSame(['session' => 'private-session'], $downloads->session($loaded));
             $envelope = (string) $this->database->getDibi()->select('session_envelope')->from('download_connection_state')
                 ->where('connection_id = %s', $saved->id)->fetchSingle();
-            self::assertStringNotContainsString('private-session', $envelope);
+            self::assertSame(2, json_decode($envelope, true, flags: JSON_THROW_ON_ERROR)['v']);
+            self::assertStringNotContainsString('private-session', json_encode($downloads->state($saved->id), JSON_THROW_ON_ERROR));
         }
     }
 
@@ -358,6 +492,25 @@ final class DownloadStorageDatabaseTest extends TestCase
             completions: [$warning],
         ), $now + 17));
         self::assertSame([], $downloads->recent([$connection->id]));
+    }
+
+    private function legacyEnvelope(string $value, string $context): string
+    {
+        $key = is_file($this->keyPath) ? file_get_contents($this->keyPath) : random_bytes(32);
+        self::assertIsString($key);
+        if (!is_file($this->keyPath)) {
+            file_put_contents($this->keyPath, $key);
+        }
+        $nonce = random_bytes(12);
+        $tag = '';
+        $ciphertext = openssl_encrypt($value, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $nonce, $tag, $context, 16);
+        self::assertIsString($ciphertext);
+
+        return json_encode([
+            'v' => 1, 'key' => substr(hash('sha256', $key), 0, 16),
+            'nonce' => base64_encode($nonce), 'tag' => base64_encode($tag),
+            'ciphertext' => base64_encode($ciphertext),
+        ], JSON_THROW_ON_ERROR);
     }
 
     /** @return array<string,mixed> */

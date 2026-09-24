@@ -85,9 +85,10 @@ final class DownloadRepositoryTest extends TestCase
         self::assertSame(['offset' => 100, 'boundary_ids' => ['one']], $state['cursor']);
         self::assertSame(['sid' => 'private-session', 'expires_at' => $now + 1200], $this->downloads->session($this->connection));
 
-        $ciphertext = (string) $this->database->getDibi()->select('session_envelope')
+        $sessionEnvelope = (string) $this->database->getDibi()->select('session_envelope')
             ->from('download_connection_state')->where('connection_id = %s', $this->connection->id)->fetchSingle();
-        self::assertStringNotContainsString('private-session', $ciphertext);
+        self::assertSame(2, json_decode($sessionEnvelope, true, flags: JSON_THROW_ON_ERROR)['v']);
+        self::assertStringNotContainsString('private-session', json_encode($this->downloads->state($this->connection->id), JSON_THROW_ON_ERROR));
         $this->database->getDibi()->update('integration_connections', ['credential_envelope' => null])
             ->where('id = %s', $this->connection->id)->execute();
         self::assertTrue($this->connections->hasStoredSecrets());

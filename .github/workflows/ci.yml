@@ -102,6 +102,9 @@ jobs:
       - name: Build image
         run: docker build --tag jellydash:ci .
 
+      - name: Check Downloads across container replacement
+        run: bash .github/scripts/check-downloads-persistence.sh
+
       - name: Check PHP runtime
         run: |
           docker run --rm --entrypoint php jellydash:ci -r "exit(PHP_VERSION_ID === 80333 && extension_loaded('curl') && extension_loaded('mbstring') && extension_loaded('mysqli') && extension_loaded('gmp') && extension_loaded('sqlite3') && extension_loaded('openssl') ? 0 : 1);"

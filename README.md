@@ -215,7 +215,7 @@ Open the Downloads card in Settings, then select **Manage clients** to add a cli
 
 **Enable Downloads** is checked by default. Clear it in Settings to hide the page and stop collecting updates. Your saved connections and recorded results stay in Jellydash for when you turn it back on. Disabling one client affects only that client; removing a client also removes its locally stored download history.
 
-The Docker app already runs the Downloads collector. If you run Jellydash locally without Docker, schedule `php bin/console.php downloads:poll` yourself. Keep `/var/www/html/var/data` persistent in Docker: it holds the integration key needed to read saved downloader credentials after a container replacement. See [Downloads setup](docs/DOWNLOADS.md) for client-specific settings, filters, persistence and the monitor's limits.
+The Docker app already runs the Downloads collector. Saved clients use your existing Jellydash database and survive normal Docker and Unraid updates without extra volume mappings or environment variables. If you run Jellydash locally without Docker, schedule `php bin/console.php downloads:poll` yourself. See [Downloads setup](docs/DOWNLOADS.md) for client-specific settings, filters, credential storage and the monitor's limits.
 
 ## Notifications
 

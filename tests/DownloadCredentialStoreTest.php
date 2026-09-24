@@ -23,61 +23,72 @@ final class DownloadCredentialStoreTest extends TestCase
         rmdir($this->directory);
     }
 
-    public function testPersistedKeyDecryptsAfterRestartAndCiphertextIsRandomized(): void
+    public function testDatabaseValueCanBeReadAfterContainerReplacementWithoutAKeyFile(): void
     {
-        $path = $this->directory . '/key';
-        $store = new CredentialStore($path);
-        $first = $store->encrypt('sample-secret', 'connection:one:sabnzbd', true);
-        $second = $store->encrypt('sample-secret', 'connection:one:sabnzbd');
-        self::assertNotSame($first, $second);
-        self::assertStringNotContainsString('sample-secret', $first);
-        self::assertSame(32, filesize($path));
-        self::assertSame('sample-secret', (new CredentialStore($path))->decrypt($first, 'connection:one:sabnzbd'));
+        $firstPath = $this->directory . '/old-key';
+        $saved = (new CredentialStore($firstPath))->encode('sample-secret', 'connection:one:sabnzbd');
+        self::assertSame(2, json_decode($saved, true, flags: JSON_THROW_ON_ERROR)['v']);
+        self::assertFileDoesNotExist($firstPath);
+        self::assertSame('sample-secret', (new CredentialStore($this->directory . '/new-key'))
+            ->decode($saved, 'connection:one:sabnzbd'));
+        self::assertFileDoesNotExist($this->directory . '/new-key');
     }
 
-    public function testCiphertextCannotMoveToAnotherConnection(): void
+    public function testValueIsBoundToItsConnectionAndInvalidValuesDoNotExposeSecrets(): void
     {
         $store = new CredentialStore($this->directory . '/key');
-        $ciphertext = $store->encrypt('sample-secret', 'connection:one:sabnzbd', true);
-        $this->expectException(RuntimeException::class);
-        $store->decrypt($ciphertext, 'connection:two:sabnzbd');
-    }
-
-    public function testMissingKeyIsNotReplacedWhenDecryptingExistingData(): void
-    {
-        $path = $this->directory . '/key';
-        $store = new CredentialStore($path);
-        $ciphertext = $store->encrypt('sample-secret', 'connection:one:sabnzbd', true);
-        unlink($path);
-        try {
-            $store->decrypt($ciphertext, 'connection:one:sabnzbd');
-            self::fail('A missing key must not be regenerated.');
-        } catch (RuntimeException $error) {
-            self::assertStringNotContainsString('sample-secret', $error->getMessage());
-            self::assertFileDoesNotExist($path);
-        }
-    }
-
-    public function testCreationNeedsAnExplicitEmptyStoreDecision(): void
-    {
-        $store = new CredentialStore($this->directory . '/key');
-        $this->expectException(RuntimeException::class);
-        $store->encrypt('sample-secret', 'context');
-    }
-
-    public function testCorruptedEnvelopeAndWrongKeyFailWithoutExposingContent(): void
-    {
-        $path = $this->directory . '/key';
-        $store = new CredentialStore($path);
-        $ciphertext = $store->encrypt('sample-secret', 'context', true);
-        file_put_contents($path, random_bytes(32));
-        foreach ([$ciphertext, '{"v":1,"ciphertext":"sample-secret"}', 'invalid'] as $value) {
+        $saved = $store->encode('sample-secret', 'connection:one:sabnzbd');
+        foreach (['connection:two:sabnzbd' => $saved, 'connection:one:sabnzbd' => '{"v":2,"value":"sample-secret"}'] as $context => $value) {
             try {
-                $store->decrypt($value, 'context');
-                self::fail('Invalid encryption data must be rejected.');
+                $store->decode($value, $context);
+                self::fail('Invalid stored values must be rejected.');
             } catch (RuntimeException $error) {
                 self::assertStringNotContainsString('sample-secret', $error->getMessage());
             }
         }
+    }
+
+    public function testMaximumSizedControlCharacterValueRoundTrips(): void
+    {
+        $store = new CredentialStore($this->directory . '/key');
+        $value = str_repeat("\x01", 131072);
+        $saved = $store->encode($value, 'session:one:sabnzbd:1');
+        self::assertSame($value, (new CredentialStore($this->directory . '/other-key'))
+            ->decode($saved, 'session:one:sabnzbd:1'));
+        self::assertFileDoesNotExist($this->directory . '/key');
+    }
+
+    public function testExistingEncryptedValueCanBeReadOnlyWithItsOriginalKey(): void
+    {
+        $path = $this->directory . '/legacy-key';
+        $context = 'connection:one:sabnzbd';
+        $legacy = self::legacyEnvelope($path, 'sample-secret', $context);
+        $store = new CredentialStore($path);
+        self::assertTrue($store->isLegacy($legacy));
+        self::assertSame('sample-secret', $store->decode($legacy, $context));
+        unlink($path);
+        try {
+            $store->decode($legacy, $context);
+            self::fail('A missing legacy key must not be replaced.');
+        } catch (InvalidArgumentException $error) {
+            self::assertStringContainsString('Enter the credential again', $error->getMessage());
+        }
+        self::assertFileDoesNotExist($path);
+        self::assertFileDoesNotExist($path . '.lock');
+    }
+
+    public static function legacyEnvelope(string $path, string $plaintext, string $context): string
+    {
+        $key = random_bytes(32);
+        file_put_contents($path, $key);
+        $nonce = random_bytes(12);
+        $tag = '';
+        $ciphertext = openssl_encrypt($plaintext, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $nonce, $tag, $context, 16);
+        self::assertIsString($ciphertext);
+        return json_encode([
+            'v' => 1, 'key' => substr(hash('sha256', $key), 0, 16),
+            'nonce' => base64_encode($nonce), 'tag' => base64_encode($tag),
+            'ciphertext' => base64_encode($ciphertext),
+        ], JSON_THROW_ON_ERROR);
     }
 }

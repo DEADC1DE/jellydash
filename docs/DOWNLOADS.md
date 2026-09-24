@@ -41,15 +41,13 @@ SABnzbd and qBittorrent recent-history reads use 20-entry pages, looking for 20 
 
 The adapter targets are Transmission 4.x (4.0 or newer), Deluge 2.x (2.0 or newer), and NZBGet 21 through 26. These are code compatibility bounds, not a claim that every release or server setup has passed live acceptance. The connection test checks identity and access without adding or changing downloads. Transmission, Deluge and NZBGet use read-only RPC methods, even where the protocol sends the request with HTTP POST.
 
-## Persistent credentials and backups
+## Updates and credential storage
 
-Saved credentials and reusable downloader sessions are encrypted in the database. The separate key is generated at `var/data/integration-key`. The database and this key are both required to restore saved connections.
+Saved clients, credentials and reusable downloader sessions use the existing Jellydash database. Downloads needs no separate encryption key, new volume mapping or required environment variables. Update Compose installations as usual with `docker compose pull && docker compose up -d`, or use Unraid's normal container update. Keep the database storage you already use for Jellydash; the supplied Compose setups and Unraid template already persist it.
 
-The MariaDB Compose file mounts `app_data` at `/var/www/html/var/data`. **Add that volume to an existing MariaDB installation before saving a client**, or a container replacement can lose the key. The SQLite Compose setup already persists this directory through `./sqlite-data`. Custom containers and Unraid installs must also persist `/var/www/html/var/data`, regardless of database type.
+Credentials and downloader sessions are stored unencrypted in the database. They stay server-side and are excluded from monitor and client-management responses. Database backups contain these values, so keep backups private. Your existing Jellydash login or other access protection still applies.
 
-Back up the database and integration key together using your existing private backup process. Keep the key out of Git and public support attachments. Database migration does not copy the key: retain the same `var/data` storage when moving from MariaDB to SQLite.
-
-If the key is missing or changed, Jellydash does not replace it while encrypted credentials remain. Restore the original key. If it is permanently lost, remove the saved connections and re-add them with their credentials. Key rotation is not supported in this version.
+If you used an earlier Downloads build with encrypted credentials, Jellydash converts them when it reads the connections and the original key is still available. If that key was lost during container replacement, edit the affected client and enter its credential again. Other clients remain usable, and new saves need no key file.
 
 ## Existing SABnzbd environment setup
 

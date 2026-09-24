@@ -180,13 +180,24 @@ final class DownloadRepository
             throw new \RuntimeException('The saved downloader session is invalid.');
         }
 
-        $decoded = json_decode(
-            $this->store->decrypt($row, $this->sessionContext($connection)),
-            true,
-            flags: JSON_THROW_ON_ERROR,
-        );
-        if (!is_array($decoded) || array_is_list($decoded)) {
-            throw new \RuntimeException('The saved downloader session is invalid.');
+        try {
+            $decoded = json_decode(
+                $this->store->decode($row, $this->sessionContext($connection)),
+                true,
+                flags: JSON_THROW_ON_ERROR,
+            );
+            if (!is_array($decoded) || array_is_list($decoded)) {
+                throw new \RuntimeException('The saved downloader session is invalid.');
+            }
+        } catch (\RuntimeException|\InvalidArgumentException|\JsonException) {
+            $this->replaceSessionEnvelope($connection, $row, null);
+
+            return [];
+        }
+        if ($this->store->isLegacy($row)) {
+            $this->replaceSessionEnvelope($connection, $row, $this->store->encode(
+                $this->encode($decoded), $this->sessionContext($connection),
+            ));
         }
 
         return $decoded;
@@ -340,7 +351,7 @@ final class DownloadRepository
             'outside_speed' => $outside, 'speed_complete' => $speed !== null,
             'complete' => $batch->complete, 'history' => $history,
         ];
-        $sessionEnvelope = $session === [] ? null : $this->store->encrypt(
+        $sessionEnvelope = $session === [] ? null : $this->store->encode(
             $this->encode($session),
             $this->sessionContext($connection),
         );
@@ -505,6 +516,14 @@ final class DownloadRepository
             ->fetchSingle();
 
         return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    private function replaceSessionEnvelope(Connection $connection, string $oldEnvelope, ?string $newEnvelope): void
+    {
+        $this->db->update('download_connection_state', ['session_envelope' => $newEnvelope])
+            ->where('connection_id = %s AND config_revision = %i AND session_envelope = %s',
+                $connection->id, $connection->revision, $oldEnvelope)
+            ->execute();
     }
 
     /** @phpstan-impure */

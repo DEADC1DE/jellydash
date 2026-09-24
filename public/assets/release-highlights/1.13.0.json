@@ -7,7 +7,7 @@
     "See download speed, progress, processing and queued items, plus up to 20 recent matching results. A compact Now Playing indicator links to Downloads.",
     "Add clients in Settings and choose categories, tags or labels to monitor. This first version reads status only; pause, resume and other queue changes stay in your downloader.",
     "Turn Downloads off in Settings to hide it and stop collection. Saved clients and recent activity remain available when you turn it back on.",
-    "Before saving clients, make sure /var/www/html/var/data is persistent. It stores the encryption key for saved credentials. Existing MariaDB and custom container setups may need a volume added."
+    "Saved clients use your existing Jellydash database. Normal Docker and Unraid updates preserve them without extra storage settings."
   ],
   "links": [
     {

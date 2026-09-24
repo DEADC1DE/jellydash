@@ -71,7 +71,6 @@ services:
     volumes:
       - app_cache:/var/www/html/cache
       - app_runtime_cache:/var/www/html/var/cache
-      - app_data:/var/www/html/var/data
       - app_logs:/var/www/html/var/log
       - app_sessions:/var/www/html/var/sessions
       - app_uploads:/var/www/html/public/uploads
@@ -97,7 +96,6 @@ services:
 volumes:
   app_cache:
   app_runtime_cache:
-  app_data:
   app_logs:
   app_sessions:
   app_uploads:

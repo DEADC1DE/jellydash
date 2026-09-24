@@ -81,6 +81,9 @@ final class ConnectionRepository
     public function all(): array
     {
         $rows = $this->db->select('*')->from('integration_connections')->orderBy('display_name, id')->fetchAll();
+        foreach ($rows as $row) {
+            $this->migrateLegacyCredential($row->toArray());
+        }
         $connections = array_map(fn (\Dibi\Row $row): Connection => $this->hydrate($row->toArray()), $rows);
 
         if (!$this->hasLegacyOverride()) {
@@ -100,6 +103,7 @@ final class ConnectionRepository
     {
         $row = $this->db->select('*')->from('integration_connections')->where('id = %s', $id)->fetch();
         if ($row !== null) {
+            $this->migrateLegacyCredential($row->toArray());
             return $this->hydrate($row->toArray());
         }
 
@@ -275,10 +279,12 @@ final class ConnectionRepository
             throw new \RuntimeException('The saved credential is unavailable.');
         }
 
-        return [
-            'username' => $current->username,
-            'secret' => $this->store->decrypt($envelope, $this->credentialContext($current)),
-        ];
+        $secret = $this->store->decode($envelope, $this->credentialContext($current));
+        if ($this->store->isLegacy($envelope)) {
+            $this->replaceLegacyCredential($current->id, $current->revision, $envelope, $secret, $this->credentialContext($current));
+        }
+
+        return ['username' => $current->username, 'secret' => $secret];
     }
 
     /** @param array<string,mixed> $row */
@@ -350,13 +356,7 @@ final class ConnectionRepository
             if ($secret === '' || strlen($secret) > 4096) {
                 throw new \InvalidArgumentException('A valid client credential is required.');
             }
-            $allowCreate = !$this->hasStoredSecrets();
-
-            return ['stored', $this->store->encrypt(
-                $secret,
-                $this->credentialContext($candidate),
-                $allowCreate,
-            )];
+            return ['stored', $this->store->encode($secret, $this->credentialContext($candidate))];
         }
 
         if ($existing !== null) {
@@ -376,6 +376,30 @@ final class ConnectionRepository
         }
 
         throw new \InvalidArgumentException('Enter the client credential for this endpoint.');
+    }
+
+    /** @param array<string,mixed> $row */
+    private function migrateLegacyCredential(array $row): void
+    {
+        $envelope = $row['credential_envelope'] ?? null;
+        if (!is_string($envelope) || !$this->store->isLegacy($envelope)) {
+            return;
+        }
+        $context = 'connection:' . (string) $row['id'] . ':' . (string) $row['provider'];
+        try {
+            $secret = $this->store->decode($envelope, $context);
+        } catch (\RuntimeException|\InvalidArgumentException) {
+            // A missing old key affects only this connection. It can be repaired by entering its credential again.
+            return;
+        }
+        $this->replaceLegacyCredential((string) $row['id'], (int) $row['config_revision'], $envelope, $secret, $context);
+    }
+
+    private function replaceLegacyCredential(string $id, int $revision, string $oldEnvelope, string $secret, string $context): void
+    {
+        $this->db->update('integration_connections', [
+            'credential_envelope' => $this->store->encode($secret, $context),
+        ])->where('id = %s AND config_revision = %i AND credential_envelope = %s', $id, $revision, $oldEnvelope)->execute();
     }
 
     private function canUseEnvironmentCredential(Connection $candidate): bool
