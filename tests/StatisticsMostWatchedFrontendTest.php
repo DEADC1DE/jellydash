@@ -15,7 +15,7 @@ final class StatisticsMostWatchedFrontendTest extends TestCase
         $this->assertStringContainsString('<summary class="most-watched-summary">', $template);
         $this->assertStringNotContainsString('data-most-watched open', $template);
         $this->assertStringContainsString('<strong>Most Watched</strong>', $template);
-        $this->assertStringContainsString('<small>All-time favourites</small>', $template);
+        $this->assertStringContainsString('<small>Ranked by total plays</small>', $template);
         $this->assertStringContainsString('<span>TV Shows</span>', $template);
         $this->assertStringContainsString('<span>Movies</span>', $template);
     }

@@ -34,6 +34,13 @@ final class AppSettings
         return $all[$key] ?? $default;
     }
 
+    public static function getFresh(string $key, ?string $default = null, bool $requireAvailable = false): ?string
+    {
+        self::$cache = null;
+
+        return self::get($key, $default, $requireAvailable);
+    }
+
     public static function set(string $key, ?string $value): void
     {
         $database = Container::db();

@@ -227,7 +227,7 @@ final class MonthlyRecapServiceTest extends TestCase
         self::assertSame(2, $recap['plays']);
         self::assertSame(0, $recap['titleCount']);
         self::assertSame([], $recap['featured']);
-        self::assertStringContainsString('excluded libraries', $recap['rankingNote']);
+        self::assertStringContainsString('libraries excluded in Statistics', $recap['rankingNote']);
     }
 
     public function testSeriesWithMixedLibraryResolutionStayTogether(): void
@@ -264,6 +264,40 @@ final class MonthlyRecapServiceTest extends TestCase
         $this->insert($database, '2026-09-02 10:00:00', 'Viewer', 'Movie', 'New film', '', 'new-film', 600, 600, 'Movies', true);
         self::assertSame(['2026-08' => 'August 2026'], $service->data(null, null, $now)['months']);
         self::assertSame(['2026-08' => 'August 2026', '2026-06' => 'June 2026'], $service->data('2026-06', null, $now)['months']);
+    }
+
+    public function testRecapRendersCountLabelsAndEscapesTheSelectedViewer(): void
+    {
+        [$database, $repository] = $this->repository();
+        $service = new MonthlyRecapService($repository);
+        $now = new DateTimeImmutable('2026-09-14');
+        $twig = new \Twig\Environment(new \Twig\Loader\ChainLoader([
+            new \Twig\Loader\ArrayLoader(['_shell.twig' => '{% block dashboard_content %}{% endblock %}']),
+            new \Twig\Loader\FilesystemLoader(TEMPLATES_DIR),
+        ]));
+        $viewer = '<b>Viewer & Co</b>';
+
+        $empty = $service->data('2026-08', '', $now);
+        self::assertSame('', $empty['recap']['rankingNote']);
+        self::assertStringContainsString('No viewing history for this month', $twig->render('statistics/recap.twig', $empty));
+
+        $this->insert($database, '2026-08-02 10:00:00', $viewer, 'Movie', 'First film', '', 'first', 600, 600, 'Movies', true);
+        $single = $service->data('2026-08', $viewer, $now);
+        self::assertSame('', $single['recap']['rankingNote']);
+        $html = $twig->render('statistics/recap.twig', $single);
+        self::assertStringContainsString('Movies<span>1 title</span>', $html);
+        self::assertStringContainsString('Series<span>0 titles</span>', $html);
+        self::assertSame(3, preg_match_all('/\b1 play\b/', $html));
+        self::assertStringNotContainsString('1 plays', $html);
+        self::assertStringContainsString('Viewing by &lt;b&gt;Viewer &amp; Co&lt;/b&gt;', $html);
+        self::assertStringNotContainsString('Viewing by <b>', $html);
+
+        $this->insert($database, '2026-08-03 10:00:00', $viewer, 'Movie', 'First film', '', 'first', 600, 600, 'Movies', true);
+        $this->insert($database, '2026-08-04 10:00:00', 'Another viewer', 'Movie', 'Second film', '', 'second', 600, 600, 'Movies', true);
+        $html = $twig->render('statistics/recap.twig', $service->data('2026-08', '', $now));
+        self::assertStringContainsString('Movies<span>2 titles</span>', $html);
+        self::assertSame(3, preg_match_all('/\b2 plays\b/', $html));
+        self::assertStringContainsString('Who was watching', $html);
     }
 
     /** @return array{Database, PlayHistoryRepository} */

@@ -209,10 +209,10 @@ final class MonthlyRecapService
         }
 
         $rankingNote = $this->excludedLibraries() === []
-            ? 'Movie and series rankings use the Statistics library exclusions.'
-            : 'Movie and series rankings omit configured excluded libraries.';
+            ? ''
+            : 'Movie and series rankings leave out libraries excluded in Statistics.';
         if ($otherPlays > 0) {
-            $rankingNote .= ' ' . $this->duration($otherSeconds)
+            $rankingNote .= ($rankingNote === '' ? '' : ' ') . $this->duration($otherSeconds)
                 . ' from music and other media is included in the totals, but not in these rankings.';
         }
 

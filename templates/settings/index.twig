@@ -1,10 +1,14 @@
 {% extends "_shell.twig" %}
 
+{% block page_styles %}
+    <link rel="stylesheet" href="/assets/css/downloads.css?v={{ asset_revision }}-release-polish-1">
+{% endblock %}
+
 {% block dashboard_header %}
     <div class="settings-page-header">
         <div class="header-copy">
             <h1>Settings</h1>
-            <p>Preferences stored in the database; infrastructure stays in <code>.env</code></p>
+            <p>Choose what Jellydash shows and which activity it records.</p>
         </div>
         {% if can_manage_global %}
             <button type="submit" class="settings-save-btn settings-header-save" form="settings-form">Save settings</button>
@@ -22,6 +26,33 @@
             {% if can_manage_global %}
             <form class="settings-form" id="settings-form" action="?req=settings" method="post" data-settings-form>
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <section class="settings-card downloads-settings-card" aria-labelledby="downloads-settings-title">
+            <header class="settings-card-head">
+                <span class="settings-card-mark" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false"><path d="M12 3v12m-5 -5l5 5l5 -5M4 16v4h16v-4"></path></svg>
+                </span>
+                <span class="settings-card-copy">
+                    <strong id="downloads-settings-title">Downloads</strong>
+                    <span>Your download clients, together in Jellydash.</span>
+                </span>
+            </header>
+            <input type="hidden" name="downloads_settings_present" value="1">
+            <label class="settings-check settings-check-toggle">
+                <input type="checkbox" name="downloads_enabled" value="1" {{ downloads_enabled ? 'checked' : '' }} aria-describedby="downloads-settings-help">
+                <span>Enable Downloads</span>
+            </label>
+            <p class="settings-note" id="downloads-settings-help">Show Downloads and collect updates from your clients. Turning this off keeps your saved clients and recent activity.</p>
+            <div class="downloads-settings-providers" aria-label="Supported download clients">
+                {% for provider, name in {qbittorrent: 'qBittorrent', sabnzbd: 'SABnzbd', transmission: 'Transmission', deluge: 'Deluge', nzbget: 'NZBGet'} %}
+                    <span><img src="/assets/img/download-clients/{{ provider }}.svg" alt="" width="20" height="20">{{ name }}</span>
+                {% endfor %}
+            </div>
+            <div class="downloads-settings-actions">
+                <button type="button" class="settings-secondary-btn" data-downloads-manage>Manage clients</button>
+                {% if downloads_enabled and downloads_configured %}<a class="downloads-text-button" href="/downloads">View downloads <span aria-hidden="true">→</span></a>{% endif %}
+            </div>
+        </section>
 
         <section class="settings-card">
             <header class="settings-card-head">
@@ -89,7 +120,7 @@
                     <input type="text" name="monitoring_ignore_extra" value="{{ monitoring_ignored_users|join(', ') }}" placeholder="e.g. a private profile">
                 </label>
             {% endif %}
-            <small class="settings-note">Existing rows stay in the database. Removing an exclusion restores that earlier activity, but activity skipped while excluded cannot be reconstructed. Names match exactly and are case-insensitive.</small>
+            <small class="settings-note">Earlier activity stays saved and will reappear when you remove the exclusion. Activity skipped while the user was excluded cannot be recovered. Names must match exactly, but case does not matter.</small>
             </fieldset>
             <fieldset class="settings-exclusion-group">
                 <legend>Notifications</legend>
@@ -187,6 +218,7 @@
             </form>
         </section>
     {% endif %}
+
 
             <section class="settings-card system-status-card" id="system-status" data-system-status aria-labelledby="system-status-title">
                 <header class="settings-card-head system-status-head">
@@ -322,6 +354,8 @@
 {% endblock %}
 
 {% block page_scripts %}
+    {% include "downloads/_dialogs.twig" %}
+    <script src="/assets/js/downloads.js?v={{ asset_revision }}-release-polish-1"></script>
     {% if can_manage_global %}
         {% include "_import_history_dialog.twig" %}
         <script src="/assets/js/settings-dirty.js?v=20260818"></script>

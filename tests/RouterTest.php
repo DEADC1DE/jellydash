@@ -150,7 +150,7 @@ final class RouterTest extends TestCase
         (new Router(new View()))->dispatch('definitely-not-a-route', null);
         $output = (string) ob_get_clean();
 
-        $this->assertStringContainsString('PAGE NOT FOUND', $output);
+        $this->assertStringContainsString('Page not found.', $output);
         $this->assertSame(404, http_response_code());
     }
 }

@@ -9,6 +9,33 @@ use PHPUnit\Framework\TestCase;
 
 final class PlaybackStatisticsServiceTest extends TestCase
 {
+    public function testViewerMetricUsesSingularOnlyForOneViewer(): void
+    {
+        $database = \Mk\Framework\Database::sqlite(':memory:');
+        $repository = new \Mk\Framework\Jellyfin\PlayHistoryRepository($database);
+        $service = new PlaybackStatisticsService($repository);
+        $now = new DateTimeImmutable('2026-09-15 12:00:00');
+
+        foreach ([0 => 'unique viewers', 1 => 'unique viewer', 2 => 'unique viewers'] as $count => $label) {
+            if ($count > 0) {
+                $repository->logActiveStreams([[
+                    'id' => 'viewer-label-' . $count,
+                    'itemId' => 'viewer-film',
+                    'itemType' => 'Movie',
+                    'itemName' => 'Example film',
+                    'user' => 'Viewer ' . $count,
+                    'client' => 'Client',
+                    'playMethod' => 'DirectPlay',
+                    'watchedSec' => 120,
+                ]], $now);
+            }
+
+            $metric = $service->data('month', $now)['kpis'][2];
+            self::assertSame((string) $count, $metric['value']);
+            self::assertSame($label, $metric['delta']);
+        }
+    }
+
     public function testStatisticsRangesNormalizeToAValidFallback(): void
     {
         $this->assertTrue(StatisticsPeriod::isValidRange('month'));

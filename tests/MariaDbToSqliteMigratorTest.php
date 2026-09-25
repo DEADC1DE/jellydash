@@ -153,10 +153,29 @@ final class MariaDbToSqliteMigratorTest extends TestCase
             (string) $sqlite->select('device_capability_hash')->from('push_subscriptions')->fetchSingle(),
         );
         $this->assertSame(101, (int) $sqlite->select('user_id')->from('push_subscriptions')->fetchSingle());
+        $connection = $sqlite->select('provider, endpoint, credential_envelope, config_revision')
+            ->from('integration_connections')->where('id = %s', 'migration-download-client')->fetch();
+        $this->assertNotFalse($connection);
+        $this->assertSame('qbittorrent', (string) $connection['provider']);
+        $this->assertSame('https://downloads.example.test', (string) $connection['endpoint']);
+        $this->assertSame('{"encrypted":"credential"}', (string) $connection['credential_envelope']);
+        $this->assertSame(4, (int) $connection['config_revision']);
+        $this->assertSame('{"encrypted":"session"}', (string) $sqlite->select('session_envelope')
+            ->from('download_connection_state')->fetchSingle());
+        $completion = $sqlite->select('source_id, title, category, tags_json, status, completed_at, observed_at')
+            ->from('download_completions')->fetch();
+        $this->assertNotFalse($completion);
+        $this->assertSame('CaseSensitiveHash', (string) $completion['source_id']);
+        $this->assertSame('Migration Download', (string) $completion['title']);
+        $this->assertSame(str_repeat('é', 129), (string) $completion['category']);
+        $this->assertSame([str_repeat('界', 129)], json_decode((string) $completion['tags_json'], true, flags: JSON_THROW_ON_ERROR));
+        $this->assertSame('failed', (string) $completion['status']);
+        $this->assertSame(1786443600, (int) $completion['completed_at']);
+        $this->assertSame(1786443610, (int) $completion['observed_at']);
         $this->assertSame(102, $destination->addAuthUser('after-migration', 'password-123', 'After Migration', 2));
         $sqlite->disconnect();
 
-        foreach (['users', 'login_attempts', 'auth_remember_tokens', 'app_settings', 'play_history', 'theme_item_classifications', 'theme_classification_state', 'push_subscriptions', 'seerr_requests', 'system_status'] as $table) {
+        foreach (['users', 'login_attempts', 'auth_remember_tokens', 'app_settings', 'play_history', 'theme_item_classifications', 'theme_classification_state', 'push_subscriptions', 'seerr_requests', 'system_status', 'integration_connections', 'download_connection_state', 'download_completions'] as $table) {
             $expected = match ($table) {
                 'system_status' => 3,
                 'theme_item_classifications' => 2,
@@ -164,6 +183,30 @@ final class MariaDbToSqliteMigratorTest extends TestCase
             };
             $this->assertSame($expected, (int) $this->sourceConnection->select('COUNT(*)')->from($table)->fetchSingle());
         }
+    }
+
+    public function testLegacyCompletionWithoutOutcomeMigratesAsCompleted(): void
+    {
+        DatabaseSchemaInitializer::initialize($this->source);
+        $this->sourceConnection->query('ALTER TABLE `download_completions` DROP COLUMN `status`');
+        $this->sourceConnection->insert('download_completions', [
+            'connection_id' => 'legacy-client',
+            'source_id_digest' => hash('sha256', 'legacy-item'),
+            'source_id' => 'legacy-item',
+            'title' => 'Legacy completion',
+            'category' => '',
+            'tags_json' => '[]',
+            'size_bytes' => null,
+            'completed_at' => 1_800_000_000,
+            'observed_at' => 1_800_000_001,
+            'last_seen_at' => 1_800_000_001,
+        ])->execute();
+
+        (new MariaDbToSqliteMigrator($this->source))->migrate($this->destinationPath);
+        $destination = Database::sqlite($this->destinationPath);
+        self::assertSame('completed', (string) $destination->getDibi()
+            ->select('status')->from('download_completions')->fetchSingle());
+        $destination->getDibi()->disconnect();
     }
 
     public function testConsoleCommandRequiresStoppedConfirmation(): void
@@ -474,6 +517,53 @@ final class MariaDbToSqliteMigratorTest extends TestCase
                 'last_success_at' => 1786442510,
             ])->execute();
         }
+        $this->sourceConnection->insert('integration_connections', [
+            'id' => 'migration-download-client',
+            'provider' => 'qbittorrent',
+            'display_name' => 'Migration client',
+            'endpoint' => 'https://downloads.example.test',
+            'endpoint_hash' => hash('sha256', "qbittorrent\0https://downloads.example.test"),
+            'username' => 'migration-user',
+            'verify_tls' => 1,
+            'enabled' => 1,
+            'filter_mode' => 'selected',
+            'categories_json' => '["movies"]',
+            'tags_json' => '["migration"]',
+            'credential_envelope' => '{"encrypted":"credential"}',
+            'credential_source' => 'stored',
+            'config_revision' => 4,
+            'created_at_epoch' => 1786442400,
+            'updated_at_epoch' => 1786443500,
+        ])->execute();
+        $this->sourceConnection->insert('download_connection_state', [
+            'connection_id' => 'migration-download-client',
+            'config_revision' => 4,
+            'lease_token' => str_repeat('7', 64),
+            'lease_expires_at' => 1786443700,
+            'next_due_at' => 1786443700,
+            'last_attempt_at' => 1786443500,
+            'last_success_at' => 1786443501,
+            'failure_code' => null,
+            'failure_count' => 0,
+            'cursor_json' => '{"offset":100}',
+            'snapshot_json' => '{"items":[],"speed":0,"complete":true}',
+            'snapshot_at' => 1786443501,
+            'session_envelope' => '{"encrypted":"session"}',
+        ])->execute();
+        $sourceId = 'CaseSensitiveHash';
+        $this->sourceConnection->insert('download_completions', [
+            'connection_id' => 'migration-download-client',
+            'source_id_digest' => hash('sha256', $sourceId),
+            'source_id' => $sourceId,
+            'title' => 'Migration Download',
+            'category' => str_repeat('é', 129),
+            'tags_json' => json_encode([str_repeat('界', 129)], JSON_THROW_ON_ERROR),
+            'size_bytes' => 9876543210,
+            'status' => 'failed',
+            'completed_at' => 1786443600,
+            'observed_at' => 1786443610,
+            'last_seen_at' => 1786443620,
+        ])->execute();
     }
 
     private function dropTemporaryDatabase(): void

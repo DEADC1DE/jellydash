@@ -11,4 +11,5 @@ echo implode(' ', [
     Config::interval('POLL_INTERVAL', 30),
     Config::interval('LIBRARIES_CACHE_TTL', 300),
     Config::interval('SEERR_POLL_INTERVAL', 120),
+    Mk\Framework\Downloads\Collector::INTERVAL,
 ]), PHP_EOL;

@@ -2,7 +2,7 @@
 
 Jellydash can be extended with drop-in modules: self-contained folders under
 `modules/` that add pages, nav entries, API endpoints, and assets without
-touching the core. With no modules present the app runs core-only.
+touching the core. Jellydash runs without any modules installed.
 
 In Docker, mount a module into the container:
 
@@ -10,7 +10,7 @@ In Docker, mount a module into the container:
 services:
   app:
     volumes:
-      - ./my-modules/downloads:/var/www/html/modules/downloads:ro
+      - ./my-modules/example:/var/www/html/modules/example:ro
 ```
 
 ## Layout
@@ -26,28 +26,30 @@ modules/<name>/
 
 The folder name must match the manifest `name` and use only `a-z 0-9 -`.
 
+The name `downloads` is reserved for the built-in Downloads feature. A module with that folder name is skipped before its manifest runs.
+
 ## Manifest (`module.php`)
 
 A PHP file returning an array:
 
 ```php
 return [
-    'name' => 'downloads',                 // must equal the folder name
-    'label' => 'Downloads',
+    'name' => 'example',                 // must equal the folder name
+    'label' => 'Example',
     'nav' => [                             // optional sidebar entry
-        'label' => 'Downloads',
-        'route' => 'downloads',
+        'label' => 'Example',
+        'route' => 'example',
         'order' => 20,                     // lower = higher in the list
         'icon' => '<path d="..."/>',       // inline SVG inner markup (24x24 viewBox)
     ],
     'routes' => [                          // page route => controller class
-        'downloads' => \Vendor\Module\DownloadsController::class,
+        'example' => \Vendor\Module\ExampleController::class,
     ],
     'autoload' => [                        // PSR-4 prefix => dir inside the module
         'Vendor\\Module\\' => 'src/',
     ],
-    'api' => 'api/downloads.php',          // handler for /api/module.php?m=downloads
-    'styles' => ['downloads.css'],         // loaded globally in the shell <head>
+    'api' => 'api/example.php',          // handler for /api/module.php?m=example
+    'styles' => ['example.css'],         // loaded globally in the shell <head>
     'scripts' => ['indicator.js'],         // loaded globally before </body>
 ];
 ```
@@ -57,7 +59,7 @@ Every key except `name` is optional.
 ## How the pieces behave
 
 - **Controllers** extend `Mk\Framework\Controller` and render namespaced
-  templates: `$this->render('@downloads/index', [...])`. Module templates can
+  templates: `$this->render('@example/index', [...])`. Module templates can
   `{% extends "_shell.twig" %}` to get the full dashboard chrome.
 - **The API handler** is a plain PHP file. When it runs, the standard bootstrap
   has already happened: env loaded, session handled, and the optional-auth
@@ -70,7 +72,7 @@ Every key except `name` is optional.
   extension allowlist (js, css, svg, png, jpg, webp, woff2). Build URLs with
   `Mk\Framework\Modules::assetUrl()` or hardcode the pattern.
 - **Global scripts** load on every page, so return early unless the page you
-  care about is present (see the downloads indicator for the pattern).
+  care about is present.
 - **Configuration** comes from environment variables, documented by your
   module. In Docker, pass them through in your compose override.
 

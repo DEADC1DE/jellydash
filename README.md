@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  A self-hosted dashboard for your Jellyfin server. See who is watching, keep full play history, dig into statistics and get push notifications on your phone.
+  A self-hosted dashboard for your Jellyfin server. See who's watching, keep a play history, follow downloads, explore viewing statistics and get notifications on your phone.
 </p>
 
 <p align="center">
@@ -17,19 +17,20 @@
 
 ## What is Jellydash?
 
-Jellydash is a monitoring dashboard for [Jellyfin](https://jellyfin.org). If you know Tautulli from the Plex world, this is that idea, built for Jellyfin. It runs in Docker next to your server and answers the questions you actually care about:
+Jellydash is a monitoring dashboard for [Jellyfin](https://jellyfin.org). If you know Tautulli from the Plex world, this is that idea, built for Jellyfin. It runs in Docker alongside your server and helps you check:
 
 - Who is watching right now, and is it transcoding?
 - What did people watch this week?
 - Which shows and movies are the most popular on my server?
 - Did someone just request something new in Jellyseerr?
+- What is downloading, and did the latest downloads finish?
 
 It's supposed to be lightweight, without too much bloat and (hopefully) nice looking!
 
-It also works as a PWA, so you can install it on your phone like a real app. With notifications turned on, your phone buzzes the moment someone hits play. Alerts can go through Telegram, Pushover, Discord, ntfy, Gotify or Web Push, whatever you already use.
-I may work on open-source Android app in the future.
+You can install Jellydash on your phone as a PWA and get alerts when someone starts watching. Alerts can go through Telegram, Pushover, Discord, ntfy, Gotify or Web Push, whatever you already use.
+I may work on an open-source Android app in the future.
 
-The project is very young and in very active development.
+The project is still young and under active development.
 
 ## Screenshots
 
@@ -44,6 +45,10 @@ The project is very young and in very active development.
 | Trending and Most Watched | Statistics |
 | --- | --- |
 | ![Trending](docs/assets/statistics-trending.png) | ![Statistics](docs/assets/statistics-overview.png) |
+
+![Downloads with active transfers, a waiting queue and recent activity](docs/assets/downloads.png)
+
+*Downloads with sample activity using Blender Open Movie titles.*
 
 <p align="center">
   <img src="docs/assets/mobile-idle.png" width="270" alt="Jellydash idle view on Android">
@@ -65,11 +70,11 @@ The project is very young and in very active development.
 
 - **Now Playing.** Live cards for every active stream: artwork, user, quality, progress and the playback method (Direct Play, Remux or Transcode, including the reason why). Live TV channels from tuners like Tunarr show up too, with real program progress and a red on-air badge.
 
-- **History.** Every play gets recorded by a background poller, so history is complete even when nobody has the dashboard open. Search it, filter by user or library, export the matching plays to CSV, and enjoy the poster art. Existing Jellyfin or Emby Playback Reporting backups can be imported from Settings.
+- **History.** Jellydash records play history in the background, even when nobody has the dashboard open. Search it, filter by user or library, export the matching plays to CSV, and enjoy the poster art. Existing Jellyfin or Emby Playback Reporting backups can be imported from Settings.
 
 - **Statistics.** Watch time trends, top users, device activity, clients, codecs and transcode reasons. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
 
-- **Monthly recap.** Open Monthly recap from Statistics to look back at a completed month, with watch time, favourite movies and series, daily activity and a viewer filter. Viewing time inferred from older history is labelled as an estimate.
+- **Monthly recap.** Open Monthly recap from Statistics to look back at a completed month, with watch time, movie and series rankings, daily activity and a viewer filter. Viewing time inferred from older history is labelled as an estimate.
 
 - **Libraries.** An overview of all your libraries with item counts and type breakdowns. New libraries are picked up automatically.
 
@@ -79,9 +84,11 @@ The project is very young and in very active development.
 
 - **Jellyseerr requests** (optional). The latest requests with their current status, plus a push notification when a new request comes in. The page only appears once you connect your Jellyseerr instance.
 
+- **Downloads** (optional). Follow SABnzbd, qBittorrent, Transmission, Deluge and NZBGet clients on one page. See current jobs and up to 20 recent matching results. Jellydash only reads their status; queue changes still happen in the downloader. See [Downloads setup](docs/DOWNLOADS.md).
+
 - **Notifications** (optional). "Anna started watching The Office" straight to your phone or desktop, even with the app closed. Delivered through Telegram, Pushover, a Discord webhook, ntfy, Gotify, Web Push, or any combination of them.
 
-- **Optional login.** Off by default, because on a trusted home network it just gets in the way. One env var turns it on. Recommended if you expose Jellydash to the internet. I recommend using Tailscale for exposing.
+- **Optional login.** Login is off by default for use on a trusted home network. Enable it with `AUTH_ENABLED=true` and set an initial admin username and password as described in [Optional login](#optional-login). Enable login if you expose Jellydash to the internet. For remote access, I recommend Tailscale.
 
 - **Modules.** Jellydash can load drop-in modules that add whole new pages to the dashboard. See [docs/MODULES.md](docs/MODULES.md) if you want to build your own.
 
@@ -113,7 +120,7 @@ curl -L -o .env https://raw.githubusercontent.com/themartz90/jellydash/main/.env
 docker compose up -d
 ```
 
-Open `http://your-host:8080` and you are done. Both setups create everything they need automatically, there is nothing to import.
+Open `http://your-host:8080`. Both setups create the database tables automatically; you don't need to import an SQL file.
 
 Set `APP_TIMEZONE` in `.env` to your local IANA timezone so History and Statistics use the right date boundaries. Custom `docker run` setups may pass the standard `TZ` variable instead. `APP_TIMEZONE` takes priority when both are present.
 
@@ -121,7 +128,7 @@ Whichever database you choose, the active setup is saved as `docker-compose.yml`
 
 If you want to use your own MariaDB server or mount modules, copy [docker-compose.override.example.yml](docker-compose.override.example.yml) to `docker-compose.override.yml` and adjust it there.
 
-**For setting up notifications, check the section down below.**
+To set up alerts, see [Notifications](#notifications).
 
 ### Unraid
 
@@ -190,7 +197,7 @@ docker compose up -d
 
 ### Building from source
 
-Prefer building the image yourself instead of pulling it from GHCR?
+To build the image yourself:
 
 ```bash
 git clone https://github.com/themartz90/jellydash.git
@@ -202,9 +209,19 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 Updating then means `git pull` and running the same command again. For a source-built SQLite install, replace `docker-compose.yml` with `docker-compose.sqlite.yml`.
 
+## Downloads
+
+Open the Downloads card in Settings, then select **Manage clients** to add a client, test its connection and choose which categories, tags or labels to monitor. You can add up to ten clients. The Downloads page appears once a client is configured, and Now Playing shows a small activity indicator. With Jellydash login enabled, an owner or admin manages these settings.
+
+**Enable Downloads** is checked by default. Clear it in Settings to hide the page and stop collecting updates. Your saved connections and recorded results stay in Jellydash for when you turn it back on. Disabling one client affects only that client; removing a client also removes its locally stored download history.
+
+The Docker app already runs the Downloads collector. Saved clients use your existing Jellydash database and survive normal Docker and Unraid updates without extra volume mappings or environment variables. If you run Jellydash locally without Docker, schedule `php bin/console.php downloads:poll` yourself. See [Downloads setup](docs/DOWNLOADS.md) for client-specific settings, filters, credential storage and the monitor's limits.
+
 ## Notifications
 
-Jellydash can ping you when someone starts playing and when a new Jellyseerr request comes in. Pick whichever channels you already use. Jellydash attempts delivery through every configured channel. Once any channel accepts an alert, it is considered delivered; failed channels do not get separate retries. If all channels fail, the existing retry queue handles the alert.
+Jellydash can ping you when someone starts playing and when a new Jellyseerr request comes in. Pick whichever channels you already use.
+
+Jellydash sends each alert through every configured channel. If any channel accepts it, the alert is marked as delivered, and failed channels aren't retried separately. If all channels fail, the alert goes into the retry queue.
 
 Configure Telegram, Pushover, Discord, ntfy and Gotify in `.env`. Each is optional and stays off until its required settings are filled in. Web Push uses `.env` for its server keys and browser permission for each receiving device.
 
@@ -217,7 +234,7 @@ Two things that apply to all channels:
 - Set `APP_URL=https://your-dashboard.example.com` if you want alerts to link back to your dashboard.
 - You can exclude users from triggering alerts (usually yourself) in the Settings page inside the app.
 
-Test your setup any time, it reports each channel separately:
+Run this to test your setup. It reports each channel separately:
 
 ```bash
 docker compose exec app php bin/console.php push:test
@@ -227,7 +244,7 @@ docker compose exec app php bin/console.php push:test
 
 1. Message [@BotFather](https://t.me/BotFather), send `/newbot` and answer its two questions. It gives you a bot token.
 2. Open a chat with your new bot and send it any message (bots cannot message you first).
-3. Visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser and find `"chat":{"id":...}` in the response. That number is your chat id! Or you can also use IDbot for your id.
+3. Visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser and find `"chat":{"id":...}` in the response. That number is your chat ID.
 
 ```bash
 TELEGRAM_BOT_TOKEN=123456789:your-token
@@ -245,7 +262,7 @@ PUSHOVER_USER_KEY=your-user-key
 
 ### Discord
 
-Server Settings > Integrations > Webhooks > New Webhook, pick a channel, copy the webhook URL. No bot needed.
+Open **Server Settings > Integrations > Webhooks > New Webhook**, choose a channel and copy the webhook URL. No bot needed.
 
 ```bash
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
@@ -282,15 +299,15 @@ For these two channels, Jellydash limits titles to 1,024 UTF-8 bytes and message
 
 ### Web Push (browser and the installed app)
 
-The no-third-party option: notifications go straight to your browser or the installed PWA. It needs the dashboard served over HTTPS. Generate a keypair once:
+Web Push sends notifications to your browser or installed PWA through your browser's push service. Your dashboard must use HTTPS. Generate a keypair once:
 
 ```bash
 docker compose exec app php bin/console.php push:vapid
 ```
 
-Paste the two keys into `.env`, restart, then tap the bell in the app and allow notifications. You get a test notification right away so you know it works. Jellydash accepts browser subscriptions from the push services used by Firefox, Chromium browsers, Safari and Edge. Other endpoint hosts are rejected.
+Paste the two keys into `.env` and recreate the app container as described above. Then tap the bell in the app, allow notifications and check that the test notification arrives. Jellydash accepts browser subscriptions from the push services used by Firefox, Chromium browsers, Safari and Edge. Other endpoint hosts are rejected.
 
-The Web Push client does not pin DNS answers. The outbound boundary therefore relies on the fixed provider hostname list, HTTPS certificate verification and disabled redirects. Custom push endpoint hosts are not supported.
+Web Push only supports the browser push services listed above. Jellydash verifies HTTPS certificates and does not follow redirects, but it does not pin DNS answers. Custom push endpoint hosts are not supported.
 
 One installation stores up to 100 browser notification devices by default, with up to 10 per signed-in account. Set `PUSH_MAX_SUBSCRIPTIONS` or `PUSH_MAX_SUBSCRIPTIONS_PER_ACCOUNT` if you need different limits. Existing devices can refresh their subscription when a limit is full.
 
@@ -306,7 +323,9 @@ AUTH_ADMIN_PASSWORD=pick-a-strong-one
 
 The password needs at least 8 characters. The admin user is created automatically on the next start. More users can be added with `docker compose exec app php bin/console.php user:add`.
 
-Owners and administrators manage global Settings, imports, History repair and server-wide notification tests. Regular users can read the dashboard and manage their own browser notification devices. Guests have read-only access. Notification devices registered before account ownership was added stay paused while login is enabled until the same browser enrolls again. They continue working when login is disabled.
+Owners and administrators manage global Settings, imports, History repair and server-wide notification tests. Regular users can read the dashboard and manage their own browser notification devices. Guests have read-only access.
+
+Notification devices registered before account ownership was added stay paused while login is enabled until the same browser enrolls again. They continue working when login is disabled.
 
 If an installation has no owner or administrator, use `docker compose exec app php bin/console.php user:role <username> 1` to promote an existing account explicitly, or add a new owner with `user:add` and role `1`. Use `push:devices` to review safe device metadata and `push:revoke <device-id>` to remove a legacy device. These commands do not print push endpoints or keys.
 
@@ -332,7 +351,7 @@ Confirmed background theme songs and videos are excluded automatically. The hist
 
 ## Exporting History
 
-Use **Export CSV** on the History page to choose a search, user, library and time period before downloading. Jellydash shows the exact number of matching plays, and the export is never limited to the page you are viewing. Its versioned format keeps the playback fields Jellydash needs for a native round-trip import. See [docs/HISTORY_CSV.md](docs/HISTORY_CSV.md) for the format and compatibility details.
+Use **Export CSV** on the History page to choose a search, user, library and time period before downloading. Jellydash shows the exact number of matching plays, and the export is never limited to the page you are viewing. You can import the exported file back into Jellydash. See [History CSV format](docs/HISTORY_CSV.md) for format versions and compatibility details.
 
 To restore that file, open **Settings → Import play history** and choose **Jellydash CSV**. Jellydash previews new and already-present plays before asking you to confirm. Imports are transactional, skip duplicates and never trigger playback notifications.
 
@@ -344,16 +363,22 @@ The plugin backup is a TSV file with no header row. You can also provide `playba
 
 Use **Import history** on the History page, or open the importer directly from Settings. Drop a TSV backup or `playback_reporting.db` (20 MB max) there. The file type is detected automatically. Jellydash counts the plays first, then asks you to confirm before writing anything. If the plugin is still installed, **Import from server plugin** appears too.
 
-User names are resolved through the connected server's `/Users` API. Media runtime is looked up through `/Items` (`RunTimeTicks`) so the completion bar matches live history; plays are marked finished at 95% of that runtime, same as the poller. If an item no longer exists, runtime stays empty and the play is left unfinished. `PlayDuration` is elapsed session time, not playback position. When an Emby backup includes `PauseDuration`, Jellydash excludes that paused time from the watched total. Dates are kept as the plugin recorded them in the server's local time. Each play is attached to the library that currently owns the item from its file path; if the item is gone, the type is used as a fallback (Movie → Movies, Episode → TV Shows). Imported plays never trigger notifications. Re-importing skips duplicates, but will fill in a missing runtime and replace a generic library label if the server is reachable the second time.
+Jellydash looks up user names through the connected server's `/Users` API and media runtime through `/Items` (`RunTimeTicks`). As with live history, a play is marked finished at 95% of the item's runtime. If the item no longer exists, runtime stays empty and the play is left unfinished.
+
+`PlayDuration` is elapsed session time, not playback position. When an Emby backup includes `PauseDuration`, Jellydash subtracts that paused time from the watched total. Dates stay in the server's local time, as recorded by the plugin.
+
+Each play is assigned to the item's current library using its file path. If the item is gone, Jellydash falls back to its media type, such as Movies for a Movie or TV Shows for an Episode.
+
+Imported plays never trigger notifications. Re-importing skips duplicates, but can fill in missing runtime and replace a generic library label if the server is reachable the second time.
 
 If you have ignored users configured, the import stops before writing a play whose user name cannot be resolved. Check the server connection and retry. With no ignored users, offline imports can still keep unnamed plays.
 
-This compatibility only covers Playback Reporting imports from Emby. Jellydash is still built and tested for Jellyfin, so Emby is not a fully supported server yet.
+This compatibility only covers Playback Reporting imports from Emby. Jellydash is built and tested for Jellyfin; full Emby server support is not available.
 
 ## Good to know
 
 - The CPU and RAM numbers in the sidebar come from the host the container runs on.
-- iOS only supports Web Push for apps installed to the home screen, and only on iOS 16.4 or newer. That is an Apple rule, not mine 👀. Telegram and Pushover alerts work on any iPhone.
+- iOS only supports Web Push for apps installed to the home screen, and only on iOS 16.4 or newer. That is an Apple rule, not mine 👀. Telegram and Pushover are other options for iPhone notifications.
 - Brave blocks Web Push by default. It works after enabling "Use Google services for push messaging" in Brave's privacy settings.
 - Edge hides Web Push permission prompts behind a small bell icon in the address bar ("quiet notification requests"). If enabling notifications keeps snapping back to off, allow notifications for the site there, and check that Windows itself allows notifications from Edge.
 - Trending and Most Watched can exclude libraries you pick (Settings page). Useful for libraries full of temporary stuff.
@@ -373,4 +398,4 @@ Interface icons come from [Tabler Icons](https://tabler.io/icons), used under it
 
 ## License
 
-The code is licensed under [MIT](LICENSE). The mascot original icon is covered by the Flaticon license above, not MIT. Third-party license notices are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The code is licensed under [MIT](LICENSE). The original mascot icon is covered by the Flaticon license above, not MIT. Third-party license notices are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

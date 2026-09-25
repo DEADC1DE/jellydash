@@ -8,6 +8,7 @@ use Mk\Framework\AppSettings;
 use Mk\Framework\Authorization;
 use Mk\Framework\Config;
 use Mk\Framework\Controller;
+use Mk\Framework\Downloads\Feature;
 use Mk\Framework\Jellyfin\JellyfinClient;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Log;
@@ -117,6 +118,7 @@ final class SettingsController extends Controller
             'server_label_value' => AppSettings::get('server_label', 'Jellyfin dashboard'),
             'show_server_stats' => AppSettings::bool('show_server_stats', true),
             'show_recently_added' => AppSettings::bool('show_recently_added', true),
+            'downloads_enabled' => Feature::enabled(),
             'libraries' => $libraries,
             'excluded' => $excluded,
             'extra_excluded' => implode(', ', $extraExcluded),

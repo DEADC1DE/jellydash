@@ -74,6 +74,42 @@ if ($userId !== '') {
     exit;
 }
 
+$baseUrl = rtrim((string) Config::get('JELLYFIN_URL', ''), '/');
+$token = (string) Config::get('JELLYFIN_API_TOKEN', Config::get('JELLYFIN_API_KEY', ''));
+
+if ($baseUrl === '' || $token === '') {
+    http_response_code(404);
+    exit;
+}
+
+$verifySsl = Config::bool('JELLYFIN_VERIFY_SSL', true);
+
+if ($userId !== '') {
+    if (!preg_match('/^[A-Za-z0-9_-]+$/', $userId)) {
+        http_response_code(400);
+        exit;
+    }
+
+    $url = $baseUrl . '/Users/' . rawurlencode($userId) . '/Images/Primary'
+        . '?maxWidth=' . max(32, min(256, $maxWidth > 0 ? $maxWidth : 80));
+    $tag = (string) ($_GET['tag'] ?? '');
+    if ($tag !== '' && preg_match('/^[A-Za-z0-9._-]+$/', $tag)) {
+        $url .= '&tag=' . rawurlencode($tag);
+    }
+
+    $image = fetchJellyfinImage($url, $token, $verifySsl);
+    $response = UserAvatarResponse::fromImage($image);
+    header('Cache-Control: ' . $response['cacheControl']);
+    http_response_code($response['status']);
+    if ($response['body'] === null || $response['contentType'] === null) {
+        exit;
+    }
+
+    header('Content-Type: ' . $response['contentType']);
+    echo $response['body'];
+    exit;
+}
+
 if ($itemId === '' || !preg_match('/^[A-Za-z0-9_-]+$/', $itemId)) {
     http_response_code(400);
     exit;

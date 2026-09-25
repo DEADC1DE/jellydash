@@ -36,7 +36,7 @@ final class WorkerConfigurationTest extends TestCase
         fclose($pipes[2]);
 
         self::assertSame(0, proc_close($process), (string) $errors);
-        self::assertSame($expected . PHP_EOL, $output);
+        self::assertSame($expected . ' 15' . PHP_EOL, $output);
     }
 
     /** @return iterable<string, array{string, string, string, string, string}> */

@@ -1,0 +1,50 @@
+{% extends "_shell.twig" %}
+
+{% block page_styles %}
+    <link rel="stylesheet" href="/assets/css/downloads.css?v={{ asset_revision }}-transfer-polish-1">
+{% endblock %}
+
+{% block dashboard_header %}
+    <div class="downloads-header-copy header-copy">
+        <h1>Downloads</h1>
+        <p>A little closer to movie night.</p>
+    </div>
+    {% if downloads_can_manage %}
+        <button class="downloads-button" type="button" data-downloads-manage>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="currentColor"/><circle cx="15" cy="17" r="3" fill="currentColor"/></svg>
+            <span>Manage clients</span>
+        </button>
+    {% else %}
+        <a class="downloads-button" href="/login">Owner or admin sign-in</a>
+    {% endif %}
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="downloads-page"
+         data-downloads-root
+         data-can-manage="{{ downloads_can_manage ? 'true' : 'false' }}"
+         data-configured="{{ downloads_configured ? 'true' : 'false' }}">
+        {% if downloads_error %}
+            <div class="downloads-notice downloads-notice-error" role="alert">
+                <div>
+                    <strong>Downloads could not be loaded.</strong>
+                    <p>{{ downloads_error }}</p>
+                </div>
+            </div>
+        {% else %}
+            <div class="downloads-loading" role="status">
+                <span class="downloads-loading-mark" aria-hidden="true"></span>
+                <div>
+                    <strong>Loading downloads</strong>
+                    <p>Checking the latest saved update.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    <p class="downloads-announcer visually-hidden" data-downloads-announcer aria-live="polite" aria-atomic="true"></p>
+    {% include "downloads/_dialogs.twig" %}
+{% endblock %}
+
+{% block page_scripts %}
+    <script src="/assets/js/downloads.js?v={{ asset_revision }}-release-polish-1"></script>
+{% endblock %}

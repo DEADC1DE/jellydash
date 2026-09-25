@@ -27,9 +27,12 @@ services:
       JELLYSEER_VERIFY_SSL: "${JELLYSEER_VERIFY_SSL:-true}"
       SEERR_POLL_INTERVAL: "${SEERR_POLL_INTERVAL:-120}"
       SEERR_NOTIFY_ENABLED: "${SEERR_NOTIFY_ENABLED:-true}"
-      # Invite service (optional; the page hides until these are set)
       # Public base URL for absolute invite links (recommended behind a proxy)
       APP_PUBLIC_URL: "${APP_PUBLIC_URL:-}"
+      # Optional compatibility settings; new download clients use Settings.
+      SAB_API_URL: "${SAB_API_URL:-}"
+      SAB_API_KEY: "${SAB_API_KEY:-}"
+      SAB_VERIFY_SSL: "${SAB_VERIFY_SSL:-true}"
       # Background poller (history recording, cache warming, alerts)
       POLLER_ENABLED: "${POLLER_ENABLED:-true}"
       POLL_INTERVAL: "${POLL_INTERVAL:-30}"
@@ -74,7 +77,7 @@ services:
       - app_sessions:/var/www/html/var/sessions
       - app_uploads:/var/www/html/public/uploads
       # Drop-in feature modules (see docs/MODULES.md), e.g.:
-      # - ./my-modules/downloads:/var/www/html/modules/downloads:ro
+      # - ./my-modules/example:/var/www/html/modules/example:ro
 
   db:
     image: mariadb:11

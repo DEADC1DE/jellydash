@@ -23,6 +23,9 @@ final class MariaDbToSqliteMigrator
         'push_subscriptions',
         'seerr_requests',
         'system_status',
+        'integration_connections',
+        'download_connection_state',
+        'download_completions',
     ];
 
     /**
@@ -44,6 +47,9 @@ final class MariaDbToSqliteMigrator
         'push_subscriptions' => ['id', 'endpoint', 'endpoint_hash', 'p256dh', 'auth', 'failure_count', 'created_at'],
         'seerr_requests' => ['id', 'request_id', 'media_type', 'tmdb_id', 'title', 'request_status', 'media_status', 'is_4k', 'requested_at', 'notified', 'created_at'],
         'system_status' => ['source_id', 'component', 'status'],
+        'integration_connections' => ['id', 'provider', 'display_name', 'endpoint', 'endpoint_hash', 'username', 'verify_tls', 'enabled', 'filter_mode', 'categories_json', 'tags_json', 'credential_envelope', 'credential_source', 'config_revision', 'created_at_epoch', 'updated_at_epoch'],
+        'download_connection_state' => ['connection_id', 'config_revision', 'lease_token', 'lease_expires_at', 'next_due_at', 'last_attempt_at', 'last_success_at', 'failure_code', 'failure_count', 'cursor_json', 'snapshot_json', 'snapshot_at', 'session_envelope'],
+        'download_completions' => ['connection_id', 'source_id_digest', 'source_id', 'title', 'category', 'tags_json', 'size_bytes', 'completed_at', 'observed_at', 'last_seen_at'],
     ];
 
     public function __construct(private readonly Database $source)
@@ -158,6 +164,9 @@ final class MariaDbToSqliteMigrator
             'system_status' => ['source_id', 'component'],
             'theme_item_classifications' => ['server_key', 'item_id'],
             'theme_classification_state' => ['server_key'],
+            'integration_connections' => ['id'],
+            'download_connection_state' => ['connection_id'],
+            'download_completions' => ['connection_id', 'source_id_digest'],
             default => [in_array('id', $columns, true) ? 'id' : $columns[0]],
         };
         $expectedSourceCount = (int) $this->source->getDibi()

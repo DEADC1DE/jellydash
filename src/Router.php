@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mk\Framework;
 
 use Mk\Framework\Pages\HistoryController;
+use Mk\Framework\Pages\DownloadsController;
 use Mk\Framework\Pages\HomeController;
 use Mk\Framework\Pages\JellyseerrController;
 use Mk\Framework\Pages\LibrariesController;
@@ -25,6 +26,7 @@ final class Router
     private const ROUTES = [
         'homepage' => HomeController::class,
         'now-playing' => NowPlayingController::class,
+        'downloads' => DownloadsController::class,
         'jellyseerr' => JellyseerrController::class,
         'libraries' => LibrariesController::class,
         'history' => HistoryController::class,

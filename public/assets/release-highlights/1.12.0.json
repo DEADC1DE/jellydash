@@ -4,7 +4,7 @@
   "title": "History and notification fixes",
   "summary": "This update fixes several History and notification problems and adds an Unraid Community Apps installation option.",
   "highlights": [
-    "History imports now keep rollback intact on MariaDB. Search treats % and _ as literal text, and episode links open the exact History result.",
+    "If a History import fails on MariaDB, its changes are rolled back. Search treats % and _ as literal text, and episode links open the exact History result.",
     "Web Push can re-enroll after a signing-key change, tracks delivery failures per device, and leaves unrelated open tabs alone when you click an alert.",
     "Old Jellyseerr requests no longer send delayed alerts when notifications are re-enabled. Background worker settings and status now agree.",
     "You can install Jellydash from Unraid Community Apps using the SQLite template. Existing Compose installations are not moved automatically."

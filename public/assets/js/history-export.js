@@ -67,7 +67,7 @@
             if (error && error.name === 'AbortError') {
                 return;
             }
-            setCountState('error', 'Could not check these choices');
+            setCountState('error', 'Could not count matching plays.');
         });
     }
 

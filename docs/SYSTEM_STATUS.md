@@ -42,8 +42,8 @@ It does not confirm delivery through every channel or that a person read it.
 Older delivery failures from before this feature are not reconstructed.
 
 If a check fails, start with the reason shown in the panel and the worker
-logs. Access failures usually need a token or permission check. A timeout
-needs a connection check. A delayed worker needs its schedule checked.
+logs. For access failures, check the token and permissions. For timeouts,
+check the service connection. For delayed workers, check their schedules.
 The separate CPU and RAM card describes the machine running Jellydash.
 
 ## Copy diagnostics

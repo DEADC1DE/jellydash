@@ -10,12 +10,12 @@ namespace Mk\Framework;
  * A module is a folder under modules/ with a module.php manifest that returns
  * an array. The core discovers modules on boot and lets them contribute:
  *
- *   'name'     => 'downloads',                     // must equal the folder name
+ *   'name'     => 'example',                     // must equal the folder name
  *   'nav'      => ['label','route','icon','order'] // optional sidebar entry
- *   'routes'   => ['downloads' => Controller::class]
+ *   'routes'   => ['example' => Controller::class]
  *   'autoload' => ['Vendor\\Ns\\' => 'src/']       // PSR-4, relative to module
- *   'api'      => 'api/downloads.php'              // /api/module.php?m=<name>
- *   'styles'   => ['downloads.css']                // loaded globally (shell)
+ *   'api'      => 'api/example.php'              // /api/module.php?m=<name>
+ *   'styles'   => ['example.css']                // loaded globally (shell)
  *   'scripts'  => ['indicator.js']                 // loaded globally (shell)
  *   'templates'=> 'templates'                      // Twig namespace @<name>
  *
@@ -71,6 +71,11 @@ final class Modules
 
         foreach (glob(MODULES_DIR . '/*/module.php') ?: [] as $manifestFile) {
             $folder = basename(dirname($manifestFile));
+
+            // Downloads is now a core feature. Skip the old manifest before it runs.
+            if ($folder === 'downloads') {
+                continue;
+            }
 
             // Folder names are used in URLs and paths, so keep them strict.
             if (!preg_match('/^[a-z0-9][a-z0-9-]*$/', $folder)) {

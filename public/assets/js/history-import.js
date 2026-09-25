@@ -436,7 +436,7 @@
             if (state === 'empty') {
                 importing = false;
                 title.textContent = 'No plays to import';
-                summary.textContent = 'Jellydash did not find any playback rows in this source.';
+                summary.textContent = "Jellydash didn't find any plays to import.";
                 confirmBtn.hidden = true;
                 confirmBtn.disabled = true;
                 setProgressVisible(false);

@@ -7,7 +7,9 @@ use Mk\Framework\Authorization;
 use Mk\Framework\Config;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
+use Mk\Framework\Downloads\DownloadRepository;
 use Mk\Framework\Health\WorkerStatusRepository;
+use Mk\Framework\Integrations\ConnectionRepository;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
@@ -51,6 +53,9 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         $this->assertSame([
             'app_settings',
             'auth_remember_tokens',
+            'download_completions',
+            'download_connection_state',
+            'integration_connections',
             'login_attempts',
             'play_history',
             'push_subscriptions',
@@ -69,6 +74,9 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         $this->assertSame(['idx_requested_at'], $this->namedIndexes('seerr_requests'));
         $this->assertSame(['idx_auth_remember_user'], $this->namedIndexes('auth_remember_tokens'));
         $this->assertSame(['idx_theme_retry'], $this->namedIndexes('theme_item_classifications'));
+        $this->assertSame(['idx_integration_connection_enabled'], $this->namedIndexes('integration_connections'));
+        $this->assertSame(['idx_download_state_due'], $this->namedIndexes('download_connection_state'));
+        $this->assertSame(['idx_download_completion_recent'], $this->namedIndexes('download_completions'));
     }
 
     public function testEnvironmentConnectionUsesSQLiteSafetySettings(): void
@@ -234,6 +242,8 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         new PushSubscriptionRepository($this->database);
         new SeerrRequestRepository($this->database);
         WorkerStatusRepository::ensureSchema($this->database);
+        ConnectionRepository::ensureSchema($this->database);
+        DownloadRepository::ensureSchema($this->database);
     }
 
     /** @return list<string> */
