@@ -1,0 +1,21 @@
+{
+  "version": "1.13.1",
+  "auto_show": true,
+  "title": "Library exclusions for playback alerts",
+  "summary": "Choose Jellyfin libraries that should not send playback notifications, while keeping their activity in History and Statistics.",
+  "highlights": [
+    "Select libraries under Settings > Exclusions > Notifications. This setting is separate from user notification exclusions and Statistics library exclusions.",
+    "When library exclusions are active, Jellydash waits for a new play's library before sending an alert. A play still missing that information after 10 minutes expires without an alert.",
+    "For Docker or manual configuration, PUSH_IGNORE_LIBRARIES provides an optional fallback. Saved Settings values take priority, including an empty selection."
+  ],
+  "links": [
+    {
+      "label": "Notification exclusions guide",
+      "url": "https://github.com/themartz90/jellydash/blob/v1.13.1/docs/MONITORING_EXCLUSIONS.md"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.13.1"
+    }
+  ]
+}
