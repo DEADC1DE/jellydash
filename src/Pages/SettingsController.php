@@ -13,6 +13,7 @@ use Mk\Framework\Jellyfin\JellyfinClient;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Log;
 use Mk\Framework\Main;
+use Mk\Framework\Push\NotificationLibraryExclusions;
 use Mk\Framework\Push\PushDeviceCapability;
 use Mk\Framework\Push\PushSubscriptionRepository;
 
@@ -77,6 +78,7 @@ final class SettingsController extends Controller
             AppSettings::get('push_ignore_users')
                 ?? (string) Config::get('PUSH_IGNORE_USERS', '')
         );
+        $ignoredLibraries = NotificationLibraryExclusions::names();
         $monitoringIgnoredUsers = $this->csvValues(
             AppSettings::get('ignore_users')
                 ?? (string) Config::get('IGNORE_USERS', '')
@@ -87,6 +89,10 @@ final class SettingsController extends Controller
         $knownLower = array_map('mb_strtolower', $libraries ?? []);
         $extraExcluded = array_values(array_filter(
             $excluded,
+            static fn (string $name): bool => !in_array(mb_strtolower($name), $knownLower, true)
+        ));
+        $extraIgnoredLibraries = array_values(array_filter(
+            $ignoredLibraries,
             static fn (string $name): bool => !in_array(mb_strtolower($name), $knownLower, true)
         ));
 
@@ -123,6 +129,9 @@ final class SettingsController extends Controller
             'users' => $users,
             'ignored_users' => $ignoredUsers,
             'extra_ignored' => implode(', ', $extraIgnored),
+            'ignored_libraries' => $ignoredLibraries,
+            'extra_ignored_libraries' => NotificationLibraryExclusions::csvFieldValue($extraIgnoredLibraries),
+            'ignored_libraries_csv' => NotificationLibraryExclusions::csvFieldValue($ignoredLibraries),
             'monitoring_ignored_users' => $monitoringIgnoredUsers,
             'extra_monitoring_ignored' => implode(', ', $extraMonitoringIgnored),
             'import' => [

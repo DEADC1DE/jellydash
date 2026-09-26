@@ -124,7 +124,7 @@
             </fieldset>
             <fieldset class="settings-exclusion-group">
                 <legend>Notifications</legend>
-                <p class="settings-note">Selected users never trigger playback alerts. Their activity is still recorded unless they are also excluded from monitoring.</p>
+                <p class="settings-note">Users: Selected users never trigger playback alerts. Their activity is still recorded unless they are also excluded from monitoring.</p>
             {% if users is not empty %}
                 <div class="settings-checks">
                     {% for user in users %}
@@ -144,6 +144,29 @@
                 <label class="settings-field">
                     <span>Users to ignore (comma-separated)</span>
                     <input type="text" name="push_ignore_extra" value="{{ ignored_users|join(', ') }}" placeholder="e.g. your own username">
+                </label>
+            {% endif %}
+                <p class="settings-note">Libraries: Selected libraries never trigger playback alerts. Plays remain in History and Statistics.</p>
+            {% if libraries is not null and libraries is not empty %}
+                <div class="settings-checks">
+                    {% for library in libraries %}
+                        <label class="settings-check">
+                            <input type="checkbox" name="push_ignore_library[]" value="{{ library }}"
+                                {{ library|lower in ignored_libraries|map(l => l|lower) ? 'checked' : '' }}>
+                            <span>{{ library }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+                <label class="settings-field">
+                    <span>Additional ignored libraries (comma-separated)</span>
+                    <input type="text" name="push_ignore_library_extra" value="{{ extra_ignored_libraries }}" placeholder="Optional">
+                    <small>For libraries Jellyfin didn't report just now. Put names containing commas in double quotes.</small>
+                </label>
+            {% else %}
+                <label class="settings-field">
+                    <span>Libraries to ignore (comma-separated)</span>
+                    <input type="text" name="push_ignore_library_extra" value="{{ ignored_libraries_csv }}" placeholder="e.g. Music">
+                    <small>Jellyfin didn't report its libraries. Enter names manually. Put names containing commas in double quotes.</small>
                 </label>
             {% endif %}
             </fieldset>

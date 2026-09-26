@@ -340,7 +340,7 @@ Open **Settings > Exclusions** to manage these options:
 | Option | What it excludes | Environment fallback |
 | --- | --- | --- |
 | Monitoring | Selected users from Now Playing, History, Statistics, library playback summaries and CSV exports. New plays and history imports for those users are skipped. | `IGNORE_USERS` |
-| Notifications | Playback alerts for selected users. Their activity is still recorded unless they are also excluded from monitoring. | `PUSH_IGNORE_USERS` |
+| Notifications | Playback alerts for selected users or libraries. Their activity is still recorded unless the user is also excluded from monitoring. | `PUSH_IGNORE_USERS`, `PUSH_IGNORE_LIBRARIES` |
 | Statistics | Selected libraries from Trending, Most Watched and Monthly recap title rankings. Viewing totals and History remain visible. | `TRENDING_EXCLUDE_LIBRARIES` |
 
 Environment values are comma-separated names, for example `IGNORE_USERS=Admin,Test`. Saved Settings values take priority over the environment, including an empty selection. To change a saved exclusion, use Settings. For Docker environment changes, recreate the app container so it receives the new values.
@@ -348,6 +348,9 @@ Environment values are comma-separated names, for example `IGNORE_USERS=Admin,Te
 Monitoring exclusions preserve existing database rows. Removing an exclusion makes that earlier activity visible again; Jellydash cannot reconstruct activity it skipped while the user was excluded. Username matching is exact and case-insensitive. If you rename an account, update its exclusion. See [Monitoring exclusions](docs/MONITORING_EXCLUSIONS.md) for details.
 
 Confirmed background theme songs and videos are excluded automatically. The history poller also checks older items and hides confirmed theme plays from History, Statistics and CSV exports while preserving the stored rows. Ordinary music stays monitored. See [Background theme media](docs/MONITORING_EXCLUSIONS.md#background-theme-media) for detection rules and limits.
+
+To silence music alerts without hiding music activity, select the library under **Settings > Exclusions > Notifications**. Library names match exactly, ignoring letter case. If Jellydash cannot identify a new play's library, it waits for that information before sending an alert. An unresolved play expires without an alert after 10 minutes.
+For manually entered names or `PUSH_IGNORE_LIBRARIES`, put a library name containing a comma in double quotes.
 
 ## Exporting History
 

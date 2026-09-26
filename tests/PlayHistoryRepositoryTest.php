@@ -134,6 +134,81 @@ final class PlayHistoryRepositoryTest extends TestCase
         );
     }
 
+    public function testNotificationLibraryExclusionsWaitForConfirmedMetadataAndKeepHistory(): void
+    {
+        $now = new DateTimeImmutable('2099-06-19 12:00:30');
+        $music = $this->insertPlay([
+            'library' => 'Music',
+            'library_resolved_at' => '2099-06-19 12:00:00',
+            'notified' => 0,
+        ]);
+        $movie = $this->insertPlay([
+            'library' => 'Movies',
+            'library_resolved_at' => '2099-06-19 12:00:00',
+            'notified' => 0,
+        ]);
+        $unknown = $this->insertPlay([
+            'library' => 'Audio',
+            'library_resolved_at' => null,
+            'notified' => 0,
+        ]);
+
+        $claims = $this->repository->claimUnnotifiedPlays([], 600, $now, ['mUsIc']);
+
+        $this->assertSame([$movie], array_map(static fn (\Dibi\Row $row): int => (int) $row['id'], $claims));
+        $this->assertSame(1, (int) $this->dibi->select('notified')->from('play_history')->where('id = %i', $music)->fetchSingle());
+        $this->assertSame(0, (int) $this->dibi->select('notification_attempts')->from('play_history')->where('id = %i', $unknown)->fetchSingle());
+        $this->assertSame(3, $this->repository->totalRows());
+
+        $this->dibi->update('play_history', [
+            'library' => 'Movies',
+            'library_resolved_at' => '2099-06-19 12:01:00',
+        ])->where('id = %i', $unknown)->execute();
+
+        $later = $this->repository->claimUnnotifiedPlays([], 600, $now->modify('+30 seconds'), ['Music']);
+        $this->assertSame([$unknown], array_map(static fn (\Dibi\Row $row): int => (int) $row['id'], $later));
+    }
+
+    public function testUnresolvedLibraryCanStillNotifyWithoutLibraryExclusions(): void
+    {
+        $unknown = $this->insertPlay([
+            'library' => 'Audio',
+            'library_resolved_at' => null,
+            'notified' => 0,
+        ]);
+
+        $claims = $this->repository->claimUnnotifiedPlays([], 600, new DateTimeImmutable('2099-06-19 12:00:30'));
+        $this->assertSame([$unknown], array_map(static fn (\Dibi\Row $row): int => (int) $row['id'], $claims));
+    }
+
+    public function testLateExcludedLibraryAndUnresolvedPlayExpireWithoutAlerts(): void
+    {
+        $lateMusic = $this->insertPlay([
+            'library' => 'Audio',
+            'library_resolved_at' => null,
+            'notified' => 0,
+        ]);
+        $unresolved = $this->insertPlay([
+            'library' => 'Audio',
+            'library_resolved_at' => null,
+            'notified' => 0,
+        ]);
+        $now = new DateTimeImmutable('2099-06-19 12:00:30');
+
+        $this->assertSame([], $this->repository->claimUnnotifiedPlays([], 600, $now, ['Music']));
+        $this->dibi->update('play_history', [
+            'library' => 'Music',
+            'library_resolved_at' => '2099-06-19 12:01:00',
+        ])->where('id = %i', $lateMusic)->execute();
+
+        $this->assertSame([], $this->repository->claimUnnotifiedPlays([], 600, $now->modify('+30 seconds'), ['Music']));
+        $this->assertSame(1, (int) $this->dibi->select('notified')->from('play_history')->where('id = %i', $lateMusic)->fetchSingle());
+        $this->assertSame(0, (int) $this->dibi->select('notified')->from('play_history')->where('id = %i', $unresolved)->fetchSingle());
+
+        $this->assertSame([], $this->repository->claimUnnotifiedPlays([], 600, $now->modify('+11 minutes'), ['Music']));
+        $this->assertSame(1, (int) $this->dibi->select('notified')->from('play_history')->where('id = %i', $unresolved)->fetchSingle());
+    }
+
     public function testWatchTimeTodaySumsRowsForCurrentDay(): void
     {
         $now = new \DateTimeImmutable('2099-06-19 12:00:00');

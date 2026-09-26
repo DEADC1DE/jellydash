@@ -46,7 +46,7 @@ final class PlaybackNotifier
         }
 
         $history = $this->history ?? new PlayHistoryRepository();
-        $plays = $history->claimUnnotifiedPlays($this->ignoredUsers(), self::FRESH_WINDOW_SECONDS);
+        $plays = $history->claimUnnotifiedPlays($this->ignoredUsers(), self::FRESH_WINDOW_SECONDS, null, NotificationLibraryExclusions::names(true));
         if ($plays === []) {
             return 0;
         }

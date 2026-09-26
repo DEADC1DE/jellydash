@@ -23,7 +23,10 @@ Matching uses the complete username and ignores letter case. For example, `Alice
 
 Exclusions follow usernames, not accounts. If a Jellyfin account is renamed, update its exclusion to the new username.
 
-Monitoring exclusions and notification exclusions are separate settings. `IGNORE_USERS` controls collection and visibility. `PUSH_IGNORE_USERS` only prevents playback alerts and leaves monitoring unchanged.
+Monitoring exclusions and notification exclusions are separate settings. `IGNORE_USERS` controls collection and visibility. `PUSH_IGNORE_USERS` prevents playback alerts for selected users, and `PUSH_IGNORE_LIBRARIES` prevents alerts for selected libraries. Both notification settings leave monitoring unchanged.
+
+Open **Settings > Exclusions > Notifications** to select a library, such as Music. You can also enter a library name when Jellyfin does not list it. The match uses the complete library name and ignores letter case. If you rename the library, update the exclusion. Jellydash waits for a new play's library to be identified before sending an alert when any library exclusion is active. If it remains unknown for 10 minutes, the alert expires. The play remains in History and Statistics.
+For manually entered names or `PUSH_IGNORE_LIBRARIES`, put a library name containing a comma in double quotes.
 
 ## Background theme media
 

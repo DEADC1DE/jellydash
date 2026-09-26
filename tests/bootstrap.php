@@ -69,6 +69,7 @@ foreach ([
     'GOTIFY_URL',
     'GOTIFY_APP_TOKEN',
     'IGNORE_USERS',
+    'PUSH_IGNORE_LIBRARIES',
     'SAB_API_URL',
     'SAB_API_KEY',
 ] as $key) {

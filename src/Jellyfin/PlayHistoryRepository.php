@@ -311,9 +311,10 @@ final class PlayHistoryRepository implements LibraryHistorySource
      * retired silently so a poller that was down doesn't fire stale alerts.
      *
      * @param array<int, string> $ignoreUsers
+     * @param array<int, string> $ignoreLibraries
      * @return array<int, \Dibi\Row>
      */
-    public function claimUnnotifiedPlays(array $ignoreUsers, int $withinSeconds, ?\DateTimeImmutable $now = null): array
+    public function claimUnnotifiedPlays(array $ignoreUsers, int $withinSeconds, ?\DateTimeImmutable $now = null, array $ignoreLibraries = []): array
     {
         $now ??= new \DateTimeImmutable('now');
         $nowEpoch = $now->getTimestamp();
@@ -367,7 +368,24 @@ final class PlayHistoryRepository implements LibraryHistorySource
             static fn (string $u): string => mb_strtolower(trim($u)),
             [...$ignoreUsers, ...$this->exclusions()->names()]
         );
+        $ignoredLibraries = [];
+        foreach ($ignoreLibraries as $library) {
+            $library = mb_strtolower(trim($library));
+            if ($library !== '') {
+                $ignoredLibraries[$library] = true;
+            }
+        }
         foreach ($rows as $row) {
+            $user = mb_strtolower(trim((string) ($row['user_name'] ?? '')));
+            $ignoredUser = $user === '' || in_array($user, $ignore, true);
+            $library = mb_strtolower(trim((string) ($row['library'] ?? '')));
+            $libraryResolved = trim((string) ($row['library_resolved_at'] ?? '')) !== '';
+            if (!$ignoredUser && $ignoredLibraries !== [] && (!$libraryResolved || $library === '')) {
+                // The temporary media-type label is not a library. Wait for
+                // metadata rather than alerting on an excluded library.
+                continue;
+            }
+
             $token = bin2hex(random_bytes(32));
             $this->db->query(
                 'UPDATE `play_history` SET `notification_attempts` = `notification_attempts` + 1, `notification_claim_token` = %s, `notification_claimed_at_epoch` = %i, `notification_next_attempt_at_epoch` = NULL WHERE `id` = %i AND `started_at` = %s AND `notified` = 0 AND `notification_attempts` < 3 AND `notification_claim_token` IS NULL AND (`notification_next_attempt_at_epoch` IS NULL OR `notification_next_attempt_at_epoch` <= %i)',
@@ -381,8 +399,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
             if ($this->db->getAffectedRows() === 1) {
                 $row['notification_claim_token'] = $token;
                 $row['notification_attempts'] = (int) ($row['notification_attempts'] ?? 0) + 1;
-                $user = mb_strtolower(trim((string) ($row['user_name'] ?? '')));
-                if ($user === '' || in_array($user, $ignore, true)) {
+                if ($ignoredUser || isset($ignoredLibraries[$library])) {
                     $this->acknowledgeNotificationClaim((int) $row['id'], $token);
                     continue;
                 }

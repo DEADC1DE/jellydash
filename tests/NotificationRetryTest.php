@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-use Mk\Framework\Container;
+use Mk\Framework\AppSettings;
 use Mk\Framework\Config;
+use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Health\WorkerMonitor;
@@ -16,6 +17,8 @@ use Mk\Framework\Notifications\GotifyChannel;
 use Mk\Framework\Notifications\NotificationChannel;
 use Mk\Framework\Notifications\NotificationDispatcher;
 use Mk\Framework\Notifications\NtfyChannel;
+use Mk\Framework\Push\NotificationLibraryExclusions;
+use Mk\Framework\Push\PlaybackNotifier;
 use Mk\Framework\Push\PushSubscriptionRepository;
 use Mk\Framework\Push\WebPushSender;
 use Mk\Framework\Push\WebPushTransport;
@@ -404,6 +407,56 @@ final class NotificationRetryTest extends TestCase
         }
     }
 
+    public function testPlaybackNotifierUsesSavedLibraryExclusionsWithoutHidingPlays(): void
+    {
+        $history = new PlayHistoryRepository($this->database);
+        $now = (new DateTimeImmutable('now', new DateTimeZone(Config::timezone())))->format('Y-m-d H:i:s');
+        foreach (['Music, Podcasts', 'Movies'] as $library) {
+            $this->database->getDibi()->insert('play_history', [
+                'session_key' => 'notification-library-' . $library,
+                'item_id' => 'notification-item-' . $library,
+                'item_type' => $library === 'Music, Podcasts' ? 'Audio' : 'Movie',
+                'item_name' => $library === 'Music, Podcasts' ? 'A song' : 'A film',
+                'user_name' => 'Viewer',
+                'library' => $library,
+                'library_resolved_at' => $now,
+                'play_method' => 'DirectPlay',
+                'watched_sec' => 0,
+                'runtime_sec' => 3600,
+                'started_at' => $now,
+                'updated_at' => $now,
+                'is_finished' => 0,
+                'notified' => 0,
+            ])->execute();
+        }
+
+        AppSettings::set('push_ignore_libraries', NotificationLibraryExclusions::storedValue(
+            NotificationLibraryExclusions::fromForm(['Music, Podcasts'], '')
+        ));
+        AppSettings::set('push_ignore_users', '');
+        $previous = getenv('PUSH_ENABLED');
+        putenv('PUSH_ENABLED=1');
+        try {
+            $channel = new CountingSuccessChannel();
+            $notifier = new PlaybackNotifier(
+                $history,
+                new NotificationDispatcher(new WebPushSender(), new PushSubscriptionRepository($this->database), [$channel]),
+            );
+
+            $this->assertSame(1, $notifier->dispatch());
+            $this->assertSame(1, $channel->calls);
+            $this->assertStringContainsString('started watching', (string) $channel->notifications[0]['title']);
+            $rows = $this->database->getDibi()->select('library, notified')->from('play_history')->fetchPairs('library', 'notified');
+            $this->assertSame(1, (int) $rows['Music, Podcasts']);
+            $this->assertSame(1, (int) $rows['Movies']);
+            $this->assertSame(2, (int) $this->database->getDibi()->select('COUNT(*)')->from('play_history')->fetchSingle());
+        } finally {
+            putenv($previous === false ? 'PUSH_ENABLED' : 'PUSH_ENABLED=' . $previous);
+            AppSettings::set('push_ignore_libraries', null);
+            AppSettings::set('push_ignore_users', null);
+        }
+    }
+
     /** @return \Dibi\Row */
     private function claimAt(int $epoch): \Dibi\Row
     {
@@ -505,6 +558,8 @@ final class CountingFailureChannel implements NotificationChannel
 final class CountingSuccessChannel implements NotificationChannel
 {
     public int $calls = 0;
+    /** @var array<int, array<string, mixed>> */
+    public array $notifications = [];
 
     public function name(): string
     {
@@ -519,6 +574,7 @@ final class CountingSuccessChannel implements NotificationChannel
     public function send(array $notification): bool
     {
         ++$this->calls;
+        $this->notifications[] = $notification;
 
         return true;
     }

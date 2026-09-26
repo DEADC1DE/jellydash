@@ -1,5 +1,7 @@
 <?php
 
+use Mk\Framework\AppSettings;
+use Mk\Framework\Push\NotificationLibraryExclusions;
 use Mk\Framework\Router;
 use Mk\Framework\View;
 use PHPUnit\Framework\TestCase;
@@ -128,6 +130,8 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('Selected libraries are hidden from Trending and Most Watched.', $output);
         $this->assertStringContainsString('<legend>Notifications</legend>', $output);
         $this->assertStringContainsString('Selected users never trigger playback alerts.', $output);
+        $this->assertStringContainsString('name="push_ignore_library_extra"', $output);
+        $this->assertStringContainsString('Selected libraries never trigger playback alerts.', $output);
         $this->assertStringContainsString('<legend>Monitoring</legend>', $output);
         $this->assertStringContainsString('name="monitoring_ignore_extra"', $output);
         $this->assertStringContainsString('/assets/js/server-stats.js?v=' . View::ASSET_REVISION, $output);
@@ -142,6 +146,23 @@ final class RouterTest extends TestCase
         $this->assertStringContainsString('/assets/js/release-highlights.js?v=20260822-history-upgrade', $output);
         $this->assertStringContainsString('/assets/js/history-import.js?v=' . View::ASSET_REVISION, $output);
         $this->assertSame(200, http_response_code());
+    }
+
+    public function testSettingsRouteKeepsAStoredLibraryNameContainingACommaEditable(): void
+    {
+        AppSettings::set('push_ignore_libraries', NotificationLibraryExclusions::storedValue(['Music, Podcasts']));
+        try {
+            ob_start();
+            (new Router(new View()))->dispatch('settings', null);
+            $output = (string) ob_get_clean();
+
+            $this->assertStringContainsString(
+                'name="push_ignore_library_extra" value="&quot;Music, Podcasts&quot;"',
+                $output
+            );
+        } finally {
+            AppSettings::set('push_ignore_libraries', null);
+        }
     }
 
     public function testUnknownRouteRendersNotFound(): void
