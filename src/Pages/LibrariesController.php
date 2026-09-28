@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Mk\Framework\Pages;
 
 use Mk\Framework\Controller;
+
 final class LibrariesController extends Controller
 {
     public function handle(): void

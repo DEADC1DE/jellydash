@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use Mk\Framework\Authorization;
+use Mk\Framework\Container;
 use Mk\Framework\Csrf;
+use Mk\Framework\Database;
 use Mk\Framework\Main;
 use Mk\Framework\Pager;
 use Mk\Framework\Pages\LoginController;
@@ -106,6 +108,43 @@ use Mk\Framework\View;
         \Mk\Framework\AppSettings::set('ignore_users', $csv($monitoringIgnore, 'monitoring_ignore_extra'));
 
         header('Location: /settings?saved=1');
+        exit;
+    }
+
+    // CHANGE PASSWORD ---------------------------------------------------------------------------------------------------
+    if ($requests->requestIs('change-password') && $isPost) {
+        Csrf::check();
+
+        $authClass = new Authorization();
+        if (!$authClass->isUserLoggedIn()) {
+            http_response_code(403);
+            exit('Forbidden');
+        }
+
+        $userId = (int) $authClass->getUserData()['id'];
+        $username = (string) $authClass->getUserData()['username'];
+        $currentPassword = (string) ($_POST['current_pwd'] ?? '');
+        $newPassword = (string) ($_POST['new_pwd'] ?? '');
+        $newPasswordConfirm = (string) ($_POST['new_pwd_confirm'] ?? '');
+
+        $error = null;
+        if (!Container::db()->verifyPassword($userId, $currentPassword)) {
+            $error = 'Current password is incorrect.';
+        } elseif ($newPassword !== $newPasswordConfirm) {
+            $error = 'New passwords do not match.';
+        } elseif (strlen($newPassword) < Database::MIN_PASSWORD_LENGTH) {
+            $error = 'New password must be at least ' . Database::MIN_PASSWORD_LENGTH . ' characters.';
+        }
+
+        if ($error !== null) {
+            header('Location: /settings?' . http_build_query(['password_error' => $error]));
+            exit;
+        }
+
+        $database = Container::db();
+        $database->setUserPassword($username, $newPassword);
+
+        header('Location: /settings?password_changed=1');
         exit;
     }
 

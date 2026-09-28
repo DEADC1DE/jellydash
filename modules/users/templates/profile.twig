@@ -1,0 +1,105 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>{{ userName }}</h1>
+        <p><a href="/users">&larr; Back to Users</a></p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <dl class="users-profile-stats">
+        <div class="users-profile-stat"><dt>Plays</dt><dd>{{ summary.plays }}</dd></div>
+        <div class="users-profile-stat"><dt>Watch time</dt><dd>{{ (summary.watchSec / 3600)|round(1) }}h</dd></div>
+        <div class="users-profile-stat"><dt>Top library</dt><dd>{{ summary.topLibrary|default('-') }}</dd></div>
+        <div class="users-profile-stat"><dt>Top device</dt><dd>{{ summary.topDevice|default('-') }}</dd></div>
+        <div class="users-profile-stat"><dt>Longest session</dt><dd>{{ (summary.longestSessionSec / 60)|round }} min</dd></div>
+        <div class="users-profile-stat"><dt>Last seen</dt><dd>{{ summary.lastSeen|default('-') }}</dd></div>
+    </dl>
+
+    <h2 class="users-profile-heatmap-title">Activity by weekday &times; hour</h2>
+    <div class="users-profile-heatmap-scroll">
+        <table class="users-profile-heatmap">
+            <thead>
+                <tr><th></th>{% for hour in 0..23 %}<th>{{ hour }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody>
+                {% set days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] %}
+                {% set max = 1 %}
+                {% for day in 0..6 %}
+                    {% for hour in 0..23 %}
+                        {% if heatmap[day][hour] > max %}{% set max = heatmap[day][hour] %}{% endif %}
+                    {% endfor %}
+                {% endfor %}
+                {% for day in 0..6 %}
+                    <tr>
+                        <th>{{ days[day] }}</th>
+                        {% for hour in 0..23 %}
+                            {% set count = heatmap[day][hour] %}
+                            <td class="users-profile-heatmap-cell{{ count > 0 ? '' : ' is-empty' }}" style="--intensity: {{ count / max }}" title="{{ count }} plays">{{ count > 0 ? count : '' }}</td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="users-profile-heatmap-title">Recent plays</h2>
+    <div class="users-recent-plays">
+        {% for play in recentPlays %}
+            <div class="users-recent-plays-row">
+                <span class="users-recent-plays-poster" style="background-image: {{ play.poster }}"></span>
+                <div class="users-recent-plays-title">
+                    <strong>
+                        {% if play.seriesName %}{{ play.seriesName }}{% if play.seasonEp %} · {{ play.seasonEp }}{% endif %} — {{ play.itemName|default('Unknown') }}
+                        {% else %}{{ play.itemName|default('Unknown title') }}
+                        {% endif %}
+                    </strong>
+                    <small>{{ play.library|default('-') }} · {{ play.client|default('-') }} · {{ play.device|default('-') }}</small>
+                </div>
+                <div class="users-recent-plays-meta">
+                    <span>{{ (play.watchedSec / 60)|round }} min{{ play.isFinished ? ' · finished' : '' }}</span>
+                    <time>{{ play.startedAt|date('Y-m-d H:i') }}</time>
+                </div>
+            </div>
+        {% else %}
+            <div class="users-recent-plays-empty">No plays recorded yet.</div>
+        {% endfor %}
+    </div>
+    {% if playsTotalPages > 1 %}
+        <nav class="users-profile-pager">
+            {% if playsPage > 1 %}<a href="?user={{ userName|url_encode }}&playsPage={{ playsPage - 1 }}&devicesPage={{ devicesPage }}">&larr; Newer</a>{% endif %}
+            <span>Page {{ playsPage }} of {{ playsTotalPages }}</span>
+            {% if playsPage < playsTotalPages %}<a href="?user={{ userName|url_encode }}&playsPage={{ playsPage + 1 }}&devicesPage={{ devicesPage }}">Older &rarr;</a>{% endif %}
+        </nav>
+    {% endif %}
+
+    <h2 class="users-profile-heatmap-title">Devices</h2>
+    <div class="devices-table users-profile-devices-compact">
+        <div class="devices-head">
+            <span>Device</span>
+            <span>App</span>
+            <span>Last user</span>
+            <span>Last activity</span>
+            <span></span>
+        </div>
+        {% for device in devices %}
+            <div class="devices-row">
+                <span class="devices-name">{{ device.name }}</span>
+                <span class="devices-app">{{ device.appName|default('-') }}</span>
+                <span class="devices-user">{{ device.lastUserName }}</span>
+                <span class="devices-activity">{{ device.lastActivity ? device.lastActivity|date('Y-m-d H:i') : '-' }}</span>
+                <span></span>
+            </div>
+        {% else %}
+            <div class="devices-empty">No devices reported for this user.</div>
+        {% endfor %}
+    </div>
+    {% if devicesTotalPages > 1 %}
+        <nav class="users-profile-pager">
+            {% if devicesPage > 1 %}<a href="?user={{ userName|url_encode }}&playsPage={{ playsPage }}&devicesPage={{ devicesPage - 1 }}">&larr; Newer</a>{% endif %}
+            <span>Page {{ devicesPage }} of {{ devicesTotalPages }}</span>
+            {% if devicesPage < devicesTotalPages %}<a href="?user={{ userName|url_encode }}&playsPage={{ playsPage }}&devicesPage={{ devicesPage + 1 }}">Older &rarr;</a>{% endif %}
+        </nav>
+    {% endif %}
+{% endblock %}

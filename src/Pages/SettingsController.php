@@ -114,6 +114,8 @@ final class SettingsController extends Controller
                 'hide_footer' => true,
             ]),
             'saved' => isset($_GET['saved']),
+            'password_changed' => isset($_GET['password_changed']),
+            'password_error' => trim((string) (Main::captureGetString('password_error') ?? '')),
             'can_manage_global' => $canManageGlobal,
             'can_manage_push' => $canManagePush,
             'can_manage_all_push' => $canManageAllPush,

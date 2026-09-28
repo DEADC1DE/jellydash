@@ -13,7 +13,7 @@ use Twig\Loader\FilesystemLoader;
  */
 class View
 {
-    public const ASSET_REVISION = '20260922-ui-copy';
+    public const ASSET_REVISION = '20260922-ui-copy-fork1';
 
     private Environment $twig;
 

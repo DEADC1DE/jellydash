@@ -27,6 +27,8 @@ services:
       JELLYSEER_VERIFY_SSL: "${JELLYSEER_VERIFY_SSL:-true}"
       SEERR_POLL_INTERVAL: "${SEERR_POLL_INTERVAL:-120}"
       SEERR_NOTIFY_ENABLED: "${SEERR_NOTIFY_ENABLED:-true}"
+      # Public base URL for absolute invite links (recommended behind a proxy)
+      APP_PUBLIC_URL: "${APP_PUBLIC_URL:-}"
       # Optional compatibility settings; new download clients use Settings.
       SAB_API_URL: "${SAB_API_URL:-}"
       SAB_API_KEY: "${SAB_API_KEY:-}"

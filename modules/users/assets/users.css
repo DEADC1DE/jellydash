@@ -1,0 +1,606 @@
+.users-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+.users-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 18px;
+    color: inherit;
+    text-decoration: none;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    box-shadow: 0 20px 44px -28px rgba(0, 0, 0, .85);
+    transition: border-color .15s ease, background .15s ease;
+}
+
+.users-card:hover {
+    background: rgba(255, 255, 255, .025);
+    border-color: rgba(255, 255, 255, .14);
+}
+
+.users-card-name {
+    margin-bottom: 6px;
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-card-stat {
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+.users-card-lastseen {
+    margin-top: 8px;
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.users-empty {
+    grid-column: 1 / -1;
+    padding: 32px 18px;
+    color: var(--color-low);
+    text-align: center;
+}
+
+/* Overview variant of the Statistics page's stats-user-table: denser rows and
+   content-hugging columns so it reads like the History/Devices tables instead
+   of stretching the user cell across the full page width. The columns pair
+   the Top Users table with the Top Titles table at equal widths; the only
+   other addition is the clickable user cell linking to the profile. */
+.users-overview-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 22px;
+    align-items: start;
+}
+
+.users-overview-table {
+    overflow-x: auto;
+}
+
+.users-overview-table .stats-user-head,
+.users-overview-table .stats-user-table-row {
+    grid-template-columns: minmax(120px, 1.5fr) 84px 64px 84px minmax(90px, 1fr);
+    gap: 14px;
+    padding: 0 16px;
+}
+
+.users-overview-titles .stats-user-head,
+.users-overview-titles .stats-user-table-row {
+    grid-template-columns: minmax(120px, 1fr) 84px 64px;
+}
+
+.users-overview-table .stats-user-head {
+    height: 34px;
+}
+
+.users-overview-table .stats-user-table-row {
+    min-height: 42px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+}
+
+.users-overview-table .stats-user-name strong {
+    font-size: 12.5px;
+}
+
+.users-overview-table .watcher-avatar {
+    flex-basis: 24px;
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+}
+
+.users-overview-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+}
+
+.users-overview-name:hover strong {
+    color: var(--color-purple);
+}
+
+.users-overview-name strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Top Titles rows show a small cover (the controller serves real Jellyfin
+   art over a gradient fallback) next to a two-line title cell. Size and
+   inline background-image handling mirror the History page's poster so the
+   class-level center/cover cropping keeps working. */
+.users-overview-title-poster {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 60px;
+    overflow: hidden;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 6px;
+    box-shadow: 0 6px 16px -10px rgba(0, 0, 0, .8);
+}
+
+.users-overview-title-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.users-overview-title-copy strong {
+    overflow: hidden;
+    color: #f4f2fb;
+    font-size: 13.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-overview-title-copy small {
+    overflow: hidden;
+    color: rgba(255, 255, 255, .45);
+    font-size: 11.5px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .users-overview-columns {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 26px;
+    }
+}
+
+.users-profile-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+    margin: 0 0 28px;
+}
+
+.users-profile-stat {
+    padding: 16px 18px;
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+}
+
+.users-profile-stat dt {
+    margin: 0 0 6px;
+    color: var(--color-low);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .7px;
+    text-transform: uppercase;
+}
+
+.users-profile-stat dd {
+    margin: 0;
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: 18px;
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-profile-heatmap-title {
+    margin: 28px 0 14px;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.users-profile-heatmap-title:first-child {
+    margin-top: 0;
+}
+
+.users-recent-plays {
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .02);
+}
+
+.users-recent-plays-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 18px;
+    border-top: 1px solid rgba(255, 255, 255, .05);
+}
+
+.users-recent-plays-row:first-child {
+    border-top: 0;
+}
+
+.users-recent-plays-row:hover {
+    background: rgba(255, 255, 255, .025);
+}
+
+.users-recent-plays-poster {
+    flex: 0 0 40px;
+    width: 40px;
+    height: 60px;
+    overflow: hidden;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border: 1px solid rgba(255, 255, 255, .12);
+    border-radius: 6px;
+    box-shadow: 0 6px 16px -10px rgba(0, 0, 0, .8);
+}
+
+.users-recent-plays-title {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.users-recent-plays-title strong {
+    overflow: hidden;
+    color: var(--color-text);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-recent-plays-title small {
+    overflow: hidden;
+    color: var(--color-low);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.users-recent-plays-meta {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    align-items: flex-end;
+    gap: 3px;
+    color: var(--color-muted);
+    font-size: 12px;
+    text-align: right;
+}
+
+.users-recent-plays-meta time {
+    color: var(--color-low);
+    font-family: var(--font-mono);
+    font-size: 11px;
+}
+
+.users-recent-plays-empty {
+    padding: 32px 18px;
+    color: var(--color-low);
+    text-align: center;
+}
+
+.users-profile-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 12px 0 0;
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.users-profile-pager a {
+    padding: 6px 12px;
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .05);
+}
+
+.users-profile-pager a:hover {
+    background: rgba(124, 92, 255, .18);
+    border-color: var(--color-purple);
+}
+
+/* Smaller units on the profile page — this is a secondary glance at a
+   single user's devices, not the full admin Devices page. */
+.users-profile-devices-compact .devices-head,
+.users-profile-devices-compact .devices-row {
+    grid-template-columns: minmax(120px, 1.4fr) minmax(100px, 1fr) 100px 130px 0;
+    padding: 0 14px;
+    font-size: 12px;
+}
+
+.users-profile-devices-compact .devices-row {
+    min-height: 44px;
+}
+
+.users-profile-heatmap-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-card);
+}
+
+.users-profile-heatmap {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+.users-profile-heatmap th,
+.users-profile-heatmap td {
+    padding: 6px;
+    text-align: center;
+}
+
+.users-profile-heatmap thead th {
+    color: var(--color-low);
+    font-weight: 800;
+    font-family: var(--font-mono);
+}
+
+.users-profile-heatmap tbody th {
+    color: var(--color-muted);
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.users-profile-heatmap-cell {
+    min-width: 26px;
+    color: var(--color-purple-soft);
+    font-family: var(--font-mono);
+    background: rgba(124, 92, 255, calc(.08 + var(--intensity, 0) * .72));
+    border-radius: 4px;
+}
+
+.users-profile-heatmap-cell.is-empty {
+    color: transparent;
+    background: rgba(255, 255, 255, .02);
+}
+
+/* ── Invite service (invitations + account actions) ─────────────────── */
+
+.users-card-name {
+    display: block;
+}
+
+.users-card:hover .users-card-name {
+    color: #fff;
+}
+
+.users-card-invite {
+    margin-top: 4px;
+    color: rgba(247, 185, 85, .8);
+}
+
+.users-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--color-border);
+}
+
+.users-card-actions form {
+    display: contents;
+}
+
+.invite-mini {
+    padding: 5px 9px;
+    color: rgba(255, 255, 255, .78);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: rgba(8, 7, 12, .48);
+}
+
+.invite-mini:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, .22);
+    background: rgba(124, 92, 255, .16);
+}
+
+.invite-mini.is-danger:hover {
+    border-color: rgba(255, 99, 99, .45);
+    background: rgba(255, 80, 80, .14);
+}
+
+.invite-note {
+    margin: 0 0 14px;
+    padding: 10px 14px;
+    font-size: 13px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-card);
+}
+
+.invite-note.is-muted {
+    color: var(--color-muted);
+}
+
+.invite-note.is-error {
+    color: #ffb0b0;
+    border-color: rgba(255, 99, 99, .35);
+}
+
+.invite-note code {
+    padding: 1px 5px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, .07);
+}
+
+.invite-grid {
+    display: grid;
+    grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+    gap: 18px;
+    margin-bottom: 26px;
+}
+
+@media (max-width: 900px) {
+    .invite-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.invite-create,
+.invite-invite {
+    border: 1px solid var(--color-border);
+    border-radius: 18px;
+    background: var(--color-card);
+}
+
+.invite-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+}
+
+.invite-form > label {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--color-muted);
+    font-size: 12.5px;
+}
+
+.invite-form select {
+    padding: 7px 9px;
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: rgba(8, 7, 12, .6);
+}
+
+.invite-libraries {
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+}
+
+.invite-libraries legend {
+    padding: 0 6px;
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.invite-libraries legend small {
+    color: rgba(255, 255, 255, .3);
+}
+
+.invite-check {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 2px 0;
+    color: var(--color-text);
+    font-size: 13px;
+}
+
+.invite-form-toggles {
+    display: flex;
+    gap: 18px;
+}
+
+.invite-button {
+    padding: 9px 14px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 1px solid rgba(124, 92, 255, .5);
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(124, 92, 255, .55), rgba(176, 107, 255, .45));
+}
+
+.invite-button:hover {
+    background: linear-gradient(135deg, rgba(124, 92, 255, .75), rgba(176, 107, 255, .6));
+}
+
+.invite-invites {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.invite-invite {
+    padding: 14px 16px;
+}
+
+.invite-invite-head {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.invite-invite-head code {
+    color: #e4dcff;
+    font-family: var(--font-mono);
+    font-size: 13px;
+}
+
+.invite-invite-status {
+    padding: 3px 8px;
+    color: rgba(52, 216, 166, .9);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    border: 1px solid rgba(52, 216, 166, .3);
+    border-radius: 999px;
+}
+
+.invite-invite-meta {
+    display: block;
+    margin-top: 5px;
+    color: var(--color-muted);
+}
+
+.invite-invite-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.invite-invite-url {
+    overflow: hidden;
+    max-width: 100%;
+    color: rgba(59, 158, 255, .85);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.invite-invite-foot form {
+    margin-left: auto;
+}

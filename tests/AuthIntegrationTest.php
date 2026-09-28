@@ -103,6 +103,15 @@ final class AuthIntegrationTest extends TestCase
         $this->assertFalse($auth->isUserLoggedIn());
     }
 
+    public function testVerifyPasswordAcceptsCorrectAndRejectsWrong(): void
+    {
+        $userId = (int) $this->dibi->select('id')->from('users')
+            ->where('username = %s', self::USERNAME)->fetchSingle();
+
+        $this->assertTrue($this->db->verifyPassword($userId, self::PASSWORD));
+        $this->assertFalse($this->db->verifyPassword($userId, 'wrong-password'));
+    }
+
     public function testLockoutBlocksEvenCorrectPassword(): void
     {
         $auth = new Authorization($this->db);

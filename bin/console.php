@@ -29,6 +29,10 @@ define('DATABASE_PASSWORD', Config::get('DB_PASS', ''));
 // Match the web app's timezone so CLI-written timestamps line up with the UI.
 date_default_timezone_set(Config::timezone());
 
+// Register module autoloaders (commands reach into module classes).
+\Mk\Framework\Modules::boot();
+
+
 $command = $argv[1] ?? '';
 
 try {
@@ -181,6 +185,21 @@ try {
             ))->run();
             break;
 
+        case 'stream-control:enforce':
+            // Evaluate the enabled stream rules against the live sessions and
+            // stop/kick every match. Runs inside the same poll loop as
+            // history:poll; guarded kills keep this idempotent per session.
+            $monitor = new Health\WorkerMonitor();
+            try {
+                $killed = $monitor->run('stream_rules', static fn (): int => (new \Mk\Modules\SessionControl\StreamRuleEnforcer())->run());
+                if ($killed > 0) {
+                    echo date('c') . " stream-control:enforce - terminated {$killed} session(s)\n";
+                }
+            } catch (\Throwable $e) {
+                Log::logException($e);
+            }
+            break;
+
         case 'seerr:poll':
             // Mirror the latest Jellyseerr requests locally (one list call, plus
             // a detail lookup only for requests we've never seen) and alert
@@ -276,6 +295,20 @@ try {
                 : "No notification device found: #{$deviceId}\n";
             break;
 
+        case 'invites:enforce':
+            // Disable every invite-managed account past its expiry. Runs in
+            // the entrypoint poll loop; a no-op query when nothing lapsed.
+            try {
+                $disabled = (new \Mk\Modules\Users\Invite\InviteManager())->enforceExpiry();
+                if ($disabled > 0) {
+                    echo date('c') . " invites:enforce - disabled {$disabled} expired account(s)\n";
+                }
+            } catch (\Throwable $e) {
+                Log::logException($e);
+                fwrite(STDERR, date('c') . ' invites:enforce failed: ' . $e->getMessage() . "\n");
+            }
+            break;
+
         case 'libraries:warm':
             // Refresh the cached library overview so the Libraries page never
             // triggers a cold multi-second scan inside a visitor's request.
@@ -367,6 +400,7 @@ try {
             echo "  php bin/console.php libraries:warm (refresh the cached library overview)\n";
             echo "  php bin/console.php database:migrate-to-sqlite <file> --confirm-stopped\n";
             echo "  php bin/console.php seerr:poll     (sync Jellyseerr requests + alert on new ones)\n";
+            echo "  php bin/console.php invites:enforce (disable expired invite accounts)\n";
             echo "  php bin/console.php push:vapid     (generate a Web Push VAPID keypair)\n";
             echo "  php bin/console.php push:test      (send a test notification to subscribers)\n\n";
             echo "  php bin/console.php push:devices   (list safe notification device metadata)\n";

@@ -146,7 +146,7 @@
             details.push(`<span class="stream-detail"><small>Audio</small>${escapeHtml(stream.audioPath)}</span>`);
         }
         if (stream.containerPath) {
-            details.push(`<span class="stream-detail"><small>Output</small>${escapeHtml(stream.containerPath)}</span>`);
+            details.push(`<span class="stream-detail"><small>Out</small>${escapeHtml(stream.containerPath)}</span>`);
         }
         return details.length > 0
             ? `<div class="stream-details" aria-label="Playback details">${details.join('')}</div>`
@@ -166,6 +166,7 @@
                         <div class="playback-stack">
                             ${methodBadge(stream)}
                             <span class="quality-chip">${escapeHtml(stream.quality || '')}</span>
+                            ${stream.storage ? `<span class="quality-chip storage-chip">Storage: ${escapeHtml(stream.storage)}</span>` : ''}
                         </div>
                     </div>
 

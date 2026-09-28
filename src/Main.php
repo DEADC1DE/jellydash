@@ -6,7 +6,6 @@ namespace Mk\Framework;
 
 class Main
 {
-
     public static function isPostSet($post): bool
     {
         return isset($_POST[$post]);
@@ -25,6 +24,25 @@ class Main
         return isset($_POST[$post]) ? (string) $_POST[$post] : null;
     }
 
+    // One-shot session flash: read-and-clear, so a notice (e.g. a freshly
+    // reset password) survives exactly one redirect and never sits in the URL.
+    public static function putSessionNotice(string $message): void
+    {
+        $_SESSION['invite_notice'] = $message;
+    }
+
+    public static function captureSessionNotice(): ?string
+    {
+        if (!isset($_SESSION['invite_notice']) || !is_string($_SESSION['invite_notice'])) {
+            return null;
+        }
+
+        $notice = $_SESSION['invite_notice'];
+        unset($_SESSION['invite_notice']);
+
+        return $notice;
+    }
+
     // Validate NON $_POST Email
     public static function validateEmail($email): ?string
     {
@@ -33,7 +51,8 @@ class Main
     }
 
     // Check if array items are not empty -> primarily for POSTs
-    public static function arrayItemsNotEmpty(array $array): bool {
+    public static function arrayItemsNotEmpty(array $array): bool
+    {
         foreach ($array as $item) {
             if (empty(trim($item))) {
                 return false;

@@ -1,0 +1,32 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Devices</h1>
+        <p>{{ devices|length }} known {{ devices|length == 1 ? 'device' : 'devices' }}</p>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="devices-table">
+        <div class="devices-head">
+            <span>Device</span>
+            <span>App</span>
+            <span>Last user</span>
+            <span>Last activity</span>
+            <span></span>
+        </div>
+        {% for device in devices %}
+            <div class="devices-row" data-device-row="{{ device.id }}">
+                <span class="devices-name">{{ device.name }}</span>
+                <span class="devices-app">{{ device.appName|default('-') }}</span>
+                <span class="devices-user">{{ device.lastUserName|default('-') }}</span>
+                <span class="devices-activity">{{ device.lastActivity ? device.lastActivity|date('Y-m-d H:i') : '-' }}</span>
+                <button type="button" class="devices-delete-btn" data-devices-delete="{{ device.id }}">Delete</button>
+            </div>
+        {% else %}
+            <div class="devices-empty">No devices reported yet.</div>
+        {% endfor %}
+    </div>
+{% endblock %}
+

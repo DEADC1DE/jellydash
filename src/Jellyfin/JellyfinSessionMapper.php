@@ -45,6 +45,18 @@ final class JellyfinSessionMapper
             $streams[] = $this->mapSession($session);
         }
 
+        // /Sessions has no guaranteed order, so the dashboard would reshuffle
+        // the cards on every five-second refresh without a stable sort here.
+        usort($streams, fn (array $a, array $b): int => [
+            strtolower((string) $a['user']),
+            (string) $a['itemId'],
+            (string) $a['id'],
+        ] <=> [
+            strtolower((string) $b['user']),
+            (string) $b['itemId'],
+            (string) $b['id'],
+        ]);
+
         $hiddenNames = array_values(array_unique(array_filter($hiddenNames)));
 
         return [
@@ -90,6 +102,7 @@ final class JellyfinSessionMapper
         $itemName = (string) ($item['Name'] ?? 'Unknown title');
         $seriesName = (string) ($item['SeriesName'] ?? '');
         $user = (string) ($session['UserName'] ?? 'Unknown user');
+        $remoteIp = trim((string) ($session['RemoteEndPoint'] ?? ''));
         $positionTicks = $this->intValue($playState['PositionTicks'] ?? 0);
         $runtimeTicks = $this->intValue($item['RunTimeTicks'] ?? 0);
         $playMethod = (string) ($playState['PlayMethod'] ?? '');
@@ -128,6 +141,7 @@ final class JellyfinSessionMapper
 
         $stream = [
             'id' => $streamId,
+            'ip' => $remoteIp,
             'diagnosticsId' => 'stream-diagnostics-' . substr(hash('sha256', $streamId), 0, 12),
             'itemId' => $itemId,
             'itemType' => $type,
@@ -180,6 +194,7 @@ final class JellyfinSessionMapper
             'containerPath' => $this->mediaPath($sourceContainer, $targetContainer, $isTranscode),
             'sourceMediaLabel' => $sourceMediaLabel !== '' ? $sourceMediaLabel : 'Source unknown',
             'outputMediaLabel' => $outputMediaLabel !== '' ? $outputMediaLabel : 'Output unknown',
+            'storage' => $this->storageLabel($this->storagePath($item)),
             'transcodeReasons' => $transcodeReasons,
             'isLive' => $isLive,
         ];
@@ -609,6 +624,41 @@ final class JellyfinSessionMapper
         }
 
         return $source !== '' ? $source : $target;
+    }
+
+    /**
+     * Short storage name for the card badge: the mount point the file lives
+     * on (first two path segments), not the whole file path.
+     *
+     * @param array<string, mixed> $item
+     */
+    private function storagePath(array $item): string
+    {
+        $mediaSources = $item['MediaSources'] ?? [];
+        $path = '';
+        if (is_array($mediaSources) && is_array($mediaSources[0] ?? null)) {
+            $path = trim((string) ($mediaSources[0]['Path'] ?? ''));
+        }
+
+        return $path !== '' ? $path : trim((string) ($item['Path'] ?? ''));
+    }
+
+    private function storageLabel(string $path): string
+    {
+        if (preg_match('~^https?:~i', $path) === 1) {
+            $host = parse_url($path, PHP_URL_HOST);
+
+            return is_string($host) ? $host : '';
+        }
+
+        $segments = preg_split('~[\\\/]~', $path, -1, PREG_SPLIT_NO_EMPTY);
+        if ($segments === false || $segments === []) {
+            return '';
+        }
+
+        $label = implode('/', array_slice($segments, 0, 2));
+
+        return mb_strlen($label) > 26 ? mb_substr($label, 0, 24) . '…' : $label;
     }
 
     private function mediaSummary(string $videoCodec, string $audioCodec, string $container): string

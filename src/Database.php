@@ -262,4 +262,12 @@ class Database
 
         return $row?->toArray();
     }
+
+    public function verifyPassword(int $userId, string $password): bool
+    {
+        $row = $this->dibi->select('password')->from('users')
+            ->where('id = %i', $userId)->limit(1)->fetch();
+
+        return $row !== null && password_verify($password, (string) $row['password']);
+    }
 }

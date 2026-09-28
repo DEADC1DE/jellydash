@@ -1,0 +1,249 @@
+{% extends "_shell.twig" %}
+
+{% block dashboard_header %}
+    <div class="header-copy">
+        <h1>Users</h1>
+        <p>{{ rows|length }} Jellyfin {{ rows|length == 1 ? 'user' : 'users' }}</p>
+    </div>
+    <div class="header-actions statistics-header-actions">
+        <div class="statistics-range-picker">
+            <div class="statistics-range-meta">
+                <span class="statistics-range-label">
+                    <svg class="icon-filled" viewBox="0 0 24 24" role="img" focusable="false" aria-hidden="true">
+                        <path d="M16 2a1 1 0 0 1 .993 .883l.007 .117v1h1a3 3 0 0 1 2.995 2.824l.005 .176v12a3 3 0 0 1 -2.824 2.995l-.176 .005h-12a3 3 0 0 1 -2.995 -2.824l-.005 -.176v-12a3 3 0 0 1 2.824 -2.995l.176 -.005h1v-1a1 1 0 0 1 1.993 -.117l.007 .117v1h6v-1a1 1 0 0 1 1 -1m3 8h-14v8.625c0 .705 .386 1.286 .883 1.366l.117 .009h12c.513 0 .936 -.53 .993 -1.215l.007 -.16zm-9 4a1 1 0 0 1 1 1v2a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-2a1 1 0 0 1 1 -1z"></path>
+                    </svg>
+                    Viewing period
+                </span>
+            </div>
+            <div class="segmented-control statistics-range-control" aria-label="Users range">
+                {% for range in overview.ranges %}
+                    <a class="{{ range.active ? 'is-active' : '' }}" href="{{ range.href }}"{{ range.active ? ' aria-current="page"' : '' }}>{{ range.label }}</a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block dashboard_content %}
+    <div class="stats-page">
+        <header class="stats-section-header">
+            <strong>Overview</strong>
+            <span>Totals - top users - top titles · {{ overview.subLabel }}</span>
+            <i></i>
+        </header>
+
+        <section class="stats-kpi-grid" aria-label="Key user metrics">
+            {% for kpi in overview.kpis %}
+                <article class="stats-kpi">
+                    <span><i style="background: {{ kpi.color }}"></i>{{ kpi.label }}</span>
+                    <strong>{{ kpi.value }}</strong>
+                    <small style="color: {{ kpi.deltaColor }}">{{ kpi.delta }}</small>
+                </article>
+            {% endfor %}
+        </section>
+
+        <div class="users-overview-columns">
+            <div class="users-overview-column">
+                <header class="stats-section-header">
+                    <strong>Top Users</strong>
+                    <span>Watch time - plays - share per user</span>
+                    <i></i>
+                </header>
+
+                <section class="stats-user-table users-overview-table" aria-label="User statistics for this period">
+                    <div class="stats-user-head">
+                        <span>User</span>
+                        <span>Watch Time</span>
+                        <span>Plays</span>
+                        <span>Avg / Play</span>
+                        <span>Share</span>
+                    </div>
+                    {% for user in overview.users %}
+                        <article class="stats-user-table-row">
+                            <div class="stats-user-name">
+                                <a class="users-overview-name" href="/users?user={{ user.user|url_encode }}">
+                                    {% include "_avatar.twig" with { initials: user.initials, bg: user.avatarBg, url: user.avatarUrl } only %}
+                                    <strong>{{ user.user }}</strong>
+                                </a>
+                            </div>
+                            <span class="history-mono">{{ user.watch }}</span>
+                            <span class="history-mono">{{ user.plays }}</span>
+                            <span class="history-mono">{{ user.avg }}</span>
+                            <span class="stats-track" aria-label="{{ user.share }} of total watch time"><i style="width: {{ user.w }}; background: {{ user.color }}"></i></span>
+                        </article>
+                    {% else %}
+                        <article class="stats-user-table-row is-empty">
+                            <span>No user activity in this period.</span>
+                        </article>
+                    {% endfor %}
+                </section>
+            </div>
+
+            <div class="users-overview-column">
+                <header class="stats-section-header">
+                    <strong>Top Titles</strong>
+                    <span>Most watched this period</span>
+                    <i></i>
+                </header>
+
+                <section class="stats-user-table users-overview-table users-overview-titles" aria-label="Most watched titles for this period">
+                    <div class="stats-user-head">
+                        <span>Title</span>
+                        <span>Watch Time</span>
+                        <span>Plays</span>
+                    </div>
+                    {% for title in overview.titles %}
+                        <article class="stats-user-table-row">
+                            <div class="stats-user-name">
+                                <span class="users-overview-title-poster" style="background-image: {{ title.poster }}"></span>
+                                <div class="users-overview-title-copy">
+                                    <strong>{{ title.name }}</strong>
+                                    {% if title.sub %}<small>{{ title.sub }}</small>{% endif %}
+                                </div>
+                            </div>
+                            <span class="history-mono">{{ title.watch }}</span>
+                            <span class="history-mono">{{ title.plays }}</span>
+                        </article>
+                    {% else %}
+                        <article class="stats-user-table-row is-empty">
+                            <span>No plays in this period.</span>
+                        </article>
+                    {% endfor %}
+                </section>
+            </div>
+        </div>
+
+        <header class="stats-section-header" id="invitations">
+            <strong>Invitations</strong>
+            <span>Create invite links and manage account expiry</span>
+            <i></i>
+        </header>
+
+        {% if invite.error %}
+            <div class="invite-note is-error">Invitations: {{ invite.error }}</div>
+        {% else %}
+            {% if invite.notice %}
+                <div class="invite-note is-muted">{{ invite.notice }}</div>
+            {% endif %}
+            <div class="invite-grid">
+                <section class="invite-create" aria-label="Create invitation">
+                    <form method="post" action="/users#invitations" class="invite-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="do" value="create-invite">
+                        <label>Link validity
+                            <select name="linkExpires">
+                                <option value="">No expiry</option>
+                                <option value="1">1 day</option>
+                                <option value="7">7 days</option>
+                                <option value="30">30 days</option>
+                            </select>
+                        </label>
+                        <label>Account access
+                            <select name="access">
+                                <option value="unlimited">Unlimited</option>
+                                <option value="30">30 days</option>
+                                <option value="90">90 days</option>
+                                <option value="365">1 year</option>
+                            </select>
+                        </label>
+                        <fieldset class="invite-libraries">
+                            <legend>Libraries <small>none selected = all</small></legend>
+                            {% for lib in invite.libraries %}
+                                <label class="invite-check"><input type="checkbox" name="libraries[]" value="{{ lib.id }}"> {{ lib.name }}</label>
+                            {% endfor %}
+                        </fieldset>
+                        <div class="invite-form-toggles">
+                            <label class="invite-check"><input type="checkbox" name="downloads" value="1"> Allow downloads</label>
+                            <label class="invite-check"><input type="checkbox" name="livetv" value="1"> Allow live TV</label>
+                        </div>
+                        <button type="submit" class="invite-button">Create invitation</button>
+                    </form>
+                </section>
+
+                <section class="invite-invites" aria-label="Existing invitations">
+                    {% for inv in invite.invitations %}
+                        <article class="invite-invite">
+                            <div class="invite-invite-head">
+                                <code>{{ inv.code }}</code>
+                                {% if inv.status %}<span class="invite-invite-status">{{ inv.status }}</span>{% endif %}
+                            </div>
+                            <small class="invite-invite-meta">
+                                {% if inv.link_expires_at %}Link expires {{ inv.link_expires_at|date('Y-m-d') }}{% else %}Link without expiry{% endif %}
+                                · Access: {{ inv.duration_days ? (inv.duration_days ~ ' days') : 'unlimited' }}
+                                {% if inv.used_by %} · Used by {{ inv.used_by }}{% if inv.used_at %} on {{ inv.used_at|date('Y-m-d') }}{% endif %}{% endif %}
+                            </small>
+                            <div class="invite-invite-foot">
+                                {% if inv.join_url %}
+                                    <a class="invite-invite-url" href="{{ inv.join_url }}" target="_blank" rel="noreferrer">{{ inv.join_url }}</a>
+                                    <button type="button" class="invite-mini" data-copy-invite="{{ inv.join_url }}">Copy link</button>
+                                {% else %}
+                                    <span class="invite-invite-url">{{ inv.code }}</span>
+                                {% endif %}
+                                <form method="post" action="/users#invitations">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="do" value="delete-invite">
+                                    <input type="hidden" name="id" value="{{ inv.id }}">
+                                    <button type="submit" class="invite-mini is-danger">Delete</button>
+                                </form>
+                            </div>
+                        </article>
+                    {% else %}
+                        <div class="invite-note is-muted">No open invitations.</div>
+                    {% endfor %}
+                </section>
+            </div>
+        {% endif %}
+
+        <header class="stats-section-header">
+            <strong>All Users</strong>
+            <span>All-time stats - open for profile</span>
+            <i></i>
+        </header>
+
+        <div class="users-grid">
+            {% for row in rows %}
+                <div class="users-card">
+                    <a class="users-card-name" href="/users?user={{ row.name|url_encode }}">{{ row.name }}</a>
+                    <span class="users-card-stat">{{ row.plays }} plays</span>
+                    <span class="users-card-stat">{{ (row.watchSec / 3600)|round(1) }}h watched</span>
+                    <small class="users-card-lastseen">{{ row.lastSeen ? 'Last seen ' ~ row.lastSeen|date('Y-m-d') : 'No plays recorded' }}</small>
+                    {% if row.invite %}
+                        <small class="users-card-invite">
+                            {% if row.invite.expires_at %}Expires {{ row.invite.expires_at|date('Y-m-d') }}{% else %}Unlimited access{% endif %}
+                            {% if row.invite.disabled_at %} · Disabled{% endif %}
+                        </small>
+                        <div class="users-card-actions">
+                            <form method="post" action="/users">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="do" value="disable-user">
+                                <input type="hidden" name="id" value="{{ row.id }}">
+                                <button type="submit" class="invite-mini is-danger">Disable</button>
+                            </form>
+                            <form method="post" action="/users">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="do" value="enable-user">
+                                <input type="hidden" name="id" value="{{ row.id }}">
+                                <button type="submit" class="invite-mini">Enable</button>
+                            </form>
+                            <form method="post" action="/users">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="do" value="extend-user">
+                                <input type="hidden" name="id" value="{{ row.id }}">
+                                <input type="hidden" name="days" value="30">
+                                <button type="submit" class="invite-mini">+30 days</button>
+                            </form>
+                            <form method="post" action="/users">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <input type="hidden" name="do" value="reset-password">
+                                <input type="hidden" name="id" value="{{ row.id }}">
+                                <button type="submit" class="invite-mini">Reset password</button>
+                            </form>
+                        </div>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="users-empty">No Jellyfin users found.</div>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock %}

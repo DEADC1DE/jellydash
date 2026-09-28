@@ -6,9 +6,8 @@ namespace Mk\Framework;
 
 class Requests
 {
-
-    private const GET_AUTH_ENDPOINT = "auth";
-    private const GET_REQUEST_ENDPOINT = "req";
+    private const GET_AUTH_ENDPOINT = 'auth';
+    private const GET_REQUEST_ENDPOINT = 'req';
     private const SESSION_KEY = 'session_data';
 
     public ?string $auth;
@@ -58,33 +57,33 @@ class Requests
 
     public function setSessionAnswer($msg): void
     {
-        $_SESSION[self::SESSION_KEY]["request_answer"] = $msg;
+        $_SESSION[self::SESSION_KEY]['request_answer'] = $msg;
     }
 
     public function getSessionAnswer(): ?string
     {
-        return $_SESSION[self::SESSION_KEY]["request_answer"] ?? null;
+        return $_SESSION[self::SESSION_KEY]['request_answer'] ?? null;
     }
 
     public function clearSessionAnswer(): void
     {
-        unset($_SESSION[self::SESSION_KEY]["request_answer"]);
+        unset($_SESSION[self::SESSION_KEY]['request_answer']);
     }
 
     public function clearTwigSessionData(): void
     {
-        $this->clearSessionData("error_message");
-        $this->clearSessionData("message");
-        $this->clearSessionData("post_data");
+        $this->clearSessionData('error_message');
+        $this->clearSessionData('message');
+        $this->clearSessionData('post_data');
     }
 
     public function successSessionMessage($msg, $url): never
     {
         $this->clearTwigSessionData();
-        $this->setSessionData("message", $msg);
+        $this->setSessionData('message', $msg);
 
         // Relative redirect: avoids Host-header injection from $_SERVER['HTTP_HOST'].
-        header("Location: " . $url);
+        header('Location: ' . $url);
         exit();
     }
 
@@ -92,11 +91,11 @@ class Requests
     {
         $this->clearTwigSessionData();
 
-        $this->setSessionData("error_message", $msg);
-        $this->setSessionData("post_data", $post);
+        $this->setSessionData('error_message', $msg);
+        $this->setSessionData('post_data', $post);
 
         // Relative redirect: avoids Host-header injection from $_SERVER['HTTP_HOST'].
-        header("Location: " . $url);
+        header('Location: ' . $url);
         exit();
 
     }
@@ -105,10 +104,10 @@ class Requests
     {
         $this->clearTwigSessionData();
 
-        $this->setSessionData("error_message", $msg);
+        $this->setSessionData('error_message', $msg);
 
         // Relative redirect: avoids Host-header injection from $_SERVER['HTTP_HOST'].
-        header("Location: " . $url);
+        header('Location: ' . $url);
         exit();
 
     }
