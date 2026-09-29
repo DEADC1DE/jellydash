@@ -40,7 +40,8 @@ final class JellyfinSessionMapperTest extends TestCase
             '/api/image.php?user=user-1&maxWidth=80&tag=maya-face',
             $stream['avatarUrl']
         );
-        $this->assertSame('Living Room Shield - Android TV', $stream['deviceLine']);
+        $this->assertSame('Living Room Shield - Android TV · 203.0.113.7', $stream['deviceLine']);
+        $this->assertSame('203.0.113.7', $stream['ip']);
         $this->assertSame('4K HEVC HDR', $stream['quality']);
         $this->assertTrue($stream['isTranscode']);
         $this->assertFalse($stream['isDirect']);
@@ -225,6 +226,7 @@ final class JellyfinSessionMapperTest extends TestCase
             'UserPrimaryImageTag' => 'maya-face',
             'Client' => 'Android TV',
             'DeviceName' => 'Living Room Shield',
+            'RemoteEndPoint' => '203.0.113.7',
             'PlayState' => [
                 'PositionTicks' => 7500000000,
                 'PlayMethod' => 'Transcode',

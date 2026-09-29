@@ -165,7 +165,8 @@ final class JellyfinSessionMapper
                 (string) ($session['UserId'] ?? ''),
                 (string) ($session['UserPrimaryImageTag'] ?? ''),
             ),
-            'deviceLine' => trim((string) ($session['DeviceName'] ?? 'Unknown device') . ' - ' . (string) ($session['Client'] ?? 'Unknown client')),
+            'deviceLine' => trim((string) ($session['DeviceName'] ?? 'Unknown device') . ' - ' . (string) ($session['Client'] ?? 'Unknown client'))
+                . ($remoteIp !== '' ? ' · ' . $remoteIp : ''),
             'quality' => $this->quality($item, $session, $isTranscode),
             'isTranscode' => $isTranscode,
             'isDirect' => in_array($playMethod, ['DirectPlay', 'DirectStream'], true) || !$isTranscode,
