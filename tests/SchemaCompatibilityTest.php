@@ -10,6 +10,7 @@ use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Downloads\DownloadRepository;
 use Mk\Framework\Health\WorkerStatusRepository;
 use Mk\Framework\Integrations\ConnectionRepository;
+use Mk\Framework\Jellyfin\MovieReplacements;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
@@ -86,6 +87,7 @@ final class SchemaCompatibilityTest extends TestCase
             'download_connection_state',
             'integration_connections',
             'login_attempts',
+            'movie_replacements',
             'play_history',
             'push_subscriptions',
             'seerr_requests',
@@ -115,6 +117,11 @@ final class SchemaCompatibilityTest extends TestCase
     {
         $this->initializeAllSchemas();
 
+        $this->dibi->insert('movie_replacements', [
+            'server_key' => str_repeat('1', 64),
+            'item_id' => 'Old-Movie ',
+            'replacement_id' => 'Current-Movie',
+        ])->execute();
         $this->dibi->insert('users', [
             'username' => 'schema-user',
             'password' => 'not-used',
@@ -185,6 +192,10 @@ final class SchemaCompatibilityTest extends TestCase
         $this->resetSchemaState();
         $this->initializeAllSchemas();
 
+        $replacement = $this->dibi->select('server_key, item_id, replacement_id')->from('movie_replacements')->fetch();
+        $this->assertNotFalse($replacement);
+        $this->assertSame('Old-Movie ', (string) $replacement['item_id']);
+        $this->assertSame('Current-Movie', (string) $replacement['replacement_id']);
         $this->assertSame('schema-user', (string) $this->dibi->select('username')->from('users')->fetchSingle());
         $this->assertSame(2, (int) $this->dibi->select('attempts')->from('login_attempts')->fetchSingle());
         $this->assertNull($this->dibi->select('window_started_at')->from('login_attempts')->fetchSingle());
@@ -302,6 +313,7 @@ final class SchemaCompatibilityTest extends TestCase
         AppSettings::set('schema_test', 'ok');
         new PlayHistoryRepository($this->database);
         new ThemePlaybackExclusions($this->database);
+        new MovieReplacements($this->database);
         new PushSubscriptionRepository($this->database);
         new SeerrRequestRepository($this->database);
         WorkerStatusRepository::ensureSchema($this->database);
@@ -414,6 +426,7 @@ final class SchemaCompatibilityTest extends TestCase
             [AppSettings::class, 'cache', null],
             [AppSettings::class, 'schemaConnections', null],
             [PlayHistoryRepository::class, 'schemaConnections', null],
+            [MovieReplacements::class, 'schemaConnections', null],
             [PushSubscriptionRepository::class, 'schemaConnections', null],
             [SeerrRequestRepository::class, 'schemaConnections', null],
         ];

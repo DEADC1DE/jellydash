@@ -276,7 +276,7 @@ final class PlaybackStatisticsService
             $name = (string) ($row['item_name'] ?? '');
             $isEpisode = $type === 'Episode' && $series !== '';
             $title = $isEpisode ? $series : ($name !== '' ? $name : 'Unknown title');
-            $itemId = trim((string) ($row['item_id'] ?? ''));
+            $itemId = trim((string) ($row['resolved_item_id'] ?? $row['item_id'] ?? ''));
             $library = trim((string) ($row['library'] ?? ''));
             $resolvedAt = trim((string) ($row['library_resolved_at'] ?? ''));
             $libraryConfirmed = $library !== '' && $resolvedAt !== '';
@@ -315,7 +315,7 @@ final class PlaybackStatisticsService
             $startedAt = (string) $row['started_at'];
             if ($startedAt > (string) $groups[$key]['latest']) {
                 $groups[$key]['latest'] = $startedAt;
-                $groups[$key]['itemId'] = (string) $row['item_id'];
+                $groups[$key]['itemId'] = $itemId;
                 $groups[$key]['type'] = $type;
                 $library = trim((string) ($row['library'] ?? ''));
                 $resolvedAt = trim((string) ($row['library_resolved_at'] ?? ''));
@@ -427,7 +427,7 @@ final class PlaybackStatisticsService
         foreach ($rows as $row) {
             if (trim((string) ($row['library'] ?? '')) === ''
                 || trim((string) ($row['library_resolved_at'] ?? '')) === '') {
-                $itemId = trim((string) ($row['item_id'] ?? ''));
+                $itemId = trim((string) ($row['resolved_item_id'] ?? $row['item_id'] ?? ''));
                 if ($itemId !== '') {
                     $unresolvedIds[$this->normalizedItemId($itemId)] = $itemId;
                 }
@@ -464,7 +464,7 @@ final class PlaybackStatisticsService
                 $kept[] = $row;
                 continue;
             }
-            $itemId = $this->normalizedItemId((string) ($row['item_id'] ?? ''));
+            $itemId = $this->normalizedItemId((string) ($row['resolved_item_id'] ?? $row['item_id'] ?? ''));
             if ($itemId === '') {
                 $kept[] = $row;
                 continue;
@@ -536,6 +536,7 @@ final class PlaybackStatisticsService
             'excludedLibraries' => $this->excludedLibraries(),
             'excludedUsers' => (new MonitoringExclusions())->fingerprint(),
             'themeClassificationContext' => $repository->themePlaybackExclusions()->fingerprint(),
+            'movieReplacements' => $repository->movieReplacements()->fingerprint(),
         ], JSON_THROW_ON_ERROR));
     }
 

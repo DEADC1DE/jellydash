@@ -278,7 +278,7 @@ final class MonthlyRecapService
         foreach ($rows as $row) {
             if (trim((string) ($row['library'] ?? '')) === ''
                 || trim((string) ($row['library_resolved_at'] ?? '')) === '') {
-                $itemId = trim((string) ($row['item_id'] ?? ''));
+                $itemId = trim((string) ($row['resolved_item_id'] ?? $row['item_id'] ?? ''));
                 if ($itemId !== '') {
                     $unresolved[$this->normalizedItemId($itemId)] = $itemId;
                 }
@@ -305,7 +305,7 @@ final class MonthlyRecapService
             if ($lookupFailed) {
                 return true;
             }
-            $itemId = $this->normalizedItemId((string) ($row['item_id'] ?? ''));
+            $itemId = $this->normalizedItemId((string) ($row['resolved_item_id'] ?? $row['item_id'] ?? ''));
             if ($itemId === '') {
                 return true;
             }
@@ -363,7 +363,7 @@ final class MonthlyRecapService
         $groups = [];
         foreach ($rows as $row) {
             $isEpisode = strcasecmp((string) ($row['item_type'] ?? ''), 'Episode') === 0;
-            $itemId = trim((string) ($row['item_id'] ?? ''));
+            $itemId = trim((string) ($row['resolved_item_id'] ?? $row['item_id'] ?? ''));
             $library = trim((string) ($row['library'] ?? ''));
             $libraryConfirmed = $library !== '' && trim((string) ($row['library_resolved_at'] ?? '')) !== '';
             if ($isEpisode && !$libraryConfirmed) {

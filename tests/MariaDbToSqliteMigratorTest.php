@@ -74,6 +74,7 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $this->assertSame(0, $result['exitCode'], $result['error'] . $result['output']);
         $this->assertStringContainsString('Migration verified successfully', $result['output']);
         $this->assertStringContainsString('play_history: 1 row(s)', $result['output']);
+        $this->assertStringContainsString('movie_replacements: 3 row(s)', $result['output']);
         $this->assertFileExists($this->destinationPath);
 
         $destination = Database::sqlite($this->destinationPath);
@@ -124,6 +125,12 @@ final class MariaDbToSqliteMigratorTest extends TestCase
                 ->where('server_key = %s', str_repeat('1', 64))->fetchSingle(),
         );
         $this->assertSame('Migration Movie', (string) $sqlite->select('title')->from('seerr_requests')->fetchSingle());
+        $replacementRows = static fn (\Dibi\Connection $connection): array => array_map(
+            static fn (\Dibi\Row $row): array => $row->toArray(),
+            $connection->select('server_key, item_id, replacement_id')->from('movie_replacements')
+                ->orderBy('server_key, item_id')->fetchAll(),
+        );
+        $this->assertSame($replacementRows($this->sourceConnection), $replacementRows($sqlite));
         $this->assertSame(1786449600, (int) $sqlite->select('requested_at_epoch')->from('seerr_requests')->fetchSingle());
         $status = $sqlite->select('status, error_code, last_started_at, last_finished_at, last_success_at')
             ->from('system_status')->where('source_id = %s AND component = %s', 'default', 'history')->fetch();
@@ -175,9 +182,9 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $this->assertSame(102, $destination->addAuthUser('after-migration', 'password-123', 'After Migration', 2));
         $sqlite->disconnect();
 
-        foreach (['users', 'login_attempts', 'auth_remember_tokens', 'app_settings', 'play_history', 'theme_item_classifications', 'theme_classification_state', 'push_subscriptions', 'seerr_requests', 'system_status', 'integration_connections', 'download_connection_state', 'download_completions'] as $table) {
+        foreach (['users', 'login_attempts', 'auth_remember_tokens', 'app_settings', 'play_history', 'theme_item_classifications', 'theme_classification_state', 'movie_replacements', 'push_subscriptions', 'seerr_requests', 'system_status', 'integration_connections', 'download_connection_state', 'download_completions'] as $table) {
             $expected = match ($table) {
-                'system_status' => 3,
+                'system_status', 'movie_replacements' => 3,
                 'theme_item_classifications' => 2,
                 default => 1,
             };
@@ -303,6 +310,7 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $this->assertSame(1, $counts['play_history']);
         $this->assertSame(0, $counts['theme_item_classifications']);
         $this->assertSame(0, $counts['theme_classification_state']);
+        $this->assertSame(0, $counts['movie_replacements']);
 
         $destination = Database::sqlite($this->destinationPath);
         $row = $destination->getDibi()->select('id, notified')->from('play_history')->fetch();
@@ -468,6 +476,13 @@ final class MariaDbToSqliteMigratorTest extends TestCase
             'server_key' => str_repeat('1', 64),
             'revision' => 7,
         ])->execute();
+        foreach ([
+            ['server_key' => str_repeat('1', 64), 'item_id' => 'Old-Movie', 'replacement_id' => 'Current-Movie'],
+            ['server_key' => str_repeat('1', 64), 'item_id' => 'Old-Movie ', 'replacement_id' => 'Current-Movie'],
+            ['server_key' => str_repeat('2', 64), 'item_id' => '12345', 'replacement_id' => 'a-B'],
+        ] as $replacement) {
+            $this->sourceConnection->insert('movie_replacements', $replacement)->execute();
+        }
         $this->sourceConnection->insert('push_subscriptions', [
             'id' => 105,
             'endpoint' => 'https://push.example.test/migration',

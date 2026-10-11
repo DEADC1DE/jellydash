@@ -6,6 +6,7 @@ use Dotenv\Dotenv;
 use Mk\Framework\Config;
 use Mk\Framework\Http\ImageContentType;
 use Mk\Framework\Http\UserAvatarResponse;
+use Mk\Framework\Jellyfin\MovieReplacements;
 use Mk\Framework\Log;
 
 define('ROOT_DIR', dirname(__DIR__, 2));
@@ -72,6 +73,15 @@ if ($itemId === '' || !preg_match('/^[A-Za-z0-9_-]+$/', $itemId)) {
     exit;
 }
 
+// Old History links can still request the deleted copy's artwork.
+if ($kind !== 'series') {
+    try {
+        $itemId = (new MovieReplacements())->resolve($itemId);
+    } catch (\Throwable $error) {
+        Log::logException($error);
+    }
+}
+
 $allowedTypes = ['Backdrop', 'Thumb', 'Primary'];
 if (!in_array($type, $allowedTypes, true)) {
     $type = 'Backdrop';
@@ -129,6 +139,7 @@ foreach ($fallbackTypes as $imageType) {
     exit;
 }
 
+header('Cache-Control: no-store');
 http_response_code(404);
 
 /**

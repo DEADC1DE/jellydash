@@ -40,6 +40,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
     private DatabasePlatform $platform;
     private ?MonitoringExclusions $monitoringExclusions;
     private ThemePlaybackExclusions $themePlaybackExclusions;
+    private MovieReplacements $movieReplacements;
     /** @var \WeakMap<\Dibi\Connection, true>|null */
     private static ?\WeakMap $schemaConnections = null;
 
@@ -60,12 +61,14 @@ final class PlayHistoryRepository implements LibraryHistorySource
         ?MonitoringExclusions $monitoringExclusions = null,
         private ?\Closure $beforeImportWrite = null,
         ?ThemePlaybackExclusions $themePlaybackExclusions = null,
+        ?MovieReplacements $movieReplacements = null,
     ) {
         $database ??= Container::db();
         $this->db = $database->getDibi();
         $this->platform = $database->getPlatform();
         $this->monitoringExclusions = $monitoringExclusions;
         $this->ensureSchema();
+        $this->movieReplacements = $movieReplacements ?? new MovieReplacements($database);
         $this->themePlaybackExclusions = $themePlaybackExclusions ?? new ThemePlaybackExclusions(
             $database,
             ThemePlaybackExclusions::serverKey((string) Config::get('JELLYFIN_URL', '')),
@@ -75,6 +78,11 @@ final class PlayHistoryRepository implements LibraryHistorySource
     public function themePlaybackExclusions(): ThemePlaybackExclusions
     {
         return $this->themePlaybackExclusions;
+    }
+
+    public function movieReplacements(): MovieReplacements
+    {
+        return $this->movieReplacements;
     }
 
     /**
@@ -538,7 +546,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
             ->limit($filters->limit)
             ->offset($filters->offset);
 
-        return $selection->fetchAll();
+        return $this->withMovieReplacements($selection->fetchAll());
     }
 
     /**
@@ -687,7 +695,27 @@ final class PlayHistoryRepository implements LibraryHistorySource
             $selection->where('started_at < %s', $end->format('Y-m-d H:i:s'));
         }
 
-        return $selection->orderBy('started_at')->asc()->fetchAll();
+        return $this->withMovieReplacements($selection->orderBy('started_at')->asc()->fetchAll());
+    }
+
+    /**
+     * Keep the recorded ID for exports and import deduplication. Presentation
+     * uses a separate current ID only for explicitly linked movie copies.
+     *
+     * @param list<\Dibi\Row> $rows
+     * @return list<\Dibi\Row>
+     */
+    private function withMovieReplacements(array $rows): array
+    {
+        $replacements = $this->movieReplacements->all();
+        foreach ($rows as $row) {
+            $itemId = (string) ($row['item_id'] ?? '');
+            if ((string) ($row['item_type'] ?? '') === 'Movie' && isset($replacements[$itemId])) {
+                $row['resolved_item_id'] = $replacements[$itemId];
+            }
+        }
+
+        return $rows;
     }
 
     public function firstStatisticsStartedAt(): ?\DateTimeImmutable
@@ -1413,9 +1441,12 @@ final class PlayHistoryRepository implements LibraryHistorySource
     private function applyMediaFilter(\Dibi\Fluent $selection, HistoryFilters $filters): void
     {
         if ($filters->mediaType === 'item') {
+            $itemIds = $filters->mediaItemType === 'Movie'
+                ? $this->movieReplacements->members($filters->mediaId)
+                : [$filters->mediaId];
             $selection->where($this->platform->isSqlite()
-                ? 'item_id COLLATE BINARY = %s'
-                : 'BINARY item_id = %s', $filters->mediaId);
+                ? 'item_id COLLATE BINARY IN %in'
+                : 'BINARY item_id IN %in', $itemIds);
             $selection->where($this->platform->isSqlite()
                 ? 'item_type COLLATE BINARY = %s'
                 : 'BINARY item_type = %s', $filters->mediaItemType);

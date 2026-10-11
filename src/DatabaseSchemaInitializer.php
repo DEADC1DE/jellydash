@@ -7,6 +7,7 @@ namespace Mk\Framework;
 use Mk\Framework\Downloads\DownloadRepository;
 use Mk\Framework\Health\WorkerStatusRepository;
 use Mk\Framework\Integrations\ConnectionRepository;
+use Mk\Framework\Jellyfin\MovieReplacements;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
@@ -20,6 +21,7 @@ final class DatabaseSchemaInitializer
         AppSettings::ensureSchema($database);
         new PlayHistoryRepository($database);
         new ThemePlaybackExclusions($database);
+        new MovieReplacements($database);
         new PushSubscriptionRepository($database);
         new SeerrRequestRepository($database);
         WorkerStatusRepository::ensureSchema($database);

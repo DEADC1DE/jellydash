@@ -265,7 +265,7 @@ final class HistoryController extends Controller
             'watchedLabel' => $this->durationLabel($viewingSec) . ($watchDuration === null ? ' estimated' : ' watched'),
             'completionPct' => $completion,
             'finished' => (bool) $row['is_finished'] || $completion >= 95,
-            'poster' => $this->poster((string) $row['item_id'], $itemType),
+            'poster' => $this->poster((string) ($row['resolved_item_id'] ?? $row['item_id']), $itemType),
         ];
     }
 
