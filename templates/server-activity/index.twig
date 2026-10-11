@@ -71,5 +71,5 @@
 {% endblock %}
 
 {% block page_scripts %}
-{% if can_view_activity %}<script src="/assets/js/server-activity.js?v=20261007-activity"></script>{% endif %}
+{% if can_view_activity %}<script src="/assets/js/server-activity.js?v={{ asset_revision }}"></script>{% endif %}
 {% endblock %}

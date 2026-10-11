@@ -1,0 +1,7 @@
+Barlow by The Barlow Project Authors
+Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+Licensed under the SIL Open Font License 1.1. See OFL.txt in this directory.
+
+Source: https://github.com/google/fonts/tree/bd8f81ddb5c74d5c8897b36ad88b440266245103/ofl/barlow
+Regular (400), Medium (500), SemiBold (600) and Bold (700).
+Converted from TTF to WOFF2 with FontTools, preserving glyphs and metrics.

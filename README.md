@@ -402,6 +402,8 @@ The Jellydash mascot is based on a [jellyfish icon](https://www.flaticon.com/fre
 
 Interface icons come from [Tabler Icons](https://tabler.io/icons), used under its [MIT license](THIRD_PARTY_NOTICES.md).
 
+The interface uses [Barlow](https://github.com/jpt/barlow), bundled locally under the [SIL Open Font License 1.1](public/assets/fonts/barlow/OFL.txt).
+
 ## License
 
 The code is licensed under [MIT](LICENSE). The original mascot icon is covered by the Flaticon license above, not MIT. Third-party license notices are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

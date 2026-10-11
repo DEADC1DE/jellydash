@@ -18,6 +18,9 @@
     let stopped = false;
     let lastOverview = 0;
     let lastEvents = 0;
+    let checkedAt = 0;
+    let overviewReady = false;
+    let activityReady = false;
 
     function element(tag, className, text) {
         const node = document.createElement(tag);
@@ -41,6 +44,22 @@
 
     function formattedDate(timestamp, options) {
         return new Intl.DateTimeFormat(undefined, { timeZone: timezone, ...options }).format(new Date(timestamp * 1000));
+    }
+
+    function sectionMessage(section) {
+        const warning = section.state !== 'ready' ? section.message : '';
+        if (!section.stale || !section.data) return warning;
+        const updated = section.updated_at;
+        const knownTime = Number.isFinite(updated) && updated > 0 && Number.isFinite(new Date(updated * 1000).getTime());
+        const age = knownTime
+            ? `Last successful update: ${formattedDate(updated, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' })} (${timezone}).`
+            : 'Last successful update time is unavailable.';
+        return [warning, age].filter(Boolean).join(' ');
+    }
+
+    function refreshLabel() {
+        if (stopped || !checkedAt) return;
+        find('updated').textContent = `${overviewReady && activityReady ? 'Checked' : 'Refresh attempted'} ${formattedDate(checkedAt, { hour: '2-digit', minute: '2-digit' })}`;
     }
 
     function localDay(timestamp) {
@@ -101,7 +120,7 @@
         const target = find('server');
         target.setAttribute('aria-busy', 'false');
         const data = section.data;
-        message('server-message', section.state !== 'ready' ? section.message : '');
+        message('server-message', sectionMessage(section));
         if (!data) {
             find('server-name').textContent = section.state === 'unconfigured' ? 'Jellyfin is not configured' : 'Server details unavailable';
             find('server-meta').textContent = 'Other sections can still load when available.';
@@ -124,7 +143,7 @@
     function renderTasks(section) {
         const target = find('running');
         target.setAttribute('aria-busy', 'false');
-        message('tasks-message', section.state !== 'ready' ? section.message : '');
+        message('tasks-message', sectionMessage(section));
         const data = section.data;
         if (!data) {
             empty(target, 'Tasks unavailable', section.state === 'forbidden' ? 'Check that your Jellyfin credential can read scheduled tasks.' : 'Try refreshing shortly.');
@@ -134,7 +153,10 @@
         }
         find('task-count').textContent = section.stale ? 'Last known' : data.running.length ? `${data.running.length} running` : 'Idle';
         target.replaceChildren();
-        if (!data.running.length) empty(target, 'No tasks are running', 'Jellyfin has no maintenance work in progress.');
+        if (!data.running.length) {
+            empty(target, section.stale ? 'No tasks were running' : 'No tasks are running',
+                section.stale ? 'At the last successful update. Current task activity is unavailable.' : 'Jellyfin has no maintenance work in progress.');
+        }
         for (const task of data.running) {
             const row = element('div', 'activity-task');
             const head = element('div', 'activity-task-head');
@@ -169,8 +191,9 @@
     function renderEvents(section) {
         const target = find('events');
         target.setAttribute('aria-busy', 'false');
-        message('events-message', section.state !== 'ready' ? section.message : '');
         const data = section.data;
+        if (data?.timezone) timezone = data.timezone;
+        message('events-message', sectionMessage(section));
         if (!data) {
             empty(target, section.state === 'expired' ? 'Refresh this activity view' : 'Activity unavailable', section.state === 'forbidden' ? 'Check that your Jellyfin credential can read the activity log.' : 'Use Refresh to try again.');
             find('pagination').hidden = true;
@@ -235,12 +258,16 @@
             if (!payload || id !== overviewRequest || stopped) return;
             timezone = payload.timezone || timezone;
             renderServer(payload.server); renderTasks(payload.tasks);
-            find('updated').textContent = `Checked ${formattedDate(Math.floor(Date.now() / 1000), { hour: '2-digit', minute: '2-digit' })}`;
+            overviewReady = [payload.server, payload.tasks].every((section) => section.state === 'ready' && !section.stale);
+            checkedAt = Math.floor(Date.now() / 1000);
+            refreshLabel();
         } catch (error) {
             if (error.name === 'AbortError' && id !== overviewRequest) return;
             if (stopped) return;
             const section = { state: 'unavailable', message: 'Server details could not be loaded. Try refreshing shortly.', data: null };
             renderServer(section); renderTasks(section);
+            checkedAt = 0;
+            overviewReady = false;
             find('updated').textContent = 'Could not refresh';
         }
         lastOverview = Date.now();
@@ -259,11 +286,15 @@
             const payload = await request(params, eventController);
             if (!payload || id !== eventRequest || stopped) return;
             renderEvents(payload);
+            activityReady = payload.state === 'ready' && !payload.stale;
+            refreshLabel();
             updateUrl(false);
         } catch (error) {
             if (error.name === 'AbortError' && id !== eventRequest) return;
             if (stopped) return;
             renderEvents({ state: 'unavailable', message: error.name === 'AbortError' ? 'Activity took too long to load. Try refreshing shortly.' : error.message, data: null });
+            activityReady = false;
+            refreshLabel();
         }
         lastEvents = Date.now();
     }

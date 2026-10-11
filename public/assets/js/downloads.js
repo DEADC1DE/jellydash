@@ -249,11 +249,27 @@
     function restoreFocus(key) {
         if (!key || !root) return;
         const candidates = root.querySelectorAll('[data-downloads-focus-key]');
-        for (const candidate of candidates) {
-            if (candidate.getAttribute('data-downloads-focus-key') === key) {
-                candidate.focus({ preventScroll: true });
-                break;
+        const successors = {
+            'queue-more': ['queue-next', 'queue-fewer'],
+            'queue-fewer': ['queue-more', 'queue-next'],
+            'queue-next': ['queue-previous', 'queue-fewer', 'queue-more'],
+            'queue-previous': ['queue-next', 'queue-fewer', 'queue-more'],
+        };
+        const keys = [key, ...(successors[key] || [])];
+        if (key.startsWith('queue-')) keys.push('queue-heading');
+        keys.push('filter-all');
+        for (const nextKey of keys) {
+            for (const candidate of candidates) {
+                if (candidate.getAttribute('data-downloads-focus-key') === nextKey) {
+                    candidate.focus({ preventScroll: true });
+                    return;
+                }
             }
+        }
+        const heading = root.querySelector('h2');
+        if (heading) {
+            heading.setAttribute('tabindex', '-1');
+            heading.focus({ preventScroll: true });
         }
     }
 
@@ -654,6 +670,8 @@
             const queue = node('section', 'downloads-queue-panel');
             const queueHeading = node('div', 'downloads-section-heading');
             const queueTitle = node('h2', '', 'Waiting');
+            queueTitle.setAttribute('data-downloads-focus-key', 'queue-heading');
+            queueTitle.setAttribute('tabindex', '-1');
             queueTitle.append(node('span', '', String(waiting.length)));
             const queueTitleGroup = node('div', 'downloads-waiting-title');
             queueTitleGroup.append(icon('clock'), queueTitle);

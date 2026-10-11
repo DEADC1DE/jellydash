@@ -86,6 +86,9 @@
             <option value="all" {{ not filters.is_exact and filters.range == 'all' ? 'selected' : '' }}>All time</option>
         </select>
         <button type="submit" class="filter-submit">Apply</button>
+        {% if filters.search or filters.user or filters.library or filters.client or filters.method or filters.is_exact or filters.has_media or filters.metadata_scopes %}
+            <a class="history-clear-filters" href="/history?range=all">Clear filters</a>
+        {% endif %}
     </form>
 {% endblock %}
 

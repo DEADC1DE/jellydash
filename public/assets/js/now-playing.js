@@ -225,34 +225,72 @@
     }
 
     function updateProtectedCard(existing, replacement) {
-        const currentFill = existing.querySelector('[data-progress-fill]');
-        const nextFill = replacement.querySelector('[data-progress-fill]');
-        if (currentFill && nextFill) {
-            currentFill.style.width = nextFill.style.width;
-        }
-        ['progress-time', 'progress-remaining'].forEach((name) => {
-            const current = existing.querySelector(`[data-${name}]`);
-            const next = replacement.querySelector(`[data-${name}]`);
-            if (current && next) {
-                current.textContent = next.textContent;
+        function updateNode(current, next) {
+            if (current.nodeType !== next.nodeType || current.tagName !== next.tagName) {
+                current.replaceWith(next);
+                return;
             }
-        });
-        const currentStatus = existing.querySelector('[data-stream-status]');
-        const nextStatus = replacement.querySelector('[data-stream-status]');
-        if (currentStatus && nextStatus) {
-            currentStatus.className = nextStatus.className;
-            const currentText = Array.from(currentStatus.childNodes).find((node) => node.nodeType === 3);
-            const nextText = Array.from(nextStatus.childNodes).find((node) => node.nodeType === 3);
-            if (currentText && nextText) {
-                currentText.nodeValue = nextText.nodeValue;
+            if (current.nodeType !== 1) {
+                if (current.nodeValue !== next.nodeValue) {
+                    current.nodeValue = next.nodeValue;
+                }
+                return;
             }
+
+            const interactionAttributes = current.hasAttribute('data-diagnostics-overlay')
+                ? ['aria-hidden', 'inert']
+                : (current.hasAttribute('data-diagnostics-open') ? ['aria-expanded', 'disabled'] : []);
+            Array.from(current.attributes).forEach(({ name }) => {
+                if (!interactionAttributes.includes(name) && !next.hasAttribute(name)) {
+                    current.removeAttribute(name);
+                }
+            });
+            Array.from(next.attributes).forEach(({ name, value }) => {
+                if (!interactionAttributes.includes(name) && current.getAttribute(name) !== value) {
+                    current.setAttribute(name, value);
+                }
+            });
+            updateChildren(current, next);
         }
+
+        function updateChildren(current, next) {
+            const currentChildren = Array.from(current.childNodes);
+            const nextChildren = Array.from(next.childNodes);
+            const available = new Set(currentChildren);
+            nextChildren.forEach((child, index) => {
+                const match = currentChildren.find((candidate) => available.has(candidate)
+                    && candidate.nodeType === child.nodeType
+                    && candidate.tagName === child.tagName
+                    && (candidate.nodeType !== 1
+                        || candidate.getAttribute('class')?.split(' ')[0] === child.getAttribute('class')?.split(' ')[0]));
+                const node = match || child;
+                if (match) {
+                    available.delete(match);
+                    updateNode(match, child);
+                }
+                if (current.childNodes[index] !== node) {
+                    const focused = document.activeElement;
+                    current.insertBefore(node, current.childNodes[index] || null);
+                    if (focused && node.contains(focused)) {
+                        focused.focus();
+                    }
+                }
+            });
+            available.forEach((child) => child.remove());
+        }
+
+        updateChildren(existing, replacement);
     }
 
     function focusAfterRemoval() {
-        const fallback = root.querySelector('[data-diagnostics-open]')
-            || document.querySelector('[data-nav-toggle]')
-            || document.querySelector('.dashboard-nav a');
+        const candidates = [
+            ...root.querySelectorAll('[data-diagnostics-open]'),
+            document.querySelector('[data-nav-toggle]'),
+            document.querySelector('.dashboard-nav a'),
+        ];
+        const fallback = candidates.find((element) => element && !element.disabled
+            && !element.closest?.('[inert]') && !element.closest?.('[hidden]')
+            && (typeof element.getClientRects !== 'function' || element.getClientRects().length > 0));
         if (fallback && typeof fallback.focus === 'function') {
             fallback.focus();
         }
@@ -269,18 +307,20 @@
             .map((element) => [element.dataset.streamId, element]));
         const activeElement = document.activeElement;
         const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
+        let needsFocusFallback = false;
 
-        streams.forEach((stream) => {
+        streams.forEach((stream, index) => {
             const key = String(stream.id || '');
             const replacement = createCard(stream);
             const existing = existingCards.get(key);
             if (!existing) {
-                grid.append(replacement);
+                grid.insertBefore(replacement, grid.children[index] || null);
                 return;
             }
 
+            const containedFocus = activeElement && existing.contains(activeElement);
             const protectsInteraction = existing.classList.contains('is-diagnostics-open')
-                || (activeElement && existing.contains(activeElement))
+                || containedFocus
                 || (selection && !selection.isCollapsed && (
                     (selection.anchorNode && existing.contains(selection.anchorNode))
                     || (selection.focusNode && existing.contains(selection.focusNode))
@@ -291,7 +331,15 @@
                 existing.className = replacement.className;
                 existing.innerHTML = replacement.innerHTML;
             }
-            grid.append(existing);
+            if (grid.children[index] !== existing) {
+                grid.insertBefore(existing, grid.children[index] || null);
+                if (activeElement && existing.contains(activeElement)) {
+                    activeElement.focus();
+                }
+            }
+            if (containedFocus && !existing.contains(activeElement)) {
+                needsFocusFallback = true;
+            }
             existingCards.delete(key);
         });
 
@@ -299,9 +347,12 @@
             const containedFocus = activeElement && element.contains(activeElement);
             element.remove();
             if (containedFocus) {
-                focusAfterRemoval();
+                needsFocusFallback = true;
             }
         });
+        if (needsFocusFallback) {
+            focusAfterRemoval();
+        }
     }
 
     function renderStreams(payload) {
@@ -338,6 +389,8 @@
         const close = cardElement.querySelector('[data-diagnostics-close]');
 
         if (!trigger || !overlay || !close) {
+            cardElement.classList.remove('is-diagnostics-open');
+            openDiagnosticsId = null;
             return;
         }
 
@@ -351,13 +404,17 @@
 
         cardElement.classList.toggle('is-diagnostics-open', open);
         trigger.setAttribute('aria-expanded', String(open));
+        trigger.disabled = open;
         overlay.setAttribute('aria-hidden', String(!open));
-        overlay.inert = !open;
+        if (open) {
+            overlay.inert = false;
+        }
         openDiagnosticsId = open ? (cardElement.dataset.streamId || null) : null;
 
         if (moveFocus) {
             (open ? close : trigger).focus();
         }
+        overlay.inert = !open;
     }
 
     function setText(selector, value) {

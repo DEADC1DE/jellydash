@@ -19,7 +19,7 @@ function node(tag = 'div', text = '') {
 const source = fs.readFileSync(path.resolve(__dirname, '../../public/assets/js/server-activity.js'), 'utf8');
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 const NOW = 1791374430000;
-const ready = (data) => ({ state: 'ready', stale: false, data, message: '' });
+const ready = (data) => ({ state: 'ready', stale: false, updated_at: NOW / 1000, data, message: '' });
 const overview = { timezone: 'UTC', server: ready({ name: 'Studio', version: '10.11.0', url: 'http://jellyfin.test/web/' }), tasks: ready({ running: [], recent: [] }) };
 const events = (overrides = {}) => ready({ anchor: NOW / 1000, page: 1, pages: 3, items: [{ timestamp: NOW / 1000 - 30, name: '<img src=x onerror=alert(1)>', type: 'TaskCompleted', severity: 'Information', has_user: false }], types: ['TaskCompleted', 'PluginUpdated'], total: 70, timezone: 'UTC', ...overrides });
 
@@ -42,6 +42,46 @@ function harness() {
 }
 
 (async () => {
+    const cached = harness();
+    const previousUpdate = NOW / 1000 - 125;
+    const lastSuccess = new Intl.DateTimeFormat(undefined, { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(previousUpdate * 1000));
+    const stale = (section) => ({ ...section, state: 'unavailable', stale: true, updated_at: previousUpdate, message: 'Jellyfin could not be reached.' });
+    cached.requests[0].resolve({ ...overview, tasks: stale(overview.tasks) });
+    cached.requests[1].resolve(stale(events({ items: [], total: 0, pages: 1 })));
+    await flush();
+    assert.match(cached.nodes.updated.textContent, /^Refresh attempted /, 'A new request must not imply cached sections are fresh.');
+    assert.equal(cached.nodes['server-message'].hidden, true, 'A fresh section keeps its normal state when another section is stale.');
+    for (const name of ['tasks-message', 'events-message']) {
+        assert.ok(cached.nodes[name].textContent.includes(lastSuccess), 'Stale sections show their original successful update time.');
+        assert.match(cached.nodes[name].textContent, /Jellyfin could not be reached\./, 'Keep the existing failure explanation.');
+    }
+    assert.equal(cached.nodes.running.children[0].children[0].textContent, 'No tasks were running', 'A stale empty snapshot must use past-tense wording.');
+    assert.match(cached.nodes.running.children[0].children[1].textContent, /Current task activity is unavailable/);
+    cached.nodes.refresh.listeners.click();
+    cached.requests.at(-2).resolve({ ...overview, server: stale(overview.server) });
+    cached.requests.at(-1).resolve(events());
+    await flush();
+    assert.ok(cached.nodes['server-message'].textContent.includes(lastSuccess));
+    assert.equal(cached.nodes['tasks-message'].hidden, true, 'Recovered sections clear stale warnings.');
+    assert.equal(cached.nodes['events-message'].hidden, true);
+    assert.equal(cached.nodes.running.children[0].children[0].textContent, 'No tasks are running');
+    cached.nodes.refresh.listeners.click();
+    cached.requests.at(-2).resolve({ ...overview, tasks: { ...stale(overview.tasks), updated_at: null } });
+    cached.requests.at(-1).resolve(events());
+    await flush();
+    assert.match(cached.nodes['tasks-message'].textContent, /update time is unavailable/, 'Missing source time is not replaced with the request time.');
+
+    const staleEvents = harness();
+    staleEvents.requests[0].resolve(overview);
+    staleEvents.requests[1].resolve(stale(events()));
+    await flush();
+    assert.match(staleEvents.nodes.updated.textContent, /^Refresh attempted /, 'Stale activity is not hidden by a fresh overview.');
+    staleEvents.nodes.refresh.listeners.click();
+    staleEvents.requests.at(-1).resolve(events());
+    staleEvents.requests.at(-2).resolve(overview);
+    await flush();
+    assert.match(staleEvents.nodes.updated.textContent, /^Checked /, 'A recovered page clears the incomplete-refresh label.');
+
     const h = harness();
     assert.equal(h.requests.length, 2);
     h.tick(5000);

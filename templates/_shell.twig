@@ -22,6 +22,8 @@
         <meta name="vapid-public-key" content="{{ vapid_public_key }}">
     {% endif %}
 
+    <link rel="preload" href="/assets/fonts/barlow/Barlow-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/barlow/Barlow-Bold.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/css/dashboard.css?v={{ asset_revision }}">
     {% for href in module_styles %}
         <link rel="stylesheet" href="{{ href }}">
@@ -87,7 +89,7 @@
 {% block page_scripts %}{% endblock %}
 <script src="/assets/js/pwa.js?v=20260624-pwa"></script>
 <script src="/assets/js/push.js?v={{ asset_revision }}"></script>
-<script src="/assets/js/nav.js?v=20260620-nav"></script>
+<script src="/assets/js/nav.js?v={{ asset_revision }}"></script>
 <script src="/assets/js/dashboard-scroll.js?v=20260910-scroll-restore"></script>
 <script src="/assets/js/server-stats.js?v={{ asset_revision }}"></script>
 <script src="/assets/js/nav-count.js?v={{ asset_revision }}"></script>

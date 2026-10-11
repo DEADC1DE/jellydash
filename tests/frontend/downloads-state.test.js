@@ -614,6 +614,138 @@ function testDownloadsScriptsKeepTheSecurityAndPollingContract() {
     assert.match(indicator, /AbortController/);
 }
 
+async function testOverviewFocusSurvivesQueueChanges() {
+    function fixture() {
+        const hooks = {};
+        let payload;
+        const document = { hidden: true, addEventListener() {} };
+        function element(tag) {
+            const result = { tag, children: [], attributes: {}, dataset: {}, style: {}, className: '', _text: '', listeners: {},
+                classList: { add() {} },
+                append(...children) { this.children.push(...children.flatMap((child) => child.tag === 'fragment' ? child.children : [child])); },
+                prepend(...children) { this.children.unshift(...children); },
+                contains(target) { return this === target || this.children.some((child) => child.contains?.(target)); },
+                replaceChildren(...children) {
+                    if (this.contains(document.activeElement)) document.activeElement = document.body;
+                    this.children = []; this._text = ''; this.append(...children);
+                },
+                setAttribute(name, value) {
+                    this.attributes[name] = String(value);
+                    if (name.startsWith('data-')) this.dataset[name.slice(5).replace(/-([a-z])/g, (_, char) => char.toUpperCase())] = String(value);
+                },
+                getAttribute(name) { return this.attributes[name] ?? null; },
+                addEventListener(type, callback) { this.listeners[type] = callback; },
+                focus(options) { document.activeElement = this; this.focusOptions = options; },
+                click() { this.listeners.click?.({ currentTarget: this }); },
+                querySelectorAll(selector) {
+                    const match = selector.match(/^\[([^=\]]+)(?:="([^"]*)")?\]$/);
+                    const matches = (child) => match ? child.getAttribute?.(match[1]) != null
+                        && (match[2] === undefined || child.getAttribute(match[1]) === match[2]) : child.tag === selector;
+                    return this.children.flatMap((child) => [...(matches(child) ? [child] : []), ...(child.querySelectorAll?.(selector) || [])]);
+                },
+                querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
+            };
+            Object.defineProperty(result, 'lastChild', { get: () => result.children.at(-1) });
+            Object.defineProperty(result, 'textContent', {
+                get: () => result._text + result.children.map((child) => child.textContent ?? '').join(''),
+                set: (value) => { result._text = String(value); result.children = []; },
+            });
+            return result;
+        }
+        document.body = element('body');
+        const root = element('main');
+        root.setAttribute('data-downloads-root', '');
+        const outside = element('button');
+        document.body.append(outside, root);
+        document.activeElement = document.body;
+        document.querySelector = (selector) => document.body.querySelector(selector);
+        document.querySelectorAll = (selector) => document.body.querySelectorAll(selector);
+        document.createElement = element;
+        document.createElementNS = (_, tag) => element(tag);
+        document.createDocumentFragment = () => element('fragment');
+        document.createTextNode = (text) => ({ textContent: text });
+        run('public/assets/js/downloads.js', {
+            window: { JellydashDownloadsTestHooks: hooks, addEventListener() {}, setTimeout() {}, clearTimeout() {} },
+            document, Number, Set, Error, FormData, AbortController,
+            fetch: async () => ({ ok: true, json: async () => payload }),
+        });
+        return { root, document, outside,
+            key: () => document.activeElement.getAttribute('data-downloads-focus-key'),
+            control: (key) => root.querySelector(`[data-downloads-focus-key="${key}"]`),
+            async refresh(data) { payload = data; document.hidden = false; await hooks.refreshOverview(); document.hidden = true; },
+        };
+    }
+    const client = { id: 'sab', name: 'SABnzbd', provider: 'sabnzbd', enabled: true, status: 'connected', speed: 0 };
+    const overview = (count) => ({ configured: true, feature_enabled: true, monitoring_enabled: true,
+        connections: [client], history: [], now: 1000, items: Array.from({ length: count }, (_, index) => ({
+            connection_id: 'sab', provider: 'sabnzbd', source_id: `job-${index}`, title: `Queued job ${index}`,
+            state: 'queued', size: 1000, progress: 0, stale: false,
+        })),
+    });
+    const failures = [];
+    const check = async (name, callback) => {
+        try { await callback(); } catch (error) { failures.push(`${name}: ${error.message}`); }
+    };
+    for (const count of [4, 31, 61]) {
+        await check(`expand/collapse ${count} queued items`, async () => {
+            const page = fixture();
+            await page.refresh(overview(count));
+            while (page.control('queue-more')) {
+                page.control('queue-more').focus(); page.control('queue-more').click();
+                assert.ok(['queue-more', 'queue-next', 'queue-fewer'].includes(page.key()), 'expansion must focus its surviving successor');
+            }
+            page.control('queue-fewer').focus(); page.control('queue-fewer').click();
+            assert.equal(page.key(), 'queue-more', 'collapse returns focus to Show more');
+        });
+    }
+    await check('queue page transitions', async () => {
+        const page = fixture(); await page.refresh(overview(61));
+        while (page.control('queue-more')) { page.control('queue-more').focus(); page.control('queue-more').click(); }
+        page.control('queue-next').focus(); page.control('queue-next').click();
+        assert.equal(page.key(), 'queue-next');
+        page.control('queue-next').click();
+        assert.equal(page.key(), 'queue-previous', 'last page keeps focus on Previous');
+        page.control('queue-previous').click(); page.control('queue-previous').click();
+        assert.equal(page.key(), 'queue-next', 'first page keeps focus on Next');
+    });
+    await check('poll removes queue pager', async () => {
+        const page = fixture(); await page.refresh(overview(4)); page.control('queue-more').focus();
+        await page.refresh(overview(3));
+        assert.equal(page.key(), 'queue-heading', 'remaining queue heading keeps keyboard position when all pager controls disappear');
+        assert.equal(page.document.activeElement.getAttribute('tabindex'), '-1');
+        await page.refresh(overview(0));
+        assert.equal(page.key(), 'filter-all', 'an empty queue returns focus to All clients');
+    });
+    await check('poll removes selected client', async () => {
+        const page = fixture(); await page.refresh(overview(4));
+        page.control('filter-sab').focus(); page.control('filter-sab').click();
+        const other = { ...client, id: 'other', name: 'Other client' };
+        await page.refresh({ ...overview(0), connections: [other] });
+        assert.equal(page.key(), 'filter-all');
+        assert.equal(page.control('filter-all').getAttribute('aria-pressed'), 'true');
+    });
+    await check('ordinary refresh and outside focus', async () => {
+        const page = fixture(); await page.refresh(overview(4)); page.control('queue-more').focus();
+        await page.refresh(overview(4)); assert.equal(page.key(), 'queue-more');
+        assert.equal(page.document.activeElement.focusOptions.preventScroll, true);
+        page.control('filter-sab').focus(); page.control('filter-sab').click();
+        await page.refresh(overview(4));
+        assert.equal(page.key(), 'filter-sab', 'a surviving client keeps focus and selection');
+        assert.equal(page.control('filter-sab').getAttribute('aria-pressed'), 'true');
+        page.outside.focus(); await page.refresh(overview(0));
+        assert.equal(page.document.activeElement, page.outside, 'polling must leave focus outside Downloads untouched');
+    });
+    await check('poll turns off feature or removes last client', async () => {
+        for (const data of [{ feature_enabled: false, configured: false }, { feature_enabled: true, configured: false }]) {
+            const page = fixture(); await page.refresh(overview(4)); page.control('queue-more').focus();
+            await page.refresh(data);
+            assert.equal(page.document.activeElement.tag, 'h2', 'the new state heading receives focus when no filters remain');
+            assert.equal(page.document.activeElement.getAttribute('tabindex'), '-1');
+        }
+    });
+    assert.equal(failures.length, 0, failures.join('\n'));
+}
+
 testDownloadsFormattingAndStableAnnouncements();
 testIndicatorUsesDownloadingCountAndClientWideSpeed();
 testClientFiltersAndSpeedFallbacks();
@@ -621,6 +753,6 @@ testCardsNeverRepeatClientSpeedAndTelemetryUsesBinaryUnits();
 testTurnedOffAndFirstSetupRemainDistinct();
 testWarningHistoryRendersAsNeedsAttention();
 testDownloadsScriptsKeepTheSecurityAndPollingContract();
-testLateConnectionTestsCannotRestoreStaleReceipts().then(() => {
+Promise.all([testLateConnectionTestsCannotRestoreStaleReceipts(), testOverviewFocusSurvivesQueueChanges()]).then(() => {
     console.log('Downloads frontend state tests passed.');
 }).catch((error) => { console.error(error); process.exitCode = 1; });

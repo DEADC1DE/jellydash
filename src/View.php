@@ -13,7 +13,7 @@ use Twig\Loader\FilesystemLoader;
  */
 class View
 {
-    public const ASSET_REVISION = '20261011-downloads-activity';
+    public const ASSET_REVISION = '20261011-ui-behavior';
 
     private Environment $twig;
 

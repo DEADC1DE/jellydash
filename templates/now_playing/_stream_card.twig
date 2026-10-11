@@ -5,7 +5,7 @@
 
     <div class="stream-card-content">
         <div class="stream-card-top">
-            <span class="now-pill {{ stream.isPaused|default(false) ? 'is-paused' : (stream.isLive|default(false) ? 'is-live-tv' : '') }}"><i></i>{{ stream.statusLabel|default('Now Playing') }}</span>
+            <span class="now-pill {{ stream.isPaused|default(false) ? 'is-paused' : (stream.isLive|default(false) ? 'is-live-tv' : '') }}" data-stream-status><i></i>{{ stream.statusLabel|default('Now Playing') }}</span>
             <div class="playback-stack">
                 {% include "_badge.twig" with { item: stream } %}
                 <span class="quality-chip">{{ stream.quality }}</span>
@@ -47,10 +47,10 @@
         {% endif %}
 
         <div class="progress-block">
-            <div class="progress-track"><span style="width: {{ stream.progressPct }}"></span></div>
+            <div class="progress-track"><span data-progress-fill style="width: {{ stream.progressPct }}"></span></div>
             <div class="progress-labels">
-                <span>{{ stream.timeLabel }}</span>
-                <span>{{ stream.remaining }}</span>
+                <span data-progress-time>{{ stream.timeLabel }}</span>
+                <span data-progress-remaining>{{ stream.remaining }}</span>
             </div>
         </div>
 
