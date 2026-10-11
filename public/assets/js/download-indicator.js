@@ -9,16 +9,16 @@
     const monitoringEnabled = (data) => data?.monitoring_enabled === undefined
         ? data?.workers_enabled !== false : data.monitoring_enabled === true;
 
-    function formatBytes(value) {
+    function formatSpeed(value) {
         if (!isFiniteNumber(value) || value < 0) return '';
-        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
         let amount = value;
         let unit = 0;
-        while (amount >= 1000 && unit < units.length - 1) {
-            amount /= 1000;
+        while (amount >= 1024 && unit < units.length - 1) {
+            amount /= 1024;
             unit += 1;
         }
-        const digits = amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
+        const digits = unit === 0 ? 0 : amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
         return `${amount.toFixed(digits)} ${units[unit]}/s`;
     }
 
@@ -32,12 +32,19 @@
         if (!available && offline) return 'Downloads unavailable';
         if (active > 0) {
             const parts = [`${active} downloading`];
-            if (includeSpeed && isFiniteNumber(data.speed)) parts.push(formatBytes(data.speed));
+            if (includeSpeed && isFiniteNumber(data.speed) && data.speed >= 0) parts.push(formatSpeed(data.speed));
+            if (offline) parts.push(`${offline} offline`);
+            return parts.join(' · ');
+        }
+        if (connections.some((item) => item.status === 'connected') && isFiniteNumber(data.speed) && data.speed > 0) {
+            const parts = ['Downloading', 'Checking activity'];
+            if (includeSpeed) parts.push(formatSpeed(data.speed));
             if (offline) parts.push(`${offline} offline`);
             return parts.join(' · ');
         }
         if (connections.every((item) => item.status === 'waiting')) return 'Downloads waiting for first sync';
         if (connections.every((item) => item.status === 'stale')) return 'Downloads update delayed';
+        if (!isFiniteNumber(data.speed) || data.speed < 0) return 'Download activity unavailable';
         return offline ? `Downloads idle · ${offline} offline` : 'Downloads idle';
     }
 
@@ -68,7 +75,7 @@
             element('span', 'download-indicator-detail', detail));
         fragment.append(mark, copy);
         if (active && isFiniteNumber(speed) && speed >= 0) {
-            const [amount, unit] = formatBytes(speed).split(' ');
+            const [amount, unit] = formatSpeed(speed).split(' ');
             const reading = element('span', 'download-indicator-speed');
             reading.append(element('strong', '', amount), element('small', '', unit));
             fragment.append(reading);
@@ -94,13 +101,14 @@
         const labels = {
             'Download monitoring off': 'Monitoring off',
             'Downloads unavailable': 'Clients unavailable',
+            'Download activity unavailable': 'Activity unavailable',
             'Downloads idle': 'No active downloads',
             'Downloads waiting for first sync': 'Waiting for first update',
             'Downloads update delayed': 'Updates delayed',
         };
-        const detail = labels[summary] || summary.replace(/^Downloads idle/, 'No active downloads');
+        const detail = labels[summary] || summary.replace(/^Downloads idle/, 'No active downloads').replace(/^Downloading · /, '');
         const active = monitoringEnabled(data) && enabled.some((item) => item.status === 'connected')
-            && Number.isInteger(data.active_count) && data.active_count > 0;
+            && ((Number.isInteger(data.active_count) && data.active_count > 0) || (isFiniteNumber(data.speed) && data.speed > 0));
         const attention = monitoringEnabled(data) && enabled.some((item) => ['offline', 'stale'].includes(item.status));
         renderWidget(detail, data.speed, active, attention, summaryText(data, enabled));
     }
@@ -169,7 +177,7 @@
     refresh();
 
     const hooks = window.JellydashDownloadIndicatorTestHooks = window.JellydashDownloadIndicatorTestHooks || {};
-    hooks.formatBytes = formatBytes;
+    hooks.formatSpeed = formatSpeed;
     hooks.summaryText = summaryText;
     hooks.unavailableText = unavailableText;
     hooks.render = render;

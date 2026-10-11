@@ -8,7 +8,10 @@ const vm = require('node:vm');
 const rootDir = path.resolve(__dirname, '..', '..');
 
 function run(file, globals) {
-    vm.runInNewContext(fs.readFileSync(path.join(rootDir, file), 'utf8'), globals, { filename: file });
+    const script = fs.readFileSync(path.join(rootDir, file), 'utf8')
+        .replace('hooks.formatBytes = formatBytes;', 'hooks.formatSpeed = formatSpeed; hooks.formatBytes = formatBytes;')
+        .replace('hooks.cardSpeed = cardSpeed;', 'hooks.renderCard = renderCard; hooks.renderQueueItem = renderQueueItem; hooks.renderConnections = renderConnections; hooks.renderTransferHeader = renderTransferHeader; hooks.cardSpeed = cardSpeed;');
+    vm.runInNewContext(script, globals, { filename: file });
 }
 
 function testDownloadsFormattingAndStableAnnouncements() {
@@ -22,6 +25,10 @@ function testDownloadsFormattingAndStableAnnouncements() {
     assert.equal(hooks.formatBytes(0), '0 B');
     assert.equal(hooks.formatBytes(18_400_000), '18.4 MB');
     assert.equal(hooks.formatBytes(null), 'Unknown size');
+    for (const [value, expected] of [[54 * 1048576, '54.0 MiB/s'], [1024, '1.00 KiB/s'],
+        [1073741824, '1.00 GiB/s'], [0, '0 B/s'], [null, ''], [-1, ''], [Infinity, '']]) {
+        assert.equal(hooks.formatSpeed(value), expected);
+    }
     assert.equal(hooks.formatEta(137), '2m 17s');
     assert.equal(hooks.formatRelativeTime(970, 1000, false), 'Just now');
     assert.equal(hooks.formatRelativeTime(100, 1000, true), 'Recorded 15m ago');
@@ -118,15 +125,19 @@ function testIndicatorUsesDownloadingCountAndClientWideSpeed() {
         fetch: async () => { throw new Error('hidden page should not fetch'); },
     });
 
+    for (const [value, expected] of [[54 * 1048576, '54.0 MiB/s'], [1024, '1.00 KiB/s'],
+        [1073741824, '1.00 GiB/s'], [0, '0 B/s'], [null, ''], [-1, ''], [Infinity, '']]) {
+        assert.equal(hooks.formatSpeed(value), expected);
+    }
     const connected = [{ provider: 'qbittorrent', status: 'connected', enabled: true }];
     assert.equal(
         hooks.summaryText({ active_count: 2, speed: 18_400_000, workers_enabled: true }, connected),
-        '2 downloading · 18.4 MB/s',
+        '2 downloading · 17.5 MiB/s',
     );
     assert.equal(
         hooks.summaryText({ active_count: 0, speed: 18_400_000, workers_enabled: true }, connected),
-        'Downloads idle',
-        'non-downloading work must not be presented as active downloads',
+        'Downloading · Checking activity · 17.5 MiB/s',
+        'measured client traffic must remain visible without inventing a job count',
     );
     assert.equal(
         hooks.summaryText({ active_count: 0, speed: null, workers_enabled: true }, [{ status: 'offline' }]),
@@ -138,7 +149,7 @@ function testIndicatorUsesDownloadingCountAndClientWideSpeed() {
     );
     assert.equal(
         hooks.summaryText({ active_count: 2, speed: 18_400_000, workers_enabled: false, monitoring_enabled: true }, connected),
-        '2 downloading · 18.4 MB/s',
+        '2 downloading · 17.5 MiB/s',
         'a successful external collection stays live with the built-in worker disabled',
     );
     assert.equal(
@@ -161,9 +172,40 @@ function testIndicatorUsesDownloadingCountAndClientWideSpeed() {
     hooks.render(data);
     assert.equal(find(indicator, 'download-indicator-title').textContent, 'Downloads');
     assert.equal(find(indicator, 'download-indicator-detail').textContent, '2 downloading');
-    assert.equal(find(indicator, 'download-indicator-speed').children[0].textContent, '18.4');
-    assert.equal(find(indicator, 'download-indicator-speed').children[1].textContent, 'MB/s');
-    assert.match(indicator.attributes['aria-label'], /18.4 MB\/s.*Open Downloads/);
+    assert.equal(find(indicator, 'download-indicator-speed').children[0].textContent, '17.5');
+    assert.equal(find(indicator, 'download-indicator-speed').children[1].textContent, 'MiB/s');
+    assert.match(indicator.attributes['aria-label'], /17.5 MiB\/s.*Open Downloads/);
+    hooks.render({ ...data, speed: 54 * 1048576 });
+    assert.equal(find(indicator, 'download-indicator-speed').children[0].textContent, '54.0');
+    assert.equal(find(indicator, 'download-indicator-speed').children[1].textContent, 'MiB/s');
+    assert.match(indicator.attributes['aria-label'], /54.0 MiB\/s/);
+    const sampling = { ...data, active_count: 0, speed: 54 * 1048576 };
+    hooks.render(sampling);
+    assert.equal(find(indicator, 'download-indicator-detail').textContent, 'Checking activity');
+    assert.equal(find(indicator, 'download-indicator-speed').children[0].textContent, '54.0');
+    assert.equal(indicator.attributes['data-active'], 'true');
+    assert.equal(indicator.attributes['aria-label'], 'Downloading · Checking activity · 54.0 MiB/s. Open Downloads.');
+    assert.doesNotMatch(indicator.attributes['aria-label'], /idle|0 downloading|1 downloading/);
+    hooks.render({ ...sampling, speed: null, client_speed: sampling.speed,
+        connections: [{ ...connected[0], filter_mode: 'selected', speed: null, client_speed: sampling.speed }] });
+    assert.equal(find(indicator, 'download-indicator-speed'), undefined, 'unfiltered client total cannot become selected traffic');
+    assert.equal(indicator.attributes['data-active'], 'false');
+    assert.doesNotMatch(indicator.attributes['aria-label'], /54.0|Downloading/);
+    assert.equal(find(indicator, 'download-indicator-detail').textContent, 'Activity unavailable');
+    assert.doesNotMatch(indicator.attributes['aria-label'], /idle|No active downloads|downloading/i);
+    hooks.render({ ...sampling, speed: 0 });
+    assert.equal(find(indicator, 'download-indicator-detail').textContent, 'No active downloads');
+    assert.equal(find(indicator, 'download-indicator-speed'), undefined);
+    assert.equal(indicator.attributes['data-active'], 'false');
+    hooks.render({ ...sampling, connections: [{ status: 'offline', enabled: true }] });
+    assert.equal(find(indicator, 'download-indicator-detail').textContent, 'Clients unavailable');
+    assert.equal(find(indicator, 'download-indicator-speed'), undefined);
+    hooks.render({ ...sampling, monitoring_enabled: false });
+    assert.equal(find(indicator, 'download-indicator-detail').textContent, 'Monitoring off');
+    assert.equal(find(indicator, 'download-indicator-speed'), undefined);
+    hooks.render({ ...data, speed: 0 });
+    assert.equal(find(indicator, 'download-indicator-speed').children[0].textContent, '0');
+    assert.equal(find(indicator, 'download-indicator-speed').children[1].textContent, 'B/s');
     hooks.render({ ...data, speed: null });
     assert.equal(find(indicator, 'download-indicator-speed'), undefined, 'unknown filtered speed must not become zero');
     hooks.renderUnavailable();
@@ -218,8 +260,8 @@ function testClientFiltersAndSpeedFallbacks() {
     assert.equal(hooks.selectedOverview(data, 'removed-client').items.length, 3, 'removed filters return to all clients');
 
     const fallback = hooks.cardSpeed(data.items[0], data.connections);
-    assert.equal(fallback.value, 24_200_000);
-    assert.equal(fallback.clientWide, true, 'client speed must be labelled as client-wide');
+    assert.equal(fallback.value, null, 'unknown job speed must not repeat the aggregate client speed');
+    assert.equal(fallback.clientWide, false);
     assert.equal(hooks.cardSpeed({ ...data.items[0], speed: 12 }, data.connections).value, 12);
     assert.equal(hooks.cardSpeed({ ...data.items[0], stale: true }, data.connections).value, null);
     assert.equal(hooks.cardSpeed({ ...data.items[0], state: 'processing' }, data.connections).value, null);
@@ -227,7 +269,9 @@ function testClientFiltersAndSpeedFallbacks() {
     assert.equal(hooks.cardSpeed({ ...data.items[0], provider: 'transmission' }, data.connections).value, null,
         'torrent cards must not present an aggregate connection speed as one torrent speed');
     assert.equal(hooks.cardSpeed({ ...data.items[0], provider: 'deluge' }, data.connections).value, null);
-    assert.equal(hooks.cardSpeed({ ...data.items[0], provider: 'nzbget' }, data.connections).clientWide, true);
+    assert.equal(hooks.cardSpeed({ ...data.items[0], provider: 'nzbget' }, data.connections).value, null);
+    assert.equal(hooks.cardSpeed({ ...data.items[0], speed: 0 }, data.connections).value, 0);
+    assert.equal(hooks.cardSpeed({ ...data.items[0], speed: -1 }, data.connections).value, null);
 
     const failed = hooks.selectedOverview(hooks.staleOverview(data), 'first');
     assert.equal(failed.speed, null, 'changing filters after an API failure must keep telemetry unavailable');
@@ -263,6 +307,83 @@ function testClientFiltersAndSpeedFallbacks() {
     assert.equal(expired.connections[0].client_speed, null);
     assert.equal(hooks.selectedOverview(expired, 'qb').outside_speed, null);
     assert.equal(hooks.selectedOverview({ ...filtered, workers_enabled: false }, 'qb').outside_speed, null);
+}
+
+
+function testCardsNeverRepeatClientSpeedAndTelemetryUsesBinaryUnits() {
+    const hooks = {};
+    function element(tag) {
+        const result = { tag, className: '', children: [], attributes: {}, style: {}, dataset: {}, _text: '',
+            classList: { add() {} }, addEventListener() {}, querySelector() { return null; }, querySelectorAll() { return []; },
+            append(...children) { this.children.push(...children); },
+            prepend(...children) { this.children.unshift(...children); },
+            replaceChildren(...children) { this.children = children; },
+            setAttribute(name, value) { this.attributes[name] = value; } };
+        Object.defineProperty(result, 'textContent', {
+            get: () => result._text + result.children.map((child) => child.textContent ?? String(child)).join(''),
+            set: (value) => { result._text = String(value); result.children = []; },
+        });
+        return result;
+    }
+    const root = element('main');
+    run('public/assets/js/downloads.js', {
+        window: { JellydashDownloadsTestHooks: hooks, addEventListener() {} },
+        document: { hidden: true, addEventListener() {}, querySelectorAll: () => [],
+            querySelector: (selector) => selector === '[data-downloads-root]' ? root : null, createElement: element, createElementNS: (_, tag) => element(tag),
+            createDocumentFragment: () => element('fragment'), createTextNode: (value) => ({ textContent: value }) },
+        Number, Set, Error, FormData, AbortController,
+    });
+    const find = (node, className) => node.className?.split(' ').includes(className)
+        ? node : node.children?.map((child) => find(child, className)).find(Boolean);
+    const connection = { id: 'sab', name: 'SABnzbd', provider: 'sabnzbd', status: 'connected',
+        enabled: true, speed: 54 * 1048576 };
+    const job = { connection_id: 'sab', provider: 'sabnzbd', state: 'downloading', speed: null,
+        title: 'First job', progress: 40, size: 1000000, stale: false };
+    for (const item of [job, { ...job, title: 'Second job' }, { ...job, provider: 'nzbget' }]) {
+        const card = hooks.renderCard(item, 0, [connection]);
+        assert.equal(find(card, 'downloads-item-speed'), undefined, 'unknown job rate has no numeric speed readout');
+        assert.equal(find(card, 'downloads-transfer-note').textContent, 'Downloading');
+        assert.doesNotMatch(card.textContent, /54\.0|MiB\/s|client speed/);
+    }
+    const checking = hooks.renderQueueItem({ ...job, state: 'unknown' }, 0);
+    assert.equal(find(checking, 'downloads-queue-state').textContent, 'Checking activity');
+    const checkingOverview = hooks.selectedOverview({ connections: [connection], items: [{ ...job, state: 'unknown' }] }, 'sab');
+    assert.equal(checkingOverview.active_count, 0, 'unobserved activity is not an active download');
+    const sabEta = hooks.renderCard({ ...job, eta: 120 }, 0, [connection]);
+    assert.equal(find(sabEta, 'downloads-eta').textContent, '2m 0sincluding queue');
+    const torrentEta = hooks.renderCard({ ...job, provider: 'qbittorrent', speed: 1048576, eta: 120 }, 0, [connection]);
+    assert.equal(find(torrentEta, 'downloads-eta').textContent, '2m 0sremaining');
+    const known = hooks.renderCard({ ...job, provider: 'qbittorrent', speed: 1048576 }, 0, [connection]);
+    assert.equal(find(known, 'downloads-item-speed').textContent, '1.00MiB/s');
+    const zero = hooks.renderCard({ ...job, speed: 0 }, 0, [connection]);
+    assert.equal(find(zero, 'downloads-item-speed').textContent, '0B/s');
+    const stale = hooks.renderCard({ ...job, speed: 1048576, stale: true }, 0, [connection]);
+    assert.equal(find(stale, 'downloads-item-speed'), undefined);
+    assert.match(find(stale, 'downloads-transfer-note').textContent, /Current speed unavailable/);
+    const data = { connections: [connection], all_connections: [connection], items: [job], monitoring_enabled: true,
+        speed: connection.speed, outside_speed: 1048576, partial: false, now: 1000 };
+    assert.match(hooks.renderConnections(data).textContent, /54\.0 MiB\/s/);
+    const headline = hooks.renderTransferHeader(data);
+    assert.match(find(headline, 'downloads-speed-value').textContent, /54\.0MiB\/s/);
+    assert.match(headline.textContent, /Outside filters: 1\.00 MiB\/s/);
+    const filtered = hooks.renderTransferHeader({ ...data, speed: null, connections: [
+        { ...connection, speed: null, filter_mode: 'selected', client_speed: connection.speed },
+    ] });
+    assert.match(filtered.textContent, /SABnzbd total: 54\.0 MiB\/s/);
+    const sampling = { ...data, feature_enabled: true, configured: true,
+        items: [{ ...job, state: 'unknown' }], history: [] };
+    hooks.renderOverview(sampling);
+    assert.equal(find(root, 'downloads-idle-note').textContent, 'Checking download activity.');
+    assert.equal(find(root, 'downloads-card'), undefined, 'unknown jobs remain in the waiting list');
+    hooks.renderOverview({ ...sampling, items: [{ ...job, state: 'queued' }] });
+    assert.equal(find(root, 'downloads-idle-note').textContent, 'Checking download activity.', 'known positive scoped speed is not idle');
+    hooks.renderOverview({ ...sampling, items: [{ ...job, state: 'queued' }], connections: [{ ...connection, speed: 0 }] });
+    assert.equal(find(root, 'downloads-idle-note').textContent, 'Nothing downloading right now.');
+    hooks.renderOverview({ ...sampling, items: [{ ...job, state: 'queued' }], connections: [
+        { ...connection, filter_mode: 'selected', speed: null, client_speed: connection.speed },
+    ] });
+    assert.equal(find(root, 'downloads-idle-note').textContent, 'Nothing downloading right now.', 'outside-filter speed cannot imply selected activity');
+
 }
 
 function testTurnedOffAndFirstSetupRemainDistinct() {
@@ -496,6 +617,7 @@ function testDownloadsScriptsKeepTheSecurityAndPollingContract() {
 testDownloadsFormattingAndStableAnnouncements();
 testIndicatorUsesDownloadingCountAndClientWideSpeed();
 testClientFiltersAndSpeedFallbacks();
+testCardsNeverRepeatClientSpeedAndTelemetryUsesBinaryUnits();
 testTurnedOffAndFirstSetupRemainDistinct();
 testWarningHistoryRendersAsNeedsAttention();
 testDownloadsScriptsKeepTheSecurityAndPollingContract();

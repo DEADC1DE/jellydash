@@ -286,7 +286,12 @@ final class DownloadRepository
         foreach ($batch->items as $item) {
             $normalized = $this->normalizeItem($item, false);
             $matches = $connection->matches($normalized);
-            if ($normalized['state'] === 'downloading') {
+            // A SAB job without observed progress may still receive data now.
+            // Do not use sampled activity to assign its entire client's speed.
+            $mayDownload = $connection->provider === 'sabnzbd'
+                ? in_array($normalized['state'], ['downloading', 'queued', 'unknown'], true)
+                : $normalized['state'] === 'downloading';
+            if ($mayDownload) {
                 if ($matches) {
                     $includedDownloading = true;
                 } else {
@@ -578,7 +583,7 @@ final class DownloadRepository
             $normalizedTags[] = $this->boundedUnicodeString($tag, 256, 'download tag', false);
         }
         $normalizedTags = array_values(array_unique($normalizedTags));
-        $states = ['downloading', 'processing', 'queued', 'paused', 'stalled', 'checking', 'metadata', 'error', 'completed', 'failed', 'warning'];
+        $states = ['downloading', 'processing', 'queued', 'paused', 'stalled', 'checking', 'metadata', 'unknown', 'error', 'completed', 'failed', 'warning'];
         $state = $item['state'] ?? ($completion ? 'completed' : null);
         if (!is_string($state) || !in_array($state, $states, true)
             || ($completion && !in_array($state, ['completed', 'failed', 'warning'], true))

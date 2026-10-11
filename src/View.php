@@ -13,7 +13,7 @@ use Twig\Loader\FilesystemLoader;
  */
 class View
 {
-    public const ASSET_REVISION = '20261008-statistics-drilldowns';
+    public const ASSET_REVISION = '20261011-downloads-activity';
 
     private Environment $twig;
 

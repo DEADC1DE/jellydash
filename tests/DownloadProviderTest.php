@@ -70,11 +70,11 @@ final class DownloadProviderTest extends TestCase
         );
 
         self::assertSame(12800.0, $batch->speed);
-        self::assertSame(['downloading', 'paused', 'processing'], array_column($batch->items, 'state'));
+        self::assertSame(['unknown', 'paused', 'processing'], array_column($batch->items, 'state'));
         self::assertSame(104857600, $batch->items[0]['size']);
         self::assertSame(78643200, $batch->items[0]['downloaded']);
         self::assertNull($batch->items[0]['speed']);
-        self::assertSame(62, $batch->items[0]['eta']);
+        self::assertNull($batch->items[0]['eta']);
         self::assertCount(1, $batch->completions);
         self::assertSame(1234, $batch->completions[0]['completed_at']);
         self::assertFalse($batch->complete);
@@ -198,7 +198,7 @@ final class DownloadProviderTest extends TestCase
             $next = $provider->collect($connection, $credentials, $next->cursor);
             self::assertSame([], $next->completions);
             self::assertSame(['processing'], array_column($next->items, 'state'));
-            self::assertSame($first->cursor, $next->cursor);
+            self::assertSame($first->cursor['history'], $next->cursor['history']);
             self::assertTrue($next->complete);
         }
         self::assertSame(['0', '0', '0', '0', '0', '0'], array_column($historyQueries, 'start'));
@@ -234,7 +234,7 @@ final class DownloadProviderTest extends TestCase
         );
 
         self::assertSame(['retry-1', 'repair-1', 'unknown-1'], array_column($batch->items, 'source_id'));
-        self::assertSame(['downloading', 'processing', 'error'], array_column($batch->items, 'state'));
+        self::assertSame(['unknown', 'processing', 'error'], array_column($batch->items, 'state'));
         self::assertSame(['failed-1'], array_column($batch->completions, 'source_id'));
         self::assertSame('failed', $batch->completions[0]['state']);
         self::assertSame(1800000000, $batch->completions[0]['completed_at']);

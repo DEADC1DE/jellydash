@@ -131,15 +131,9 @@
         };
     }
 
-    function cardSpeed(item, connections) {
-        if (item.stale || item.state !== 'downloading') return { value: null, clientWide: false };
-        if (isFiniteNumber(item.speed)) return { value: item.speed, clientWide: false };
-        if (!['sabnzbd', 'nzbget'].includes(item.provider)) return { value: null, clientWide: false };
-        const connection = connections.find((client) => client.id === item.connection_id);
-        return {
-            value: connection?.status === 'connected' && isFiniteNumber(connection.speed) ? connection.speed : null,
-            clientWide: true,
-        };
+    function cardSpeed(item) {
+        const known = !item.stale && item.state === 'downloading' && isFiniteNumber(item.speed) && item.speed >= 0;
+        return { value: known ? item.speed : null, clientWide: false };
     }
 
     function formatBytes(value) {
@@ -157,7 +151,15 @@
 
     function formatSpeed(value) {
         if (!isFiniteNumber(value) || value < 0) return '';
-        return `${formatBytes(value)}/s`;
+        const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+        let amount = value;
+        let unit = 0;
+        while (amount >= 1024 && unit < units.length - 1) {
+            amount /= 1024;
+            unit += 1;
+        }
+        const digits = unit === 0 ? 0 : amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
+        return `${amount.toFixed(digits)} ${units[unit]}/s`;
     }
 
     function formatEta(value) {
@@ -184,7 +186,7 @@
     function stateLabel(state) {
         return ({
             downloading: 'Downloading', processing: 'Processing', queued: 'Queued', paused: 'Paused',
-            stalled: 'Stalled', checking: 'Checking', metadata: 'Fetching metadata', error: 'Error',
+            stalled: 'Stalled', checking: 'Checking', metadata: 'Fetching metadata', error: 'Error', unknown: 'Checking activity',
         })[state] || 'Waiting';
     }
 
@@ -453,17 +455,18 @@
         if (state === 'processing') {
             transfer.append(node('span', 'downloads-transfer-note', item.stale ? 'Last known processing state' : 'Processing files.'));
         } else {
-            const speed = cardSpeed(item, connections);
-            const reading = node('div');
-            reading.append(speedReading(speed.value, 'downloads-item-speed'));
-            reading.append(node('span', 'downloads-transfer-speed-label', item.stale ? 'Current speed unavailable'
-                : speed.value === null ? stateLabel(state)
-                    : speed.clientWide ? (connections.find((client) => client.id === item.connection_id)?.filter_mode === 'selected'
-                        ? 'Selected download speed' : `${item.connection_name || providerInfo(item.provider).name} client speed`) : 'Download speed'));
-            transfer.append(reading);
+            const speed = cardSpeed(item);
+            if (speed.value === null) {
+                transfer.append(node('span', 'downloads-transfer-note', item.stale ? 'Current speed unavailable' : stateLabel(state)));
+            } else {
+                const reading = node('div');
+                reading.append(speedReading(speed.value, 'downloads-item-speed'));
+                reading.append(node('span', 'downloads-transfer-speed-label', 'Download speed'));
+                transfer.append(reading);
+            }
             if (!item.stale && isFiniteNumber(item.eta)) {
                 const eta = node('span', 'downloads-eta', formatEta(item.eta));
-                eta.append(node('small', '', 'remaining'));
+                eta.append(node('small', '', item.provider === 'sabnzbd' ? 'including queue' : 'remaining'));
                 transfer.append(eta);
             }
         }
@@ -632,7 +635,11 @@
             activeSection.append(activeHeading);
             const activeList = node('div', 'downloads-active-list');
             active.slice(0, pageState.activeLimit).forEach((item, index) => activeList.append(renderCard(item, index, connections)));
-            if (!active.length) activeList.append(node('p', 'downloads-idle-note', 'Nothing downloading right now.'));
+            if (!active.length) {
+                const checkingActivity = monitoringEnabled(data) && (items.some((item) => !item.stale && item.state === 'unknown')
+                    || (isFiniteNumber(data.speed) && data.speed > 0));
+                activeList.append(node('p', 'downloads-idle-note', checkingActivity ? 'Checking download activity.' : 'Nothing downloading right now.'));
+            }
             activeSection.append(activeList);
             if (active.length > 6) {
                 const more = node('button', 'downloads-text-button', pageState.activeLimit >= Math.min(active.length, 30) ? 'Show fewer' : `Show ${Math.min(6, active.length - pageState.activeLimit)} more`);
