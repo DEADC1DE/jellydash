@@ -6,6 +6,7 @@ use Mk\Framework\Config;
 use Mk\Framework\Container;
 use Mk\Framework\Database;
 use Mk\Framework\Jellyfin\MovieReplacements;
+use Mk\Framework\Jellyfin\MovieIdentityRepository;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
 use PHPUnit\Framework\TestCase;
@@ -37,6 +38,10 @@ final class MovieReplacementsTest extends TestCase
             ->where('server_key IN %in', [$this->scope, $this->otherScope])->execute();
         $this->database->getDibi()->delete('play_history')
             ->where('session_key = %s', $this->sessionKey)->execute();
+        new MovieIdentityRepository($this->database, $this->scope);
+        foreach (['movie_identity_items', 'movie_identity_state'] as $table) {
+            $this->database->getDibi()->delete($table)->where('server_key IN %in', [$this->scope, $this->otherScope])->execute();
+        }
     }
 
     public function testLinksGroupAliasesAndRemainFreshAcrossInstances(): void
@@ -56,6 +61,46 @@ final class MovieReplacementsTest extends TestCase
         $fingerprint = $second->fingerprint();
         $second->link('old', 'current');
         self::assertSame($fingerprint, $second->fingerprint());
+    }
+
+    public function testAtomicRepairRollsBackEveryLinkWhenRecordingItsDecisionFails(): void
+    {
+        $this->replacements->link('A', 'B');
+        try {
+            $this->replacements->atomic(function (): void {
+                $this->replacements->link('B', 'C');
+                $this->replacements->link('D', 'C');
+                throw new RuntimeException('Decision storage failed');
+            });
+            self::fail('The decision failure must propagate.');
+        } catch (RuntimeException $error) {
+            self::assertSame('Decision storage failed', $error->getMessage());
+        }
+        self::assertSame(['A' => 'B'], $this->replacements->all());
+        self::assertSame('saved', $this->replacements->atomic(function (): string {
+            $this->replacements->link('B', 'C');
+
+            return 'saved';
+        }));
+        self::assertSame(['A' => 'C', 'B' => 'C'], $this->replacements->all());
+    }
+
+    public function testDetectedServerChangeQuarantinesExistingAliases(): void
+    {
+        $this->replacements->link('old', 'current');
+        $before = $this->replacements->fingerprint();
+        $identities = new MovieIdentityRepository($this->database, $this->scope);
+        $token = $identities->acquireLease(time());
+        self::assertIsString($token);
+        $identities->saveState(['serverMismatch' => true]);
+        $identities->releaseLease($token);
+        self::assertSame('old', $this->replacements->resolve('old'));
+        self::assertSame(['old'], $this->replacements->members('old'));
+        self::assertSame([], $this->replacements->all());
+        self::assertNotSame($before, $this->replacements->fingerprint());
+        self::assertSame(1, $this->database->getDibi()->select('COUNT(*)')->from('movie_replacements')->where('server_key = %s', $this->scope)->fetchSingle());
+        $this->expectException(RuntimeException::class);
+        $this->replacements->link('older', 'current');
     }
 
     public function testChainedReplacementsFlattenEveryUpstreamAlias(): void

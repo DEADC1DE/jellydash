@@ -10,6 +10,7 @@ use Mk\Framework\Database;
 use Mk\Framework\Downloads\DownloadRepository;
 use Mk\Framework\Health\WorkerStatusRepository;
 use Mk\Framework\Integrations\ConnectionRepository;
+use Mk\Framework\Jellyfin\MovieIdentityRepository;
 use Mk\Framework\Jellyfin\MovieReplacements;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
@@ -58,6 +59,8 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             'download_connection_state',
             'integration_connections',
             'login_attempts',
+            'movie_identity_items',
+            'movie_identity_state',
             'movie_replacements',
             'play_history',
             'push_subscriptions',
@@ -107,6 +110,14 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
     public function testSchemaInitializationPreservesRowsAndUpgradesNotifiedColumn(): void
     {
         $this->initializeAllSchemas();
+        $this->dibi->insert('movie_identity_items', [
+            'server_key' => str_repeat('1', 64), 'item_id' => 'Identity-Movie ',
+            'data_json' => '{"title":"Original movie","providers":{"Tmdb":"123"}}',
+        ])->execute();
+        $this->dibi->insert('movie_identity_state', [
+            'server_key' => str_repeat('1', 64), 'data_json' => '{"scan":"running","offset":100}',
+            'lease_token' => str_repeat('f', 64), 'lease_until_epoch' => 2000,
+        ])->execute();
         $this->dibi->insert('movie_replacements', [
             'server_key' => str_repeat('1', 64),
             'item_id' => 'Old-Movie ',
@@ -158,6 +169,15 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         $this->assertNotFalse($replacement);
         $this->assertSame('Old-Movie ', (string) $replacement['item_id']);
         $this->assertSame('Current-Movie', (string) $replacement['replacement_id']);
+        $identity = $this->dibi->select('item_id, data_json')->from('movie_identity_items')->fetch();
+        $this->assertNotFalse($identity);
+        $this->assertSame('Identity-Movie ', (string) $identity['item_id']);
+        $this->assertSame('{"title":"Original movie","providers":{"Tmdb":"123"}}', (string) $identity['data_json']);
+        $identityState = $this->dibi->select('data_json, lease_token, lease_until_epoch')->from('movie_identity_state')->fetch();
+        $this->assertNotFalse($identityState);
+        $this->assertSame('{"scan":"running","offset":100}', (string) $identityState['data_json']);
+        $this->assertSame(str_repeat('f', 64), (string) $identityState['lease_token']);
+        $this->assertSame(2000, (int) $identityState['lease_until_epoch']);
         $row = $this->dibi->select('watched_sec, notified, library_resolved_at, notification_attempts, notification_claim_token, notification_claimed_at_epoch, notification_next_attempt_at_epoch')->from('play_history')->fetch();
         $this->assertNotFalse($row);
         $this->assertSame(300, (int) $row['watched_sec']);
@@ -252,6 +272,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         new PlayHistoryRepository($this->database);
         new ThemePlaybackExclusions($this->database);
         new MovieReplacements($this->database);
+        new MovieIdentityRepository($this->database);
         new PushSubscriptionRepository($this->database);
         new SeerrRequestRepository($this->database);
         WorkerStatusRepository::ensureSchema($this->database);
@@ -332,6 +353,7 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             [AppSettings::class, 'schemaConnections', null],
             [PlayHistoryRepository::class, 'schemaConnections', null],
             [MovieReplacements::class, 'schemaConnections', null],
+            [MovieIdentityRepository::class, 'schemaConnections', null],
             [PushSubscriptionRepository::class, 'schemaConnections', null],
             [SeerrRequestRepository::class, 'schemaConnections', null],
         ];

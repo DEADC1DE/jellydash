@@ -2,11 +2,31 @@
 
 Deleting and re-adding a movie in Jellyfin can give it a different item ID. Jellydash keeps the ID recorded with each play, so the old and current items appear separately in Statistics. Artwork for the deleted ID may also stop loading.
 
-Use a movie replacement mapping when you've checked that a deleted item and its current replacement are the same movie. The mapping combines their Statistics and monthly recap entries, includes all their plays in the movie's History drilldown, and loads artwork from the current item.
+Jellydash checks for replacements automatically. It saves movie identity metadata while the item is available, then uses matching TMDB or IMDb IDs to reconnect a deleted item to its current replacement. The mapping combines their Statistics and monthly recap entries, includes all their plays in the movie's History drilldown, and loads artwork from the current item.
 
-This is a manual repair. Jellydash does not match movies by title or automatically reconcile provider IDs. Older history has no saved TMDB or IMDb identity, so the confirmation flag records your decision that the two IDs represent the same movie. Separate movies with the same title stay separate unless you explicitly link them.
+Checks run in small batches through the normal history worker. Opening Settings, History, Statistics or Now Playing as a manager also advances them. There's no separate command to run. The first check can take a while on a large library, and Jellydash checks the library twice before making an automatic repair.
 
-## Preview the replacement
+Automatic repair requires one matching current movie, a confirmed missing old item, and no conflicting identity, year or library information. Failed requests and incomplete scans are retried. Multiple copies or uncertain matches stay separate. A replacement can be found before anyone plays it.
+
+## Older history and uncertain matches
+
+Open **Settings > Movie replacements** to review suggested movies. History and Statistics show a link there when suggestions need attention. This section is available to managers, or anyone using an installation with authentication disabled.
+
+Older deleted items may have only a saved title, with no TMDB or IMDb identity. Jellydash can suggest a current movie with that title, but it needs your confirmation. Check its title, year and poster, then choose **Use this movie**. Choose **Keep separate** if it isn't the same movie. You don't need to look up item IDs or open a terminal.
+
+If no suitable movie is found, the original history stays saved. Jellydash can't reliably identify every deleted item from its title alone.
+
+## Undo a repair
+
+Expand **Reconnected movies** in Settings and choose **Undo**. For repairs made here or automatically, this restores the affected replacement group to its previous state. Every original play stays saved, and artwork may become unavailable again for deleted items.
+
+Undone and dismissed entries appear under **Kept separate**. They stay separate during later checks until you choose **Check again**.
+
+## Advanced command-line repair
+
+The commands below remain available for installations that need an explicit mapping. The Settings workflow handles ordinary replacements.
+
+### Preview the replacement
 
 Run the command from the Jellydash project directory. It uses the database and Jellyfin server configured for that installation.
 
@@ -24,7 +44,7 @@ php bin/console.php history:replace-movie OLD_ITEM_ID CURRENT_ITEM_ID --apply --
 
 The command checks the metadata again before saving. Repeating the same mapping is safe. If the movie is replaced again, link the former current ID to the new current ID. The existing mappings follow the new replacement.
 
-## Undo a mapping
+### Remove a mapping with the command line
 
 Preview the mapping to remove:
 
@@ -38,10 +58,12 @@ Then remove it:
 php bin/console.php history:unlink-movie OLD_ITEM_ID --apply
 ```
 
-This removes the mapping for that old ID. Its plays become a separate item again, and its poster may be unavailable if Jellyfin no longer has its artwork.
+This removes only the mapping for that old ID. Its plays become a separate item again, and its poster may be unavailable if Jellyfin no longer has its artwork. Use **Undo** in Settings when you also want to prevent automatic checks from recreating the link.
 
 ## History and backups
 
 Replacement mappings do not rewrite original history IDs, delete plays, create playback alerts, or modify Jellyfin. Watch time and import deduplication still use the recorded playback data. Filtered History exports include all plays in the replacement group, while each CSV row keeps its original item ID.
 
-Mappings belong to the configured Jellyfin server. Keep the Jellyfin URL stable so the installation continues to use the same mappings. Back up the full Jellydash database to preserve them. MariaDB-to-SQLite migration preserves mappings; a History CSV alone does not include them, so importing that CSV into another installation does not restore replacement groups.
+Mappings and saved movie metadata belong to the configured Jellyfin server. Keep the Jellyfin URL stable so the installation continues to use them. If a different Jellyfin server identity appears at that address, recovery pauses and existing mappings stop being applied.
+
+Back up the full Jellydash database to preserve mappings, metadata and recovery decisions. MariaDB-to-SQLite migration preserves them. A History CSV alone does not include them, so importing that CSV into another installation does not restore replacement groups or saved identity evidence.

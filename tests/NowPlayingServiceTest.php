@@ -7,6 +7,32 @@ use PHPUnit\Framework\TestCase;
 
 final class NowPlayingServiceTest extends TestCase
 {
+    public function testBothPlaybackPathsCaptureRawMovieIdentityWithoutBlockingHistory(): void
+    {
+        foreach (['payload', 'recordActivePlays'] as $method) {
+            $id = 'capture-' . bin2hex(random_bytes(8));
+            $sessions = [[
+                'Id' => 'session-' . $id,
+                'UserName' => 'Identity test',
+                'NowPlayingItem' => ['Id' => $id, 'Type' => 'Movie', 'Name' => 'Identity sample', 'ProductionYear' => 2026, 'ProviderIds' => ['Tmdb' => '123']],
+                'PlayState' => ['PositionTicks' => 10000000, 'PlayMethod' => 'DirectPlay'],
+            ]];
+            $client = new \Mk\Framework\Jellyfin\JellyfinClient(requester: static fn (string $path): array => $path === '/Sessions' ? $sessions : ['Items' => [], 'TotalRecordCount' => 0]);
+            $captured = null;
+            $service = new NowPlayingService(client: $client, movieIdentityCapture: static function (array $raw) use (&$captured): void {
+                $captured = $raw;
+                throw new RuntimeException('Optional identity store unavailable');
+            });
+            try {
+                $service->$method();
+                self::assertSame($sessions, $captured);
+                self::assertSame(1, \Mk\Framework\Container::db()->getDibi()->select('COUNT(*)')->from('play_history')->where('item_id = %s', $id)->fetchSingle());
+            } finally {
+                \Mk\Framework\Container::db()->getDibi()->delete('play_history')->where('item_id = %s', $id)->execute();
+            }
+        }
+    }
+
     public function testActiveUsersIncludesUsernameZeroButIgnoresEmptyNames(): void
     {
         $stats = (new \ReflectionClass(NowPlayingService::class))

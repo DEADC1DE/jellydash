@@ -25,6 +25,9 @@
     <link rel="preload" href="/assets/fonts/barlow/Barlow-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="/assets/fonts/barlow/Barlow-Bold.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/assets/css/dashboard.css?v={{ asset_revision }}">
+    {% if movie_recovery_allowed|default(false) and layout.page in ['settings', 'history', 'statistics', 'now-playing'] %}
+        <link rel="stylesheet" href="/assets/css/movie-recovery.css?v={{ asset_revision }}">
+    {% endif %}
     {% for href in module_styles %}
         <link rel="stylesheet" href="{{ href }}">
     {% endfor %}
@@ -72,6 +75,9 @@
         </header>
 
         <section class="dashboard-content{{ layout.content_class|default('') ? ' ' ~ layout.content_class : '' }}">
+            {% if movie_recovery_allowed|default(false) and layout.page in ['history', 'statistics'] %}
+                <a class="movie-recovery-notice" href="/settings#movie-recovery" data-movie-recovery-notice hidden></a>
+            {% endif %}
             {% block dashboard_content %}{% endblock %}
         </section>
 
@@ -97,6 +103,9 @@
 <script src="/assets/js/system-status.js?v={{ asset_revision }}"></script>
 <script src="/assets/js/avatars.js?v={{ asset_revision }}"></script>
 <script src="/assets/js/history-library-upgrade.js?v={{ asset_revision }}"></script>
+{% if movie_recovery_allowed|default(false) and layout.page in ['settings', 'history', 'statistics', 'now-playing'] %}
+    <script src="/assets/js/movie-recovery.js?v={{ asset_revision }}"></script>
+{% endif %}
 <script src="/assets/js/release-highlights.js?v=20260822-history-upgrade"></script>
 {% for src in module_scripts %}
     <script src="{{ src }}"></script>

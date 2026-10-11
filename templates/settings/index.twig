@@ -210,6 +210,10 @@
                 </section>
             {% endif %}
 
+            {% if can_manage_global and movie_recovery_allowed|default(false) %}
+                {% include "settings/_movie_recovery.twig" %}
+            {% endif %}
+
             <section class="settings-card system-status-card" id="system-status" data-system-status aria-labelledby="system-status-title">
                 <header class="settings-card-head system-status-head">
                     <span class="settings-card-mark" aria-hidden="true">

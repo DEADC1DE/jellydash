@@ -1,0 +1,32 @@
+.movie-recovery-notice {
+    display: block;
+    margin-bottom: 1rem;
+    padding: .8rem 1rem;
+    border: 1px solid rgba(164, 142, 255, .35);
+    border-radius: 12px;
+    background: rgba(125, 97, 230, .09);
+    color: #c8bbff;
+}
+.movie-recovery [hidden], .movie-recovery-notice[hidden] { display: none !important; }
+.movie-recovery { min-width: 0; }
+.movie-recovery .settings-card-head { grid-template-columns: minmax(0, 1fr); }
+.movie-recovery-status { color: #b9b8c3; font-size: .9rem; line-height: 1.5; }
+.movie-recovery-error { color: #ffb7ba; line-height: 1.5; }
+.movie-recovery-item { padding: 1rem 0; border-top: 1px solid rgba(255, 255, 255, .08); }
+.movie-recovery-item h3 { margin: 0 0 .3rem; font-size: 1rem; overflow-wrap: anywhere; }
+.movie-recovery-item p { margin: .3rem 0 .75rem; font-size: .85rem; color: #b9b8c3; line-height: 1.5; }
+.movie-recovery-candidate { display: flex; align-items: center; gap: .85rem; margin: .7rem 0; }
+.movie-recovery-candidate img { width: 48px; height: 72px; border-radius: 6px; object-fit: cover; background: #272339; flex: none; }
+.movie-recovery-candidate > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.movie-recovery-candidate strong, .movie-recovery-candidate small { display: block; }
+.movie-recovery-candidate small { color: #b9b8c3; margin: .25rem 0 .5rem; }
+.movie-recovery details { margin: .8rem 0; }
+.movie-recovery summary { cursor: pointer; padding: .4rem 0; color: #c8bbff; }
+.movie-recovery-pager { display: flex; gap: .6rem; align-items: center; justify-content: space-between; margin: 1rem 0; }
+.movie-recovery button { white-space: normal; }
+.movie-recovery button:disabled { opacity: .55; cursor: wait; }
+.movie-recovery button:focus-visible, .movie-recovery summary:focus-visible, .movie-recovery-notice:focus-visible { outline: 2px solid #bba9ff; outline-offset: 3px; }
+@media (max-width: 420px) {
+    .movie-recovery-candidate { gap: .65rem; }
+    .movie-recovery-pager { flex-wrap: wrap; }
+}

@@ -14,6 +14,8 @@ final class MovieReplacements
     private \Dibi\Connection $db;
     private DatabasePlatform $platform;
     private readonly string $serverKey;
+    private MovieIdentityRepository $identities;
+    private bool $inMutation = false;
     /** @var \WeakMap<\Dibi\Connection, true>|null */
     private static ?\WeakMap $schemaConnections = null;
 
@@ -24,11 +26,15 @@ final class MovieReplacements
         $this->platform = $database->getPlatform();
         $this->serverKey = $serverKey ?? ThemePlaybackExclusions::serverKey(Config::get('JELLYFIN_URL', ''));
         $this->validateId($this->serverKey);
+        $this->identities = new MovieIdentityRepository($database, $this->serverKey);
         $this->ensureSchema();
     }
 
     public function resolve(string $itemId): string
     {
+        if ($this->identities->state()['serverMismatch'] ?? false) {
+            return $itemId;
+        }
         $replacement = $this->db->select('replacement_id')->from('movie_replacements')
             ->where('server_key = %s AND item_id = %s', $this->serverKey, $itemId)->fetchSingle();
 
@@ -53,6 +59,9 @@ final class MovieReplacements
     /** @return array<string, string> */
     public function all(): array
     {
+        if ($this->identities->state()['serverMismatch'] ?? false) {
+            return [];
+        }
         $map = [];
         foreach ($this->db->select('item_id, replacement_id')->from('movie_replacements')
             ->where('server_key = %s', $this->serverKey)->orderBy('item_id')->fetchAll() as $row) {
@@ -76,6 +85,9 @@ final class MovieReplacements
         }
 
         $this->mutate(function () use ($oldId, $newId): void {
+            if ($this->identities->state()['serverMismatch'] ?? false) {
+                throw new \RuntimeException('Movie replacements are paused because the Jellyfin server changed.');
+            }
             $map = $this->all();
             $target = $map[$newId] ?? $newId;
             if ($target === $oldId) {
@@ -112,6 +124,24 @@ final class MovieReplacements
         return $removed;
     }
 
+    /**
+     * Keep a repair and its decision record in the same database transaction.
+     *
+     * @template T
+     * @param callable(): T $operation
+     * @return T
+     */
+    public function atomic(callable $operation): mixed
+    {
+        $result = null;
+        $this->mutate(function () use ($operation, &$result): void {
+            $result = $operation();
+        });
+
+        /** @var T $result */
+        return $result;
+    }
+
     private function validateId(string $itemId): void
     {
         if (trim($itemId) === '' || strlen($itemId) > 64) {
@@ -121,6 +151,11 @@ final class MovieReplacements
 
     private function mutate(callable $operation): void
     {
+        if ($this->inMutation) {
+            $operation();
+
+            return;
+        }
         $lockName = 'jellydash:movie:' . substr(hash('sha256', (string) $this->db->getConfig('database') . ':' . $this->serverKey), 0, 49);
         $locked = false;
         $transaction = false;
@@ -135,6 +170,7 @@ final class MovieReplacements
                 $this->db->begin();
             }
             $transaction = true;
+            $this->inMutation = true;
             $operation();
             $this->db->commit();
             $transaction = false;
@@ -144,6 +180,7 @@ final class MovieReplacements
             }
             throw $error;
         } finally {
+            $this->inMutation = false;
             if ($locked) {
                 $this->db->query('SELECT RELEASE_LOCK(%s)', $lockName);
             }

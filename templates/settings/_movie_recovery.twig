@@ -1,0 +1,27 @@
+<section class="settings-card movie-recovery" id="movie-recovery" data-movie-recovery aria-labelledby="movie-recovery-title">
+    <header class="settings-card-head">
+        <span class="settings-card-copy">
+            <strong id="movie-recovery-title" tabindex="-1">Movie replacements</strong>
+            <span>Keep history and artwork connected when a movie is replaced.</span>
+        </span>
+    </header>
+    <p class="settings-note">Jellydash reconnects movies automatically when their saved identity matches. Older entries may need you to choose the replacement below. Every play stays saved.</p>
+    <p class="movie-recovery-status" data-movie-recovery-status role="status">Checking movie replacements…</p>
+    <p class="movie-recovery-error" data-movie-recovery-error role="alert" hidden></p>
+    <div data-movie-recovery-suggestions></div>
+    <details data-movie-recovery-repairs-wrap hidden>
+        <summary data-movie-recovery-repairs-label>Reconnected movies</summary>
+        <div data-movie-recovery-repairs></div>
+    </details>
+    <details data-movie-recovery-dismissed-wrap hidden>
+        <summary data-movie-recovery-dismissed-label>Kept separate</summary>
+        <div data-movie-recovery-dismissed></div>
+    </details>
+    <nav class="movie-recovery-pager" data-movie-recovery-pager aria-label="Movie replacement pages" hidden>
+        <button class="settings-secondary-btn" type="button" data-movie-recovery-prev>Previous</button>
+        <span data-movie-recovery-page></span>
+        <button class="settings-secondary-btn" type="button" data-movie-recovery-next>Next</button>
+    </nav>
+    <button class="settings-secondary-btn" type="button" data-movie-recovery-refresh>Refresh</button>
+    <noscript><p>Enable JavaScript to review movie replacements here. Automatic checks also run through Jellydash's background worker.</p></noscript>
+</section>

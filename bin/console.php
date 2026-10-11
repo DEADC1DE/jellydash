@@ -179,6 +179,13 @@ try {
                     echo date('c') . $message . "\n";
                 },
             ))->run();
+            try {
+                if (trim((string) Config::get('JELLYFIN_URL', '')) !== '') {
+                    (new Jellyfin\MovieRecoveryService())->runBatch();
+                }
+            } catch (\Throwable $error) {
+                Log::logException($error);
+            }
             break;
 
         case 'seerr:poll':
