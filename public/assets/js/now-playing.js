@@ -240,6 +240,17 @@
             const interactionAttributes = current.hasAttribute('data-diagnostics-overlay')
                 ? ['aria-hidden', 'inert']
                 : (current.hasAttribute('data-diagnostics-open') ? ['aria-expanded', 'disabled'] : []);
+            if (current.hasAttribute('data-avatar-img') && next.hasAttribute('data-avatar-img')) {
+                interactionAttributes.push('data-avatar-bound');
+            }
+            if (current.classList.contains('watcher-avatar') && next.classList.contains('watcher-avatar')) {
+                const currentImage = current.querySelector('[data-avatar-img]');
+                const nextImage = next.querySelector('[data-avatar-img]');
+                // Keep the loaded state only while the same avatar is retained.
+                next.classList.toggle('has-image', Boolean(currentImage && nextImage
+                    && currentImage.getAttribute('src') === nextImage.getAttribute('src')
+                    && current.classList.contains('has-image')));
+            }
             Array.from(current.attributes).forEach(({ name }) => {
                 if (!interactionAttributes.includes(name) && !next.hasAttribute(name)) {
                     current.removeAttribute(name);

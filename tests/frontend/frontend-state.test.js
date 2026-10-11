@@ -254,7 +254,7 @@ async function testNowPlayingDiagnosticsRefresh() {
     });
     const hooks = {};
     const first = { id: 'same-session', itemId: 'episode-1', diagnosticsId: 'same-diagnostics', title: 'First episode',
-        subtitle: 'S1 E1', isTranscode: true, sourceMediaLabel: 'HEVC · MKV', outputMediaLabel: 'H.264 · TS',
+        subtitle: 'S1 E1', avatarUrl: '/avatar-one.png', isTranscode: true, sourceMediaLabel: 'HEVC · MKV', outputMediaLabel: 'H.264 · TS',
         transcodeReasons: ['Video codec not supported'], bitrateLabel: '8 Mbps', progressPct: '25%', timeLabel: '10:00 / 40:00' };
     let payload = { streams: [first], stats: { active_streams: 1, active_users: 1 } };
     let selection = null;
@@ -271,6 +271,16 @@ async function testNowPlayingDiagnosticsRefresh() {
     opener.click(); // Native Enter activates this same click handler.
     assert.equal(document.activeElement, close);
     assert.equal(opener.disabled || opener.inert || opener.tabIndex < 0, true);
+
+    const avatar = card.querySelector('.watcher-avatar');
+    const avatarImage = avatar.querySelector('[data-avatar-img]');
+    // Model the state installed by avatars.js after the image loads.
+    avatar.classList.toggle('has-image', true);
+    avatarImage.setAttribute('data-avatar-bound', '1');
+    await hooks.refreshNowPlaying();
+    assert.equal(avatar.classList.contains('has-image'), true, 'A protected poll keeps a loaded avatar visible');
+    assert.equal(avatar.querySelector('[data-avatar-img]'), avatarImage);
+    assert.equal(avatarImage.getAttribute('data-avatar-bound'), '1', 'Retained images keep their existing event bindings');
 
     payload = { ...payload, streams: [{ ...first, itemId: 'episode-2', title: 'Next episode', subtitle: 'S1 E2',
         sourceMediaLabel: 'AV1 · MP4', outputMediaLabel: 'H.264 · MP4',
@@ -308,6 +318,17 @@ async function testNowPlayingDiagnosticsRefresh() {
     assert.equal(document.activeElement, opener);
     assert.equal(card.querySelector('[data-diagnostics-open]'), opener);
     assert.equal(card.querySelector('[data-progress-time]').textContent, '3:12 / 40:00');
+    assert.equal(avatar.classList.contains('has-image'), true, 'A focused opener also preserves the loaded avatar');
+    payload = { ...payload, streams: [{ ...payload.streams[0], avatarUrl: '/avatar-two.png' }] };
+    await hooks.refreshNowPlaying();
+    assert.equal(avatar.classList.contains('has-image'), false, 'A changed avatar waits for its own successful load');
+    assert.equal(avatarImage.getAttribute('src'), '/avatar-two.png');
+    assert.equal(avatarImage.getAttribute('data-avatar-bound'), '1');
+    avatar.classList.toggle('has-image', true);
+    payload = { ...payload, streams: [{ ...payload.streams[0], avatarUrl: '' }] };
+    await hooks.refreshNowPlaying();
+    assert.equal(avatar.classList.contains('has-image'), false, 'Removing the image restores the initials');
+    assert.equal(avatar.querySelector('[data-avatar-img]'), null);
     opener.click();
     close.click();
     assert.equal(document.activeElement, opener);
