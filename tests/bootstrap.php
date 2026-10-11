@@ -54,6 +54,7 @@ Dotenv\Dotenv::createImmutable(ROOT_DIR)->safeLoad();
 // A developer's configured services must never receive traffic from tests.
 foreach ([
     'JELLYFIN_URL',
+    'JELLYFIN_LINK_URL',
     'JELLYFIN_API_TOKEN',
     'JELLYFIN_API_KEY',
     'JELLYSEER_URL',

@@ -2,7 +2,8 @@
 
 Open **Server Activity** in the sidebar to see your Jellyfin server details,
 scheduled tasks and recent activity. It uses the existing `JELLYFIN_URL` and
-`JELLYFIN_API_TOKEN` configuration. No extra service or background collector
+`JELLYFIN_API_TOKEN` configuration. **Open Jellyfin** uses `JELLYFIN_LINK_URL`
+when set, or `JELLYFIN_URL` otherwise. No extra service or background collector
 is needed.
 
 With Jellydash login enabled, owners and admins can open the page. Access is
@@ -19,7 +20,8 @@ may still be available through Jellyfin's public system information endpoint.
 
 Server details include the name, version, package name and pending restart
 state when Jellyfin supplies them. **Open Jellyfin** opens the configured
-server in another tab.
+browser-facing address in another tab. If `JELLYFIN_LINK_URL` is invalid, the
+link is disabled; Jellydash's connection to Jellyfin is unaffected.
 
 Running tasks show their reported progress. If Jellyfin does not report a
 percentage, the page shows the task's state. Recent results show the latest

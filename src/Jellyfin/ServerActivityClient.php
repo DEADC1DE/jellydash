@@ -25,7 +25,7 @@ final class ServerActivityClient
 
     public function configured(): bool
     {
-        return $this->dashboardUrl() !== null && $this->token !== '';
+        return JellyfinLinks::validatedBaseUrl($this->url) !== null && $this->token !== '';
     }
 
     public function sourceKey(): string
@@ -35,13 +35,9 @@ final class ServerActivityClient
 
     public function dashboardUrl(): ?string
     {
-        $parts = parse_url($this->url);
-        if (!is_array($parts) || !in_array($parts['scheme'] ?? '', ['http', 'https'], true)
-            || empty($parts['host']) || isset($parts['user']) || isset($parts['pass'])
-            || isset($parts['query']) || isset($parts['fragment'])) {
-            return null;
-        }
-        return $this->url . '/web/';
+        $baseUrl = JellyfinLinks::baseUrl($this->url);
+
+        return $baseUrl !== null ? $baseUrl . '/web/' : null;
     }
 
     /** @return array<mixed> */

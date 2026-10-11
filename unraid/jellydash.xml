@@ -21,6 +21,7 @@
   <Config Name="Appdata" Target="/var/www/html/var" Default="/mnt/user/appdata/jellydash/var" Mode="rw" Description="SQLite database, logs, and runtime files. Back up this path." Type="Path" Display="always" Required="true" Mask="false"/>
   <Config Name="Uploads" Target="/var/www/html/public/uploads" Default="/mnt/user/appdata/jellydash/uploads" Mode="rw" Description="Uploaded images and other user files. Back up this path." Type="Path" Display="always" Required="true" Mask="false"/>
   <Config Name="Jellyfin URL" Target="JELLYFIN_URL" Default="" Description="Jellyfin address reachable from this container. Use a server IP or hostname, not localhost." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Jellyfin link URL" Target="JELLYFIN_LINK_URL" Default="" Description="Optional browser-facing address for links that open Jellyfin. Leave empty to use Jellyfin URL. A reverse-proxy base path is allowed, but do not add /web." Type="Variable" Display="always" Required="false" Mask="false"/>
   <Config Name="Jellyfin API key" Target="JELLYFIN_API_TOKEN" Default="" Description="API key from Jellyfin Dashboard, API Keys. Some statistics need an admin key." Type="Variable" Display="always" Required="true" Mask="true"/>
   <Config Name="Timezone" Target="APP_TIMEZONE" Default="UTC" Description="IANA timezone, for example Europe/Prague. Used for History and Statistics dates." Type="Variable" Display="always" Required="true" Mask="false"/>
 

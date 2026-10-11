@@ -44,6 +44,9 @@ final class ServerActivityService
                 return ['name' => $name, 'version' => $version, 'package' => '', 'pending_restart' => null, 'url' => $this->client->dashboardUrl()];
             });
         }
+        if (is_array($server['data'])) {
+            $server['data']['url'] = $this->client->dashboardUrl();
+        }
         $tasks = $this->cache->remember($source . ':tasks', 10, fn (): array => $this->tasks($this->client->get('/ScheduledTasks')));
         if ($tasks['stale'] && is_array($tasks['data'])) {
             foreach ($tasks['data']['running'] as &$task) {

@@ -125,6 +125,8 @@ docker compose up -d
 
 Open `http://your-host:8080`. Both setups create the database tables automatically; you don't need to import an SQL file.
 
+If `JELLYFIN_URL` uses a Docker hostname or another address your browser cannot reach, set `JELLYFIN_LINK_URL` in `.env` to the browser-facing Jellyfin address. It can include a reverse-proxy base path, for example `https://media.example.com/jellyfin`, but should not end in `/web`. Leave it empty to use `JELLYFIN_URL`. An invalid nonempty URL disables Jellyfin links. This only changes links opened in your browser; Jellydash continues to use `JELLYFIN_URL` for its Jellyfin connection and images.
+
 Set `APP_TIMEZONE` in `.env` to your local IANA timezone so History and Statistics use the right date boundaries. Custom `docker run` setups may pass the standard `TZ` variable instead. `APP_TIMEZONE` takes priority when both are present.
 
 Whichever database you choose, the active setup is saved as `docker-compose.yml`. Normal commands, aliases and update scripts work the same way for both.

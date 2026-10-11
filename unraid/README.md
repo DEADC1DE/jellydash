@@ -6,6 +6,8 @@ This template installs the Jellydash Docker image with SQLite, so it runs as one
 
 Create an API key in Jellyfin under **Dashboard > API Keys**. The template asks for your Jellyfin URL and the key. Use an address Jellydash can reach from its container, such as your server's LAN IP and Jellyfin port. `localhost` inside the container points back to Jellydash.
 
+If Jellydash should open Jellyfin through a different browser-facing address, set **Jellyfin link URL**. This is optional and can include a reverse-proxy base path, such as `https://media.example.com/jellyfin`. Leave it empty to use **Jellyfin URL**. Do not add `/web`.
+
 Set **Timezone** to your IANA timezone, such as `Europe/Prague`, so History and Statistics use your local date boundaries. The default is UTC.
 
 The template stores the SQLite database and runtime files in `/mnt/user/appdata/jellydash/var`, and uploads in `/mnt/user/appdata/jellydash/uploads`. You can change those host paths during installation. Keep both paths on persistent storage and include them in your backups. The database file is inside `var/data`.

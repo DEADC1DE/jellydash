@@ -14,7 +14,7 @@ final class RecentlyAddedService
     private const PAGE_SIZE = 100;
     private const MAX_RAW_ITEMS = 300;
     private const CACHE_TTL = 300;
-    private const CACHE_SCHEMA_VERSION = 2;
+    private const CACHE_SCHEMA_VERSION = 3;
     private const ALLOWED_TYPES = ['Movie', 'Series', 'Episode'];
 
     public function __construct(
@@ -398,6 +398,8 @@ final class RecentlyAddedService
             'dateLabel' => $this->dateLabel($created),
             'addedAt' => $created->format(\DateTimeInterface::ATOM),
             'poster' => $this->posterUrl($posterId),
+            'detailsId' => $detailsId,
+            'serverId' => $serverId,
             'jellyfinUrl' => $this->detailsUrl($detailsId, $serverId),
             'tone' => (abs(crc32($seed)) % 5) + 1,
             'created' => $created,
@@ -418,18 +420,11 @@ final class RecentlyAddedService
 
     private function detailsUrl(string $itemId, ?string $serverId): string
     {
-        $baseUrl = rtrim(trim(($this->client ?? new JellyfinClient())->baseUrl()), '/');
-        $parts = parse_url($baseUrl);
+        $baseUrl = JellyfinLinks::baseUrl(($this->client ?? new JellyfinClient())->baseUrl());
         if (
             !$this->safeIdentifier($itemId)
             || !$this->safeIdentifier((string) $serverId)
-            || !is_array($parts)
-            || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
-            || (string) ($parts['host'] ?? '') === ''
-            || isset($parts['user'])
-            || isset($parts['pass'])
-            || isset($parts['query'])
-            || isset($parts['fragment'])
+            || $baseUrl === null
         ) {
             return '';
         }
@@ -544,6 +539,21 @@ final class RecentlyAddedService
 
             return $created !== null && $created >= $cutoff;
         }));
+        foreach ($payload['items'] as &$item) {
+            $detailsId = (string) ($item['detailsId'] ?? '');
+            $serverId = (string) ($item['serverId'] ?? '');
+            // Older caches only stored the complete link. Recover its IDs so
+            // stale cards also follow the current browser URL during an outage.
+            if (!array_key_exists('detailsId', $item)) {
+                $fragment = parse_url((string) ($item['jellyfinUrl'] ?? ''), PHP_URL_FRAGMENT);
+                if (is_string($fragment) && preg_match('/^\/details\?id=([A-Za-z0-9_-]+)&serverId=([A-Za-z0-9_-]+)$/D', $fragment, $matches)) {
+                    $detailsId = $matches[1];
+                    $serverId = $matches[2];
+                }
+            }
+            $item['jellyfinUrl'] = $this->detailsUrl($detailsId, $serverId);
+        }
+        unset($item);
         $payload['windowDays'] = self::WINDOW_DAYS;
         $payload['schemaVersion'] = (int) ($payload['schemaVersion'] ?? 0);
 
