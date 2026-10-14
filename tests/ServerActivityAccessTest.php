@@ -39,7 +39,7 @@ final class ServerActivityAccessTest extends TestCase
         $db = Container::db();
         $db->ensureAuthSchema();
         $id = $db->addAuthUser('activity-page-test', 'test-password-123', 'Tester', Authorization::ROLE_OWNER);
-        $_SESSION = ['auth_user' => ['id' => $id, 'role' => 1], 'auth_login_time' => time(), 'auth_last_activity' => time()];
+        $_SESSION = ['auth_user' => ['id' => $id, 'role' => 1, 'auth_generation' => 0], 'auth_login_time' => time(), 'auth_last_activity' => time()];
         try {
             foreach ([1 => true, 2 => true, 3 => false, 4 => false] as $role => $allowed) {
                 $db->getDibi()->update('users', ['role' => $role])->where('id = %i', $id)->execute();

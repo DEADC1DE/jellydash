@@ -63,6 +63,36 @@ final class ConfigTest extends TestCase
         $this->assertSame(120, Config::interval('CFG_FOO', 30));
     }
 
+    public function testInvalidAuthenticationFlagCannotBecomeAuthOff(): void
+    {
+        $previous = getenv('AUTH_ENABLED');
+        try {
+            putenv('AUTH_ENABLED=truee');
+            $this->expectException(InvalidArgumentException::class);
+            $this->expectExceptionMessage('AUTH_ENABLED must be a valid boolean.');
+            Config::bool('AUTH_ENABLED');
+        } finally {
+            putenv($previous === false ? 'AUTH_ENABLED' : 'AUTH_ENABLED=' . $previous);
+        }
+    }
+
+    public function testAuthenticationFlagKeepsAcceptedVariantsAndEmptyDefault(): void
+    {
+        $previous = getenv('AUTH_ENABLED');
+        try {
+            foreach (['true', 'TRUE', '  true ', "\tyes\t", '1', 'On'] as $value) {
+                putenv('AUTH_ENABLED=' . $value);
+                $this->assertTrue(Config::bool('AUTH_ENABLED'));
+            }
+            foreach (['false', 'FALSE', ' no ', '0', 'off', ''] as $value) {
+                putenv('AUTH_ENABLED=' . $value);
+                $this->assertFalse(Config::bool('AUTH_ENABLED'));
+            }
+        } finally {
+            putenv($previous === false ? 'AUTH_ENABLED' : 'AUTH_ENABLED=' . $previous);
+        }
+    }
+
     public function testEnvDefaultsToProduction(): void
     {
         $this->assertSame('production', Config::env());

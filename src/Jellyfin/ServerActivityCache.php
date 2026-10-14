@@ -71,6 +71,25 @@ final class ServerActivityCache
             if ($old !== null && ($old['written_at'] > $now - $ttl || ($old['retry_at'] ?? 0) > $now)) {
                 return $old['payload'];
             }
+            $publishLock = $this->lock('source-' . $this->stripe($key));
+            if ($publishLock === false) {
+                return $this->failure('checking');
+            }
+            try {
+                $marker = $this->marker($key);
+                if (($marker['blocked_source'] ?? null) === $source && ($marker['retry_at'] ?? 0) > $now) {
+                    return $this->failure('forbidden');
+                }
+                // A nonce also fences older loads when capacity cleanup removes their source marker.
+                if (!isset($marker['generation'])) {
+                    $marker = ['generation' => bin2hex(random_bytes(12))];
+                    if (!$this->writeMarker($key, $marker)) {
+                        return $this->failure('checking');
+                    }
+                }
+            } finally {
+                $this->unlock($publishLock);
+            }
             return $this->load($key, $load, $old, $marker);
         } finally {
             $this->unlock($lock);
@@ -103,12 +122,16 @@ final class ServerActivityCache
             $current = $this->marker($key);
             if ($state === 'forbidden') {
                 $current = ['generation' => bin2hex(random_bytes(12)), 'blocked_source' => $this->source($key), 'retry_at' => $now + 15];
-                $this->writeMarker($key, $current);
-            } elseif (($current['generation'] ?? '') !== ($marker['generation'] ?? '')) {
-                return $this->failure('forbidden');
+                if (!$this->writeMarker($key, $current)) {
+                    return $this->failure('checking');
+                }
+            } elseif (is_resource($publishLock) && ($current['generation'] ?? '') !== ($marker['generation'] ?? '')) {
+                return $this->failure(isset($current['blocked_source']) ? 'forbidden' : 'checking');
             } elseif ($state === 'ready' && ($current['blocked_source'] ?? null) === $this->source($key)) {
                 unset($current['blocked_source'], $current['retry_at']);
-                $this->writeMarker($key, $current);
+                if (!$this->writeMarker($key, $current)) {
+                    return $this->failure('checking');
+                }
             }
             $record['generation'] = $current['generation'] ?? '';
             $record['checksum'] = hash('sha256', json_encode($payload, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
@@ -165,16 +188,34 @@ final class ServerActivityCache
         if ($this->directory === null) {
             return [];
         }
-        $body = @file_get_contents($this->directory . '/generation-' . $this->stripe($key) . '.state');
+        $body = @file_get_contents($this->directory . '/generation-' . hash('sha256', $this->source($key)) . '.state');
         $marker = is_string($body) && strlen($body) < 1024 ? json_decode($body, true) : null;
         return is_array($marker) ? $marker : [];
     }
 
     /** @param array<string, mixed> $marker */
-    private function writeMarker(string $key, array $marker): void
+    private function writeMarker(string $key, array $marker): bool
     {
-        if ($this->directory !== null) {
-            $this->publish($this->directory . '/generation-' . $this->stripe($key) . '.state', $marker);
+        if ($this->directory === null) {
+            return true;
+        }
+        $lock = $this->lock('generation-cleanup');
+        if ($lock === false) {
+            return false;
+        }
+        try {
+            $path = $this->directory . '/generation-' . hash('sha256', $this->source($key)) . '.state';
+            $this->publish($path, $marker);
+            // Source metadata has its own hard bound, including bursts of denied sources.
+            $files = glob($this->directory . '/generation-*.state') ?: [];
+            $others = array_values(array_filter($files, static fn (string $file): bool => $file !== $path));
+            usort($others, static fn (string $a, string $b): int => (int) @filemtime($a) <=> (int) @filemtime($b));
+            foreach (array_slice($others, 0, max(0, count($files) - 64)) as $file) {
+                @unlink($file);
+            }
+            return true;
+        } finally {
+            $this->unlock($lock);
         }
     }
 

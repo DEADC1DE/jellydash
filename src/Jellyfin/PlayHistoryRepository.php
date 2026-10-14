@@ -37,6 +37,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
     ];
 
     private \Dibi\Connection $db;
+    private Database $database;
     private DatabasePlatform $platform;
     private ?MonitoringExclusions $monitoringExclusions;
     private ThemePlaybackExclusions $themePlaybackExclusions;
@@ -44,10 +45,8 @@ final class PlayHistoryRepository implements LibraryHistorySource
     /** @var \WeakMap<\Dibi\Connection, true>|null */
     private static ?\WeakMap $schemaConnections = null;
 
-    // A gap longer than this between updates means the previous play ended and a
-    // new viewing started (e.g. a re-watch on a client that keeps one session id
-    // alive). We deliberately do NOT treat a backwards position jump as a new
-    // play; that's just the viewer seeking within the same play.
+    // The freshness window for active history. Long gaps do not prove a restart;
+    // observed samples alone determine measured watch time.
     private const PLAY_GAP_SECONDS = 1800;
 
     // Imported Playback Reporting rows that start within this window of a live
@@ -64,6 +63,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
         ?MovieReplacements $movieReplacements = null,
     ) {
         $database ??= Container::db();
+        $this->database = $database;
         $this->db = $database->getDibi();
         $this->platform = $database->getPlatform();
         $this->monitoringExclusions = $monitoringExclusions;
@@ -109,6 +109,14 @@ final class PlayHistoryRepository implements LibraryHistorySource
      */
     public function logActiveStreams(array $streams, ?\DateTimeImmutable $now = null, int $casAttempt = 0): void
     {
+        (new HistoryWriteGuard($this->database))->run(function () use ($streams, $now, $casAttempt): void {
+            $this->logActiveStreamsGuarded($streams, $now, $casAttempt);
+        });
+    }
+
+    /** @param array<int, array<string, mixed>> $streams */
+    private function logActiveStreamsGuarded(array $streams, ?\DateTimeImmutable $now, int $casAttempt): void
+    {
         $now ??= new \DateTimeImmutable('now');
         $nowSql = $now->format('Y-m-d H:i:s');
 
@@ -127,7 +135,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
                 continue;
             }
 
-            $existing = $this->db->select('id, watched_sec, watch_duration_sec, updated_at, updated_at_epoch, is_finished, last_sample_epoch, last_sample_position_sec, last_sample_paused, last_sample_rate')
+            $existing = $this->db->select('id, watched_sec, watch_duration_sec, is_finished, last_sample_epoch, last_sample_position_sec, last_sample_paused, last_sample_rate')
                 ->from('play_history')
                 ->where('session_key = %s', $sessionKey)
                 ->where('item_id = %s', $itemId)
@@ -147,11 +155,6 @@ final class PlayHistoryRepository implements LibraryHistorySource
                 if ($previousSampleEpoch !== null && $now->getTimestamp() <= $previousSampleEpoch) {
                     continue;
                 }
-                $updatedEpoch = $existing['updated_at_epoch'] !== null
-                    ? (int) $existing['updated_at_epoch']
-                    : (new \DateTimeImmutable((string) $existing['updated_at']))->getTimestamp();
-                $secondsSinceUpdate = $now->getTimestamp() - $updatedEpoch;
-
                 // A finished row only becomes a new play when the position
                 // jumped back well below what was already watched (an actual
                 // restart). A finished item still playing out (credits) is a
@@ -160,7 +163,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
                 $restarted = (bool) $existing['is_finished']
                     && $position + 60 < (int) $existing['watched_sec'];
 
-                $isNewPlay = $restarted || $secondsSinceUpdate > self::PLAY_GAP_SECONDS;
+                $isNewPlay = $restarted;
             }
 
             $previousWatchedSec = ($existing && !$isNewPlay) ? (int) $existing['watched_sec'] : 0;
@@ -708,14 +711,69 @@ final class PlayHistoryRepository implements LibraryHistorySource
     private function withMovieReplacements(array $rows): array
     {
         $replacements = $this->movieReplacements->all();
+        $canonicalTargets = $this->canonicalMovieAliasTargets($replacements);
         foreach ($rows as $row) {
             $itemId = (string) ($row['item_id'] ?? '');
-            if ((string) ($row['item_type'] ?? '') === 'Movie' && isset($replacements[$itemId])) {
-                $row['resolved_item_id'] = $replacements[$itemId];
+            if ((string) ($row['item_type'] ?? '') === 'Movie') {
+                $resolvedId = $this->resolvedMovieId($itemId, $replacements, $canonicalTargets);
+                if ($resolvedId !== $itemId) {
+                    $row['resolved_item_id'] = $resolvedId;
+                }
             }
         }
 
         return $rows;
+    }
+
+    /**
+     * Only a full GUID can acquire an equivalent spelling. Conflicting alias
+     * targets keep exact mapping behavior rather than choosing one implicitly.
+     *
+     * @param array<string, string> $replacements
+     * @return array<string, string|null>
+     */
+    private function canonicalMovieAliasTargets(array $replacements): array
+    {
+        $targets = [];
+        foreach ($replacements as $source => $target) {
+            $sourceKey = ThemePlaybackExclusions::canonicalItemId((string) $source);
+            if (!self::isFullGuidKey($sourceKey)) {
+                continue;
+            }
+            if (!array_key_exists($sourceKey, $targets)) {
+                $targets[$sourceKey] = $target;
+            } elseif ($targets[$sourceKey] !== null
+                && ThemePlaybackExclusions::canonicalItemId($targets[$sourceKey]) !== ThemePlaybackExclusions::canonicalItemId($target)) {
+                $targets[$sourceKey] = null;
+            }
+        }
+        // A GUID used as a destination cannot also infer an onward alias from
+        // another spelling. Exact aliases still apply without that fallback.
+        foreach ($replacements as $target) {
+            $targetKey = ThemePlaybackExclusions::canonicalItemId($target);
+            if (isset($targets[$targetKey])
+                && ThemePlaybackExclusions::canonicalItemId($targets[$targetKey]) !== $targetKey) {
+                $targets[$targetKey] = null;
+            }
+        }
+
+        return $targets;
+    }
+
+    /** @param array<string, string> $replacements @param array<string, string|null> $canonicalTargets */
+    private function resolvedMovieId(string $itemId, array $replacements, array $canonicalTargets): string
+    {
+        if (isset($replacements[$itemId])) {
+            return $replacements[$itemId];
+        }
+        $key = ThemePlaybackExclusions::canonicalItemId($itemId);
+
+        return $canonicalTargets[$key] ?? $itemId;
+    }
+
+    private static function isFullGuidKey(string $key): bool
+    {
+        return preg_match('/^[0-9a-f]{32}$/', $key) === 1;
     }
 
     public function firstStatisticsStartedAt(): ?\DateTimeImmutable
@@ -751,46 +809,55 @@ final class PlayHistoryRepository implements LibraryHistorySource
      *
      * @param array<int, array<string, mixed>> $rows
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
-     * @return array{inserted: int, skipped: int, repaired: int}
+     * @param array<string, true> $dryRunSeen
+     * @return array{inserted: int, skipped: int, conflicts: int, repaired: int}
      */
-    public function importHistoricalPlays(array $rows, bool $dryRun = false, ?callable $onProgress = null): array
+    public function importHistoricalPlays(array $rows, bool $dryRun = false, ?callable $onProgress = null, array &$dryRunSeen = []): array
     {
         if ($dryRun) {
-            return $this->importHistoricalPlaysBatch($rows, true, $onProgress);
+            return $this->importHistoricalPlaysBatch($rows, true, $onProgress, $dryRunSeen);
         }
 
         $this->prepareHistoryImport();
-        $this->db->begin();
-        try {
-            $result = $this->importHistoricalPlaysBatch($rows, false, null);
-            $this->db->commit();
-        } catch (\Throwable $e) {
-            $this->db->rollback();
-            throw $e;
-        }
+        return (new HistoryWriteGuard($this->database))->run(function () use ($rows, $onProgress): array {
+            $this->db->begin();
+            try {
+                $seen = [];
+                $result = $this->importHistoricalPlaysBatch($rows, false, null, $seen);
+                $this->db->commit();
+            } catch (\Throwable $e) {
+                $this->db->rollback();
+                throw $e;
+            }
 
-        $this->reportImportProgress($onProgress, count($rows), count($rows), $result['inserted'], $result['skipped']);
+            $this->reportImportProgress($onProgress, count($rows), count($rows), $result['inserted'], $result['skipped'], $result['conflicts']);
 
-        return $result;
+            return $result;
+        });
     }
 
     /**
      * @param array<int, array<string, mixed>> $rows
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
-     * @return array{inserted: int, skipped: int, repaired: int}
+     * @param array<string, true> $dryRunSeen
+     * @return array{inserted: int, skipped: int, conflicts: int, repaired: int}
      */
-    private function importHistoricalPlaysBatch(array $rows, bool $dryRun, ?callable $onProgress): array
+    private function importHistoricalPlaysBatch(array $rows, bool $dryRun, ?callable $onProgress, array &$dryRunSeen): array
     {
         $inserted = 0;
         $skipped = 0;
+        $conflicts = 0;
         $repaired = 0;
         $livePlays = $this->livePlaysNearImport($rows);
+        [$exactKeys, $legacyBySecond] = $this->pluginImportCandidates($rows);
         $total = count($rows);
         $processed = 0;
 
         foreach ($rows as $row) {
             $sessionKey = (string) ($row['session_key'] ?? '');
             $itemId = (string) ($row['item_id'] ?? '');
+            $legacyKey = (string) ($row['legacy_session_key'] ?? '');
+            $identity = $sessionKey . "\0" . $itemId;
             if ($this->exclusions()->excludes($this->nullableString($row['user_name'] ?? null))) {
                 $skipped++;
             } elseif ($sessionKey === '' || $itemId === '') {
@@ -799,22 +866,36 @@ final class PlayHistoryRepository implements LibraryHistorySource
                 $skipped++;
             } elseif ($this->overlapsLivePlay($row, $livePlays)) {
                 $skipped++;
+            } elseif ($dryRun && isset($dryRunSeen[$identity])) {
+                $skipped++;
+            } elseif ($legacyKey !== '' && $this->hasExactImportCandidate($exactKeys, $sessionKey, $itemId)) {
+                if (!$dryRun && $this->repairImportedRow($sessionKey, $itemId, $row)) {
+                    $repaired++;
+                }
+                $skipped++;
+            } elseif ($legacyKey !== '' && $this->hasExactImportCandidate($exactKeys, $legacyKey, $itemId)) {
+                if (!$dryRun && $this->repairImportedRow($legacyKey, $itemId, $row)) {
+                    $repaired++;
+                }
+                $skipped++;
+            } elseif ($legacyKey !== '' && $this->hasAmbiguousLegacyCandidate($row, $legacyBySecond)) {
+                $conflicts++;
             } elseif ($dryRun) {
-                $exists = $this->db->select('id')
-                    ->from('play_history')
-                    ->where('session_key = %s', $sessionKey)
-                    ->where('item_id = %s', $itemId)
-                    ->fetch();
+                $exists = $legacyKey === '' && $this->db->select('id')
+                    ->from('play_history')->where('session_key = %s', $sessionKey)
+                    ->where('item_id = %s', $itemId)->fetch();
                 if ($exists) {
                     $skipped++;
                 } else {
                     $inserted++;
+                    $dryRunSeen[$identity] = true;
                 }
             } else {
                 if ($this->beforeImportWrite !== null) {
                     ($this->beforeImportWrite)($row);
                 }
                 try {
+                    unset($row['legacy_session_key']);
                     $this->db->insert('play_history', $row)->execute();
                     $inserted++;
                 } catch (\Dibi\UniqueConstraintViolationException) {
@@ -826,14 +907,83 @@ final class PlayHistoryRepository implements LibraryHistorySource
             }
 
             $processed++;
-            $this->reportImportProgress($onProgress, $processed, $total, $inserted, $skipped);
+            $this->reportImportProgress($onProgress, $processed, $total, $inserted, $skipped, $conflicts);
         }
 
         if ($total === 0) {
-            $this->reportImportProgress($onProgress, 0, 0, 0, 0);
+            $this->reportImportProgress($onProgress, 0, 0, 0, 0, 0);
         }
 
-        return ['inserted' => $inserted, 'skipped' => $skipped, 'repaired' => $repaired];
+        return ['inserted' => $inserted, 'skipped' => $skipped, 'conflicts' => $conflicts, 'repaired' => $repaired];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array{array<string, true>, array<string, list<\Dibi\Row>>}
+     */
+    private function pluginImportCandidates(array $rows): array
+    {
+        $keys = [];
+        $seconds = [];
+        foreach ($rows as $row) {
+            if (empty($row['legacy_session_key'])) {
+                continue;
+            }
+            $keys[(string) $row['session_key']] = true;
+            $keys[(string) $row['legacy_session_key']] = true;
+            $seconds[(string) ($row['started_at'] ?? '')] = true;
+        }
+
+        $exact = [];
+        foreach (array_chunk(array_keys($keys), 300) as $chunk) {
+            foreach ($this->db->select('session_key, item_id')->from('play_history')
+                ->where('session_key IN %in', $chunk)->fetchAll() as $row) {
+                $exact[(string) $row['session_key'] . "\0" . (string) $row['item_id']] = true;
+            }
+        }
+
+        $legacy = [];
+        foreach (array_chunk(array_keys($seconds), 300) as $chunk) {
+            foreach ($this->db->select('session_key, item_id, user_id, started_at')->from('play_history')
+                ->where('started_at IN %in', $chunk)
+                ->where('session_key LIKE %s', PlaybackReportingParser::SESSION_PREFIX . '%')
+                ->fetchAll() as $row) {
+                if (preg_match('/^pr-v2-[0-9a-f]{40}$/', (string) $row['session_key']) === 1) {
+                    continue;
+                }
+                // MariaDB can return DATETIME with a fractional suffix while
+                // the source parser stores this indexed lookup at second precision.
+                $legacy[substr((string) $row['started_at'], 0, 19)][] = $row;
+            }
+        }
+
+        return [$exact, $legacy];
+    }
+
+    /** @param array<string, true> $exact */
+    private function hasExactImportCandidate(array $exact, string $sessionKey, string $itemId): bool
+    {
+        return isset($exact[$sessionKey . "\0" . $itemId]);
+    }
+
+    /** @param array<string, mixed> $incoming @param array<string, list<\Dibi\Row>> $legacyBySecond */
+    private function hasAmbiguousLegacyCandidate(array $incoming, array $legacyBySecond): bool
+    {
+        $startedAt = (string) ($incoming['started_at'] ?? '');
+        $itemId = ThemePlaybackExclusions::canonicalItemId((string) ($incoming['item_id'] ?? ''));
+        $userId = trim((string) ($incoming['user_id'] ?? ''));
+        foreach ($legacyBySecond[$startedAt] ?? [] as $candidate) {
+            if (ThemePlaybackExclusions::canonicalItemId((string) $candidate['item_id']) !== $itemId) {
+                continue;
+            }
+            $storedUser = trim((string) ($candidate['user_id'] ?? ''));
+            if ($storedUser === '' || $userId === ''
+                || ThemePlaybackExclusions::canonicalItemId($storedUser) === ThemePlaybackExclusions::canonicalItemId($userId)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -851,6 +1001,22 @@ final class PlayHistoryRepository implements LibraryHistorySource
         bool $dryRun = false,
         ?callable $onProgress = null,
     ): array {
+        if ($dryRun) {
+            return $this->importNativeHistoricalPlaysBatch($rows, true, $onProgress);
+        }
+
+        return (new HistoryWriteGuard($this->database))->run(
+            fn (): array => $this->importNativeHistoricalPlaysBatch($rows, false, $onProgress),
+        );
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
+     * @return array{inserted: int, skipped: int}
+     */
+    private function importNativeHistoricalPlaysBatch(array $rows, bool $dryRun, ?callable $onProgress): array
+    {
         $inserted = 0;
         $skipped = 0;
         $total = count($rows);
@@ -899,7 +1065,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
     /**
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
      */
-    private function reportImportProgress(?callable $onProgress, int $processed, int $total, int $inserted, int $skipped): void
+    private function reportImportProgress(?callable $onProgress, int $processed, int $total, int $inserted, int $skipped, int $conflicts = 0): void
     {
         if ($onProgress === null) {
             return;
@@ -915,6 +1081,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
             'total' => $total,
             'inserted' => $inserted,
             'skipped' => $skipped,
+            'conflicts' => $conflicts,
         ]);
     }
 
@@ -926,7 +1093,7 @@ final class PlayHistoryRepository implements LibraryHistorySource
      */
     private function repairImportedRow(string $sessionKey, string $itemId, array $row): bool
     {
-        $existing = $this->db->select('id, runtime_sec, watch_duration_sec, library, started_at')
+        $existing = $this->db->select('id, runtime_sec, watch_duration_sec, library, library_resolved_at, started_at, started_at_epoch, updated_at, updated_at_epoch, ended_at, ended_at_epoch')
             ->from('play_history')
             ->where('session_key = %s', $sessionKey)
             ->where('item_id = %s', $itemId)
@@ -944,20 +1111,27 @@ final class PlayHistoryRepository implements LibraryHistorySource
         if ($incomingRuntime > 0 && (int) $existing['runtime_sec'] <= 0) {
             $watchedSec = max(0, (int) ($row['watched_sec'] ?? 0));
             $finished = self::isPlayFinished($watchedSec, $incomingRuntime);
-            $endedAt = $this->endedAtFromStart((string) ($existing['started_at'] ?? ''), $watchedSec);
+            $endedAt = $this->recordedImportEnd($row, $existing);
             $data['runtime_sec'] = $incomingRuntime;
             $data['watched_sec'] = $watchedSec;
             $data['is_finished'] = $finished ? 1 : 0;
-            $data['updated_at'] = $endedAt ?? ($row['updated_at'] ?? null);
-            $data['ended_at'] = $finished ? $endedAt : null;
-            $data['updated_at_epoch'] = null;
-            $data['ended_at_epoch'] = null;
+            if ($endedAt !== null) {
+                $data['updated_at'] = $endedAt->format('Y-m-d H:i:s');
+                $data['updated_at_epoch'] = $endedAt->getTimestamp();
+            }
+            $data['ended_at'] = $finished && $endedAt !== null ? $endedAt->format('Y-m-d H:i:s') : null;
+            $data['ended_at_epoch'] = $finished && $endedAt !== null ? $endedAt->getTimestamp() : null;
         }
 
         $incomingLibrary = $this->nullableString($row['library'] ?? null);
         $storedLibrary = trim((string) ($existing['library'] ?? ''));
         if ($incomingLibrary !== null && $this->shouldReplaceLibrary($storedLibrary, $incomingLibrary)) {
             $data['library'] = $incomingLibrary;
+        }
+        if (trim((string) ($existing['library_resolved_at'] ?? '')) === ''
+            && trim((string) ($row['library_resolved_at'] ?? '')) !== '') {
+            $data['library_resolved_at'] = $row['library_resolved_at'];
+            $data['library_resolved_at_epoch'] = (int) ($row['library_resolved_at_epoch'] ?? 0);
         }
 
         if ($data === []) {
@@ -984,19 +1158,54 @@ final class PlayHistoryRepository implements LibraryHistorySource
         return in_array(mb_strtolower($stored), ['movies', 'tv shows', 'music', 'videos', 'live tv'], true);
     }
 
-    private function endedAtFromStart(string $startedAt, int $watchedSec): ?string
+    /** @param array<string, mixed> $incoming */
+    private function recordedImportEnd(array $incoming, \Dibi\Row $existing): ?\DateTimeImmutable
     {
-        if ($startedAt === '') {
-            return null;
-        }
-
         try {
-            return (new \DateTimeImmutable($startedAt))
-                ->modify('+' . max(0, $watchedSec) . ' seconds')
-                ->format('Y-m-d H:i:s');
+            $start = new \DateTimeImmutable((string) $existing['started_at']);
         } catch (\Exception) {
             return null;
         }
+        $storedUpdatedAt = $existing['updated_at'] instanceof \DateTimeInterface
+            ? $existing['updated_at']->format('Y-m-d H:i:s')
+            : trim((string) ($existing['updated_at'] ?? ''));
+        $storedEndedAt = $existing['ended_at'] instanceof \DateTimeInterface
+            ? $existing['ended_at']->format('Y-m-d H:i:s')
+            : trim((string) ($existing['ended_at'] ?? ''));
+        foreach ([$incoming['updated_at'] ?? null, $existing['updated_at'] ?? null] as $candidate) {
+            $candidate = $candidate instanceof \DateTimeInterface
+                ? $candidate->format('Y-m-d H:i:s')
+                : (is_string($candidate) ? trim($candidate) : '');
+            if ($candidate === '') {
+                continue;
+            }
+            try {
+                $end = new \DateTimeImmutable($candidate);
+                if ($end >= $start) {
+                    foreach ([
+                        [$storedUpdatedAt, $existing['updated_at_epoch'] ?? null],
+                        [$storedEndedAt, $existing['ended_at_epoch'] ?? null],
+                    ] as [$storedTime, $storedEpoch]) {
+                        if ($candidate !== $storedTime || !is_numeric($storedEpoch)) {
+                            continue;
+                        }
+                        $knownEnd = (new \DateTimeImmutable('@' . (int) $storedEpoch))
+                            ->setTimezone(new \DateTimeZone(date_default_timezone_get()));
+                        if ($knownEnd->format('Y-m-d H:i:s') === $candidate
+                            && (!is_numeric($existing['started_at_epoch'] ?? null)
+                                || $knownEnd->getTimestamp() >= (int) $existing['started_at_epoch'])) {
+                            return $knownEnd;
+                        }
+                    }
+                    return $end;
+                }
+            } catch (\Exception) {
+                continue;
+            }
+        }
+
+        // Invalid or absent elapsed evidence cannot be reconstructed from active watch time.
+        return null;
     }
 
     /**
@@ -1441,12 +1650,13 @@ final class PlayHistoryRepository implements LibraryHistorySource
     private function applyMediaFilter(\Dibi\Fluent $selection, HistoryFilters $filters): void
     {
         if ($filters->mediaType === 'item') {
-            $itemIds = $filters->mediaItemType === 'Movie'
-                ? $this->movieReplacements->members($filters->mediaId)
-                : [$filters->mediaId];
-            $selection->where($this->platform->isSqlite()
-                ? 'item_id COLLATE BINARY IN %in'
-                : 'BINARY item_id IN %in', $itemIds);
+            if ($filters->mediaItemType === 'Movie') {
+                $this->applyMovieMediaIdFilter($selection, $filters->mediaId);
+            } else {
+                $selection->where($this->platform->isSqlite()
+                    ? 'item_id COLLATE BINARY = %s'
+                    : 'BINARY item_id = %s', $filters->mediaId);
+            }
             $selection->where($this->platform->isSqlite()
                 ? 'item_type COLLATE BINARY = %s'
                 : 'BINARY item_type = %s', $filters->mediaItemType);
@@ -1465,6 +1675,64 @@ final class PlayHistoryRepository implements LibraryHistorySource
             : 'BINARY library = %s', $filters->mediaLibrary);
         $selection->where('library_resolved_at IS NOT NULL');
         $selection->where('library_resolved_at <> %s', '');
+    }
+
+    private function applyMovieMediaIdFilter(\Dibi\Fluent $selection, string $itemId): void
+    {
+        $replacements = $this->movieReplacements->all();
+        $canonicalTargets = $this->canonicalMovieAliasTargets($replacements);
+        $target = $this->resolvedMovieId($itemId, $replacements, $canonicalTargets);
+        $targetKey = ThemePlaybackExclusions::canonicalItemId($target);
+        $members = [];
+        if (ThemePlaybackExclusions::canonicalItemId($canonicalTargets[$targetKey] ?? $target) === $targetKey) {
+            $members[$targetKey] = true;
+        }
+        foreach ($canonicalTargets as $sourceKey => $replacement) {
+            if ($replacement !== null && ThemePlaybackExclusions::canonicalItemId($replacement) === $targetKey) {
+                $members[$sourceKey] = true;
+            }
+        }
+        // Exact aliases take precedence over GUID fallback, including when
+        // several spellings have conflicting destinations.
+        $exactMembers = [];
+        $excludedMembers = [];
+        foreach ($replacements as $source => $replacement) {
+            if (ThemePlaybackExclusions::canonicalItemId($replacement) === $targetKey) {
+                $exactMembers[] = (string) $source;
+            } elseif (isset($members[ThemePlaybackExclusions::canonicalItemId((string) $source)])) {
+                $excludedMembers[] = (string) $source;
+            }
+        }
+
+        $predicates = [];
+        $parameters = [];
+        foreach ($members as $member => $_) {
+            $member = (string) $member;
+            if (self::isFullGuidKey($member)) {
+                $dashed = substr($member, 0, 8) . '-' . substr($member, 8, 4) . '-'
+                    . substr($member, 12, 4) . '-' . substr($member, 16, 4) . '-'
+                    . substr($member, 20, 12);
+                $predicates[] = '(LOWER(item_id) = %s OR LOWER(item_id) = %s)';
+                $parameters[] = $member;
+                $parameters[] = $dashed;
+            } else {
+                $predicates[] = $this->platform->isSqlite() ? 'item_id COLLATE BINARY = %s' : 'BINARY item_id = %s';
+                $parameters[] = $member;
+            }
+        }
+        if ($predicates !== []) {
+            $predicates = ['(' . implode(' OR ', $predicates) . ')'];
+            if ($excludedMembers !== []) {
+                $predicates[0] .= $this->platform->isSqlite() ? ' AND item_id COLLATE BINARY NOT IN %in' : ' AND BINARY item_id NOT IN %in';
+                $parameters[] = $excludedMembers;
+            }
+            $predicates[0] = '(' . $predicates[0] . ')';
+        }
+        if ($exactMembers !== []) {
+            $predicates[] = $this->platform->isSqlite() ? 'item_id COLLATE BINARY IN %in' : 'BINARY item_id IN %in';
+            $parameters[] = $exactMembers;
+        }
+        $selection->where('(' . implode(' OR ', $predicates) . ')', ...$parameters);
     }
 
     private function applyMethodFilter(\Dibi\Fluent $selection, string $method): void

@@ -68,7 +68,7 @@ final class MovieRecoveryEndpointTest extends TestCase
             $session = ['csrf_token' => 'recovery-fixture-token'];
             if ($role !== null) {
                 $database->getDibi()->insert('users', ['id' => 123, 'username' => 'recovery-test', 'name' => 'Recovery Test', 'password' => 'unused', 'role' => $role])->execute();
-                $session['auth_user'] = ['id' => 123, 'username' => 'recovery-test', 'name' => 'Recovery Test', 'role' => $role];
+                $session['auth_user'] = ['id' => 123, 'username' => 'recovery-test', 'name' => 'Recovery Test', 'role' => $role, 'auth_generation' => 0];
                 $session['auth_login_time'] = time();
                 $session['auth_last_activity'] = time();
             }

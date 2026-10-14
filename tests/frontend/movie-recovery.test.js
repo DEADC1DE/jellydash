@@ -313,7 +313,48 @@ async function headingFocusAllowsFreshResultsWhileFocusedActionsKeepTheirControl
     assert.equal(button.isConnected, true);
 }
 
+async function emptySectionsOnSharedPageOfferAFirstPageRoute() {
+    const ui = harness((request) => {
+        const page = Number(new URL(request.url, 'http://fixture').searchParams.get('page'));
+        return Promise.resolve(response(payload({ page, pages: 2, suggestionCount: 11, repairCount: 1,
+            suggestions: [suggestion], repairs: page === 1 ? [{ sourceId: 'repair', targetTitle: 'Repaired movie' }] : [] })));
+    });
+    ui.tick(1500);
+    await settle();
+    ui.click(ui.nodes.get('next'));
+    await settle();
+    assert.ok(ui.nodes.get('repairs').textContent.includes('No reconnected movies on this page.'));
+    const first = ui.nodes.get('repairs').querySelectorAll('button').find((button) => button.dataset.recoveryPage === '1');
+    assert.ok(first);
+    first.focus();
+    ui.click(first);
+    await settle();
+    assert.equal(ui.requests.at(-1).url, '/api/movie-recovery.php?page=1');
+    assert.equal(ui.document.activeElement, ui.title);
+    assert.ok(ui.nodes.get('repairs').textContent.includes('Repaired movie'));
+}
+
+async function staleActionRefreshesStatusWithoutResubmittingAndKeepsFocusUsable() {
+    const ui = harness((request) => request.body && request.body.action === 'confirm'
+        ? Promise.resolve(response({ error: 'Refresh the recovery list.' }, 409))
+        : Promise.resolve(response(payload(request.body ? { suggestions: [suggestion], suggestionCount: 1 }
+            : { repairs: [{ sourceId: suggestion.sourceId, targetTitle: 'Repaired elsewhere' }], repairCount: 1 }))));
+    ui.tick(1500);
+    await settle();
+    const button = ui.action('confirm');
+    button.focus();
+    ui.click(button);
+    await settle();
+    assert.equal(ui.requests.length, 3);
+    assert.equal(ui.requests.at(-1).options.method || 'GET', 'GET');
+    assert.equal(ui.document.activeElement, ui.title);
+    assert.ok(ui.nodes.get('repairs').textContent.includes('Repaired elsewhere'));
+    assert.equal(ui.nodes.get('error').textContent, 'Refresh the recovery list.');
+}
+
 (async () => {
+    await emptySectionsOnSharedPageOfferAFirstPageRoute();
+    await staleActionRefreshesStatusWithoutResubmittingAndKeepsFocusUsable();
     await initialCheckAndConfirmationUseIdsWithoutDisplayingThem();
     await separateUndoAndResumeSendTheSelectedSource();
     await stalePollingCannotOverwriteAConfirmation();

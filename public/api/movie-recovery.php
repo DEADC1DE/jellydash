@@ -51,10 +51,10 @@ try {
             $respond(400, ['error' => 'Choose a movie replacement action.']);
         }
         $action = $input['action'];
-        if (!in_array($action, ['check', 'confirm', 'dismiss', 'undo', 'resume'], true)) {
+        if (!in_array($action, ['check', 'confirm', 'dismiss', 'undo', 'remove', 'resume'], true)) {
             $respond(400, ['error' => 'Unknown movie replacement action.']);
         }
-        foreach ($action === 'confirm' ? ['sourceId', 'targetId'] : ($action === 'check' ? [] : ['sourceId']) as $key) {
+        foreach (in_array($action, ['confirm', 'remove'], true) ? ['sourceId', 'targetId'] : ($action === 'check' ? [] : ['sourceId']) as $key) {
             if (!is_string($input[$key] ?? null) || preg_match('/^[A-Za-z0-9_-]{1,64}$/D', $input[$key]) !== 1) {
                 $respond(400, ['error' => 'This movie selection is invalid. Refresh the page and try again.']);
             }
@@ -67,6 +67,7 @@ try {
             'confirm' => $service->confirm($input['sourceId'], $input['targetId']),
             'dismiss' => $service->dismiss($input['sourceId']),
             'undo' => $service->undo($input['sourceId']),
+            'remove' => $service->removeMapping($input['sourceId'], $input['targetId']),
             'resume' => $service->resume($input['sourceId']),
         };
     }

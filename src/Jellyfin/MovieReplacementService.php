@@ -35,11 +35,18 @@ final class MovieReplacementService
 
         // Schema initialization follows the same fresh-install contract as History.
         new PlayHistoryRepository($this->database);
-        $sourceIds = $this->replacements->members($oldId);
+        // The explicit CLI source still has to select its recorded spelling or an
+        // existing alias group. Equivalent GUID rows add safety evidence only.
+        $exactPlays = $this->database->getDibi()->select('COUNT(*)')->from('play_history')
+            ->where($this->database->getPlatform()->isSqlite()
+                ? 'item_id COLLATE BINARY IN %in' : 'BINARY item_id IN %in', $this->replacements->members($oldId))->fetchSingle();
+        if ((int) $exactPlays === 0) {
+            throw new \RuntimeException('No recorded movie plays were found for the old ID.');
+        }
+        $sourceIds = $this->replacements->historyMembers($oldId);
         $selection = $this->database->getDibi()->select('item_id, item_type, item_name, COUNT(*) AS plays')
             ->from('play_history');
-        $selection->where($this->database->getPlatform()->isSqlite()
-            ? 'item_id COLLATE BINARY IN %in' : 'BINARY item_id IN %in', $sourceIds);
+        $selection->where($this->replacements->historyCondition($sourceIds));
         $sourceRows = $selection->groupBy('item_id, item_type, item_name')->fetchAll();
         $titles = [];
         $plays = 0;
@@ -62,8 +69,7 @@ final class MovieReplacementService
         }
         $currentId = $this->validId((string) $target['Id']);
         $targetRows = $this->database->getDibi()->select('item_type')->from('play_history')
-            ->where($this->database->getPlatform()->isSqlite()
-                ? 'item_id COLLATE BINARY = %s' : 'BINARY item_id = %s', $currentId)->fetchAll();
+            ->where($this->replacements->historyCondition([$currentId]))->fetchAll();
         foreach ($targetRows as $row) {
             if ((string) $row['item_type'] !== 'Movie') {
                 throw new \RuntimeException('The current ID also has non-movie history. No replacement was saved.');
@@ -111,7 +117,23 @@ final class MovieReplacementService
             throw new \InvalidArgumentException('Saving requires --confirm-same-movie after checking the preview.');
         }
         $preview = $this->preview($oldId, $currentId);
-        $this->replacements->link($preview['sourceId'], $preview['targetId']);
+        (new HistoryWriteGuard($this->database))->run(function () use ($preview): void {
+            $this->replacements->atomic(function () use ($preview): void {
+                $members = $this->replacements->historyMembers($preview['sourceId']);
+                sort($members, SORT_STRING);
+                $rows = $this->database->getDibi()->select('item_type')->from('play_history')
+                    ->where($this->replacements->historyCondition($members))->fetchAll();
+                if ($rows === []) {
+                    throw new \RuntimeException('No recorded movie plays were found for the old ID.');
+                }
+                foreach ($rows as $row) {
+                    if ((string) $row['item_type'] !== 'Movie') {
+                        throw new \RuntimeException('The old movie group also has non-movie history. No replacement was saved.');
+                    }
+                }
+                $this->replacements->journaledLink($preview['sourceId'], $preview['targetId']);
+            });
+        });
 
         return $preview;
     }

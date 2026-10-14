@@ -30,6 +30,15 @@
         if (targetId) button.dataset.targetId = targetId;
         return button;
     }
+    function emptyPage(list, total, label) {
+        if (!total || list.children.length) return;
+        list.appendChild(node('p', 'No ' + label + ' on this page.'));
+        var button = node('button', 'Go to page 1', 'settings-secondary-btn');
+        button.type = 'button';
+        button.dataset.recoveryPage = '1';
+        button.setAttribute('aria-label', 'Go to page 1 of ' + label);
+        list.appendChild(button);
+    }
     function request(action, data) {
         var controller = new AbortController();
         var timeout = window.setTimeout(function () { controller.abort(); }, 25000);
@@ -42,7 +51,11 @@
         return fetch('/api/movie-recovery.php?page=' + page, options).then(function (response) {
             if (response.status === 401 || response.status === 403 || response.status === 419) stopped = true;
             return response.json().then(function (body) {
-                if (!response.ok) throw new Error(body.error || 'Movie replacements could not be checked.');
+                if (!response.ok) {
+                    var error = new Error(body.error || 'Movie replacements could not be checked.');
+                    error.status = response.status;
+                    throw error;
+                }
                 if (!body || typeof body.state !== 'string' || !Array.isArray(body.suggestions)) {
                     throw new Error('Movie replacements returned an incomplete response.');
                 }
@@ -64,7 +77,8 @@
         }
         if (!panel) return;
         find('status').textContent = data.message || 'Movie replacement checks run automatically.';
-        var signature = JSON.stringify([data.suggestions, data.repairs, data.dismissed, data.page, data.pages]);
+        var signature = JSON.stringify([data.suggestions, data.repairs, data.dismissed, data.page, data.pages,
+            data.suggestionCount, data.repairCount, data.dismissedCount]);
         var focusedList = ['suggestions', 'repairs', 'dismissed'].some(function (name) {
             return find(name).contains(document.activeElement);
         });
@@ -95,15 +109,21 @@
             card.appendChild(actionButton('Keep separate', 'dismiss', item.sourceId));
             suggestions.appendChild(card);
         });
+        emptyPage(suggestions, data.suggestionCount, 'suggestions');
         var repairs = find('repairs');
         repairs.replaceChildren();
         (data.repairs || []).forEach(function (item) {
             var card = node('article', '', 'movie-recovery-item');
             card.appendChild(node('h3', item.targetTitle || item.sourceTitle));
             card.appendChild(node('p', item.automatic ? 'Reconnected automatically. Undo keeps these entries separate until you choose to check them again.' : 'Reconnected after confirmation. Every original play is still saved.'));
-            card.appendChild(actionButton('Undo', 'undo', item.sourceId));
+            if (item.needsReview) card.appendChild(node('p', 'New history conflicts with this movie group. Review the mapping before checking again.'));
+            if (item.undoMode === 'remove') {
+                card.appendChild(node('p', 'The previous group was not recorded. Removing this mapping keeps other mappings as they are.'));
+            }
+            card.appendChild(actionButton(item.undoMode === 'remove' ? 'Remove mapping' : 'Undo', item.undoMode === 'remove' ? 'remove' : 'undo', item.sourceId, item.undoMode === 'remove' ? item.targetId : null));
             repairs.appendChild(card);
         });
+        emptyPage(repairs, data.repairCount, 'reconnected movies');
         find('repairs-wrap').hidden = !data.repairCount;
         find('repairs-label').textContent = 'Reconnected movies (' + (data.repairCount || 0) + ')';
         var dismissed = find('dismissed');
@@ -114,6 +134,7 @@
             card.appendChild(actionButton('Check again', 'resume', item.sourceId));
             dismissed.appendChild(card);
         });
+        emptyPage(dismissed, data.dismissedCount, 'kept-separate movies');
         find('dismissed-wrap').hidden = !data.dismissedCount;
         find('dismissed-label').textContent = 'Kept separate (' + (data.dismissedCount || 0) + ')';
         page = data.page || 1;
@@ -151,10 +172,11 @@
         var button = event.target.closest('button');
         if (!button || !panel.contains(button) || acting) return;
         var action = button.dataset.recoveryAction;
-        if (!action && button !== find('refresh') && button !== find('prev') && button !== find('next')) return;
+        if (!action && !button.dataset.recoveryPage && button !== find('refresh') && button !== find('prev') && button !== find('next')) return;
         var previousPage = page;
         if (button === find('prev')) page = Math.max(1, page - 1);
         if (button === find('next')) page += 1;
+        if (button.dataset.recoveryPage) page = Number(button.dataset.recoveryPage);
         acting = true;
         generation += 1;
         window.clearTimeout(timer);
@@ -162,10 +184,16 @@
         find('error').hidden = true;
         enqueue(action || (button === find('refresh') ? 'check' : null), { sourceId: button.dataset.sourceId, targetId: button.dataset.targetId }).then(function (data) {
             render(data, true);
-            if (action) document.getElementById('movie-recovery-title').focus({ preventScroll: true });
+            if (action || button.dataset.recoveryPage) document.getElementById('movie-recovery-title').focus({ preventScroll: true });
         }).catch(function (error) {
             page = previousPage;
             showError(error);
+            if (action && error.status === 409) {
+                return enqueue(null).then(function (data) {
+                    render(data, true);
+                    if (!button.isConnected) document.getElementById('movie-recovery-title').focus({ preventScroll: true });
+                }).catch(function () {});
+            }
         }).finally(function () {
             acting = false;
             if (button.isConnected && button !== find('prev') && button !== find('next')) button.disabled = false;

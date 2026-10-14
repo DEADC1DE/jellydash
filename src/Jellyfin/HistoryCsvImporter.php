@@ -51,17 +51,19 @@ final class HistoryCsvImporter
         $this->emit($onProgress, 'preparing', 0, $total, 0, 0);
 
         $this->repository->prepareHistoryImport();
-        $connection = $this->database->getDibi();
-        $connection->begin();
-        try {
-            $stats = $this->process($path, false, $onProgress, $total);
-            $connection->commit();
-        } catch (\Throwable $e) {
-            $connection->rollback();
-            throw $e;
-        }
+        return (new HistoryWriteGuard($this->database))->run(function () use ($path, $onProgress, $total): array {
+            $connection = $this->database->getDibi();
+            $connection->begin();
+            try {
+                $stats = $this->process($path, false, $onProgress, $total);
+                $connection->commit();
+            } catch (\Throwable $e) {
+                $connection->rollback();
+                throw $e;
+            }
 
-        return $stats;
+            return $stats;
+        });
     }
 
     /**

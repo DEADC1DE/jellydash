@@ -114,10 +114,26 @@
     if (window.JellydashFrontendTestHooks) {
         window.JellydashFrontendTestHooks.readImportNdjson = readNdjson;
         window.JellydashFrontendTestHooks.commitHistoryImport = commit;
+        window.JellydashFrontendTestHooks.importHistoryDialog = getDialog;
+        window.JellydashFrontendTestHooks.applyImportProgress = applyProgress;
     }
 
     function playLabel(count) {
         return count === 1 ? '1 play' : String(count) + ' plays';
+    }
+
+    function resultLabel(payload) {
+        var label = 'Imported ' + playLabel(payload.inserted || 0);
+        if (payload.skipped) {
+            label += ', skipped ' + payload.skipped;
+        }
+        if (payload.conflicts) {
+            label += ', ' + payload.conflicts + ' need review and were not imported';
+        }
+        if (payload.unresolved) {
+            label += ', ' + payload.unresolved + ' without Jellyfin runtime';
+        }
+        return label;
     }
 
     function setText(nodes, text) {
@@ -131,8 +147,6 @@
         var phase = payload.phase || 'preparing';
         var processed = typeof payload.processed === 'number' ? payload.processed : 0;
         var total = typeof payload.total === 'number' ? payload.total : 0;
-        var inserted = typeof payload.inserted === 'number' ? payload.inserted : 0;
-        var skipped = typeof payload.skipped === 'number' ? payload.skipped : 0;
         var pct = total > 0 ? Math.max(0, Math.min(100, Math.round((processed / total) * 100))) : (phase === 'preparing' ? 2 : 0);
         if (phase === 'done') {
             pct = 100;
@@ -140,12 +154,12 @@
 
         var label = 'Preparing…';
         if (phase === 'importing' && total > 0) {
-            label = processed + ' of ' + playLabel(total) + ' written to History';
-        } else if (phase === 'done') {
-            label = 'Imported ' + playLabel(inserted) + (skipped ? ', skipped ' + skipped + ' already present' : '');
-            if (payload.unresolved) {
-                label += ', ' + payload.unresolved + ' without Jellyfin runtime';
+            label = processed + ' of ' + playLabel(total) + ' checked';
+            if (payload.conflicts) {
+                label += ', ' + payload.conflicts + ' need review';
             }
+        } else if (phase === 'done') {
+            label = resultLabel(payload);
         }
 
         document.querySelectorAll('[data-import-history-progress]').forEach(function (node) {
@@ -287,6 +301,7 @@
                     source: nativeCsv ? 'jellydash' : (fromPlugin ? 'plugin' : 'file'),
                     importable: payload && typeof payload.importable === 'number' ? payload.importable : count,
                     skipped: payload && typeof payload.skipped === 'number' ? payload.skipped : 0,
+                    conflicts: payload && typeof payload.conflicts === 'number' ? payload.conflicts : 0,
                 });
             }).catch(function (error) {
                 if (!dialog.isCurrent(gen)) {
@@ -404,9 +419,7 @@
             if (state === 'done') {
                 importing = false;
                 title.textContent = 'Import complete';
-                summary.textContent = options.inserted
-                    ? 'Imported ' + playLabel(options.inserted) + (options.skipped ? ', skipped ' + options.skipped + ' already present' : '') + '.'
-                    : 'Import finished.';
+                summary.textContent = resultLabel(options) + '.';
                 confirmBtn.hidden = true;
                 confirmBtn.disabled = true;
                 setProgressVisible(true);
@@ -453,10 +466,25 @@
             var kind = options.kind || (pending && pending.kind) || 'tsv';
             var importable = typeof options.importable === 'number' ? options.importable : count;
             var skipped = typeof options.skipped === 'number' ? options.skipped : 0;
-            var plays = playLabel(source === 'jellydash' ? importable : count);
+            var conflicts = typeof options.conflicts === 'number' ? options.conflicts : 0;
+            var plays = playLabel(importable);
             if (source === 'jellydash' && importable <= 0) {
                 title.textContent = 'History is already up to date';
                 summary.textContent = 'All ' + playLabel(count) + ' in this backup are already present.';
+                confirmBtn.hidden = true;
+                confirmBtn.disabled = true;
+                setProgressVisible(false);
+                if (dismissBtn) {
+                    dismissBtn.hidden = false;
+                    dismissBtn.textContent = 'Close';
+                }
+                return;
+            }
+            if (source !== 'jellydash' && importable <= 0) {
+                title.textContent = 'No new plays to import';
+                summary.textContent = 'Found ' + playLabel(count) + '.'
+                    + (skipped ? ' ' + skipped + ' will be skipped (already present or excluded).' : '')
+                    + (conflicts ? ' ' + conflicts + ' need review and will not be imported.' : '');
                 confirmBtn.hidden = true;
                 confirmBtn.disabled = true;
                 setProgressVisible(false);
@@ -471,11 +499,16 @@
                 summary.textContent = 'This Jellydash backup contains ' + playLabel(count)
                     + (skipped ? '. ' + skipped + ' already present will be skipped.' : '. Nothing already in History will be duplicated.');
             } else if (source === 'plugin') {
-                summary.textContent = 'Jellydash found ' + plays + ' in Playback Reporting. Imported plays never trigger notifications.';
+                summary.textContent = 'Jellydash found ' + playLabel(count) + ' in Playback Reporting.';
             } else if (kind === 'sqlite') {
-                summary.textContent = 'This database contains ' + plays + '. Imported plays never trigger notifications.';
+                summary.textContent = 'This database contains ' + playLabel(count) + '.';
             } else {
-                summary.textContent = 'This backup contains ' + plays + '. Imported plays never trigger notifications.';
+                summary.textContent = 'This backup contains ' + playLabel(count) + '.';
+            }
+            if (source !== 'jellydash') {
+                summary.textContent += (skipped ? ' ' + skipped + ' will be skipped (already present or excluded).' : '')
+                    + (conflicts ? ' ' + conflicts + ' need review and will not be imported.' : '')
+                    + ' Imported plays never trigger notifications.';
             }
             confirmBtn.hidden = false;
             confirmBtn.disabled = false;

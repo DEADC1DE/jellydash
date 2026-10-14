@@ -197,7 +197,7 @@ final class PlaybackReportingParser
             return null;
         }
 
-        $startedAt = $this->startedAt($tokens[0]);
+        $timestamp = $this->sourceTimestamp($tokens[0]);
         $itemId = $this->playbackId($tokens[2]);
         $playDuration = $this->watchedSec($tokens[8]);
         $pauseDuration = 0;
@@ -205,9 +205,10 @@ final class PlaybackReportingParser
             $pauseDuration = $this->watchedSec($tokens[9]);
         }
 
-        if ($startedAt === null || $itemId === '' || $playDuration === null || $pauseDuration === null) {
+        if ($timestamp === null || $itemId === '' || $playDuration === null || $pauseDuration === null) {
             return null;
         }
+        $startedAt = $timestamp['started_at'];
 
         $watchedSec = max(0, $playDuration - $pauseDuration);
 
@@ -220,9 +221,12 @@ final class PlaybackReportingParser
         $method = $this->playMethod($tokens[5]);
         $endedAt = $this->endedAt($startedAt, $playDuration);
         $userId = $this->playbackId($tokens[1]);
+        $canonicalUser = $userId !== '' ? $userId : trim($tokens[1]);
+        $identity = json_encode([$timestamp['canonical'], $canonicalUser, $itemId], JSON_THROW_ON_ERROR);
 
         return [
-            'session_key' => self::SESSION_PREFIX . sha1($tokens[0] . '|' . trim($tokens[1]) . '|' . trim($tokens[2])),
+            'session_key' => self::SESSION_PREFIX . 'v2-' . sha1($identity),
+            'legacy_session_key' => self::SESSION_PREFIX . sha1($tokens[0] . '|' . trim($tokens[1]) . '|' . trim($tokens[2])),
             'user_id' => $userId !== '' ? $userId : null,
             'user_name' => null,
             'item_id' => $itemId,
@@ -255,19 +259,26 @@ final class PlaybackReportingParser
         ];
     }
 
-    private function startedAt(string $raw): ?string
+    /** @return array{started_at: string, canonical: string}|null */
+    private function sourceTimestamp(string $raw): ?array
     {
-        if (!preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/', trim($raw), $match)) {
+        if (preg_match('/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})(?:\.(\d+))?$/', trim($raw), $match) !== 1) {
             return null;
         }
 
-        try {
-            $date = new \DateTimeImmutable($match[1]);
-        } catch (\Exception) {
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $match[1]);
+        $errors = \DateTimeImmutable::getLastErrors();
+        if ($date === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
+            || $date->format('Y-m-d H:i:s') !== $match[1]) {
             return null;
         }
 
-        return $date->format('Y-m-d H:i:s');
+        $fraction = rtrim($match[2] ?? '', '0');
+
+        return [
+            'started_at' => $date->format('Y-m-d H:i:s'),
+            'canonical' => $match[1] . ($fraction !== '' ? '.' . $fraction : ''),
+        ];
     }
 
     private function endedAt(string $startedAt, int $watchedSec): string
@@ -279,16 +290,22 @@ final class PlaybackReportingParser
 
     private function watchedSec(string $raw): ?int
     {
-        if (!preg_match('/^-?\d+$/', trim($raw))) {
+        $raw = trim($raw);
+        if (preg_match('/^\d+$/', $raw) !== 1) {
             return null;
         }
 
-        $value = (int) $raw;
-        if ($value < 0) {
+        $digits = ltrim($raw, '0');
+        if ($digits === '') {
+            return 0;
+        }
+        $maximum = '2147483647';
+        if (strlen($digits) > strlen($maximum)
+            || (strlen($digits) === strlen($maximum) && strcmp($digits, $maximum) > 0)) {
             return null;
         }
 
-        return $value;
+        return (int) $digits;
     }
 
     /**
@@ -412,8 +429,8 @@ final class PlaybackReportingParser
     private function playbackId(string $id): string
     {
         $raw = trim($id);
-        $hex = strtolower(str_replace('-', '', $raw));
-        if (preg_match('/^[0-9a-f]{32}$/', $hex) === 1) {
+        if (preg_match('/^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i', $raw) === 1) {
+            $hex = strtolower(str_replace('-', '', $raw));
             return substr($hex, 0, 8) . '-'
                 . substr($hex, 8, 4) . '-'
                 . substr($hex, 12, 4) . '-'

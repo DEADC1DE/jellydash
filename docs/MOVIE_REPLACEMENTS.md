@@ -18,7 +18,9 @@ If no suitable movie is found, the original history stays saved. Jellydash can't
 
 ## Undo a repair
 
-Expand **Reconnected movies** in Settings and choose **Undo**. For repairs made here or automatically, this restores the affected replacement group to its previous state. Every original play stays saved, and artwork may become unavailable again for deleted items.
+Expand **Reconnected movies** in Settings and choose **Undo**. For repairs made here, automatically, or with the command below, this restores the affected replacement group to its previous state. Every original play stays saved, and artwork may become unavailable again for deleted items.
+
+Older command-line mappings may not have a saved previous group. These offer **Remove mapping**, which removes only the selected mapping and keeps it separate during later checks. If newer history conflicts with a reconnected group, Settings marks it for review.
 
 Undone and dismissed entries appear under **Kept separate**. They stay separate during later checks until you choose **Check again**.
 

@@ -32,6 +32,7 @@ date_default_timezone_set(Config::timezone());
 $command = $argv[1] ?? '';
 
 try {
+    Config::bool('AUTH_ENABLED', false);
     $db = Container::db();
 
     switch ($command) {

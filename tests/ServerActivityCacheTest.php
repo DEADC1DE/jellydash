@@ -123,6 +123,75 @@ final class ServerActivityCacheTest extends TestCase
         self::assertNull($result['data']);
     }
 
+    public function testCollidingSourcesKeepTheirSnapshotsAndInflightLoadsIndependent(): void
+    {
+        $first = 'source';
+        $stripe = hexdec(substr(hash('sha256', $first), 0, 2)) % 32;
+        for ($i = 0; ; ++$i) {
+            $second = 'different-source-' . $i;
+            if (hexdec(substr(hash('sha256', $second), 0, 2)) % 32 === $stripe
+                && hexdec(substr(hash('sha256', $second . ':denied'), 0, 2)) % 64 !== hexdec(substr(hash('sha256', $first . ':early'), 0, 2)) % 64) {
+                break;
+            }
+        }
+        $cache = new ServerActivityCache($this->directory, static fn (): int => 1000);
+        $cache->remember($first . ':snapshot', 300, static fn (): array => ['value' => 'retained']);
+        $result = $cache->remember($first . ':early', 10, function () use ($cache, $second): array {
+            $cache->remember($second . ':denied', 10, static function (): never {
+                throw new ServerActivityException('forbidden');
+            });
+            return ['value' => 'healthy'];
+        });
+        self::assertSame('ready', $result['state']);
+        self::assertSame(['value' => 'healthy'], $result['data']);
+        self::assertSame(['value' => 'retained'], $cache->remember($first . ':snapshot', 300, static fn (): array => [], true)['data']);
+    }
+
+    public function testDenialRecoversAfterDeadlineButNeverRestoresOlderSections(): void
+    {
+        $now = 1000;
+        $cache = new ServerActivityCache($this->directory, static function () use (&$now): int { return $now; });
+        $cache->remember('old-credential:tasks', 300, static fn (): array => ['private' => true]);
+        $cache->remember('old-credential:server', 10, static function (): never { throw new ServerActivityException('forbidden'); });
+        self::assertSame('ready', $cache->remember('new-credential:server', 10, static fn (): array => ['new' => true])['state']);
+        $now = 1016;
+        self::assertSame('ready', $cache->remember('old-credential:server', 10, static fn (): array => ['recovered' => true])['state']);
+        self::assertSame('expired', $cache->remember('old-credential:tasks', 300, static fn (): array => [], true)['state']);
+    }
+
+    public function testSourceMetadataRemainsBoundedDuringDistinctSourceDenials(): void
+    {
+        $cache = new ServerActivityCache($this->directory, static fn (): int => 1000);
+        for ($i = 0; $i < 100; ++$i) {
+            $cache->remember('denied-' . $i . ':server', 10, static function (): never { throw new ServerActivityException('forbidden'); });
+        }
+        self::assertLessThanOrEqual(64, count(glob($this->directory . '/generation-*.state') ?: []));
+        self::assertLessThanOrEqual(64, count(glob($this->directory . '/*.json') ?: []));
+    }
+
+    public function testEvictedSourceMarkerCannotAllowAnOlderLoadToRepublish(): void
+    {
+        $cache = new ServerActivityCache($this->directory, static fn (): int => 1000);
+        $earlyKey = 'evicted:early';
+        $readStripe = hexdec(substr(hash('sha256', $earlyKey), 0, 2)) % 64;
+        $result = $cache->remember($earlyKey, 10, function () use ($cache, $readStripe): array {
+            $cache->remember('evicted:denied', 10, static function (): never { throw new ServerActivityException('forbidden'); });
+            // Make this marker deterministically oldest before capacity cleanup.
+            touch($this->directory . '/generation-' . hash('sha256', 'evicted') . '.state', 1);
+            for ($i = 0; $i < 100; ++$i) {
+                $key = 'replacement-' . $i . ':server';
+                if (hexdec(substr(hash('sha256', $key), 0, 2)) % 64 !== $readStripe) {
+                    $cache->remember($key, 10, static fn (): array => ['value' => $i]);
+                }
+            }
+            return ['private' => true];
+        });
+        self::assertSame('checking', $result['state']);
+        self::assertNull($result['data']);
+        self::assertNull($cache->read($earlyKey));
+        self::assertCount(64, glob($this->directory . '/generation-*.state') ?: []);
+    }
+
     public function testUnicodeSnapshotsRemainReadable(): void
     {
         $cache = new ServerActivityCache($this->directory, static fn (): int => 1000);

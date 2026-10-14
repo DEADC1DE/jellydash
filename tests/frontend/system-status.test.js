@@ -68,7 +68,9 @@ vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '../../public/assets/
     assert.equal(nav['aria-label'], 'System status, healthy');
     assert.equal(copy.disabled, false);
     assert.equal(anchorScrolls, 1, 'Settle the anchor after asynchronous rows expand the page.');
+    const firstRow = components.children[0];
     hooks.systemStatus.render(await response.json());
+    assert.equal(components.children[0], firstRow, 'An unchanged status must retain live-region rows.');
     assert.equal(anchorScrolls, 1, 'Polling must not move the reader.');
     await hooks.systemStatus.copyDiagnostics();
     assert.deepEqual(JSON.parse(copied), { version: 'test', database: 'sqlite' });

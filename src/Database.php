@@ -50,6 +50,7 @@ class Database
                 `password` varchar(255) NOT NULL,
                 `name` varchar(100) NOT NULL,
                 `role` tinyint(4) NOT NULL,
+                `auth_generation` bigint NOT NULL DEFAULT 0,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `uniq_username` (`username`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
@@ -59,9 +60,20 @@ class Database
                 `password` TEXT NOT NULL,
                 `name` TEXT NOT NULL,
                 `role` INTEGER NOT NULL,
+                `auth_generation` INTEGER NOT NULL DEFAULT 0,
                 UNIQUE (`username`)
             )'
         );
+
+        if (!$this->platform->columnExists('users', 'auth_generation')) {
+            try {
+                $this->platform->addColumn('users', '`auth_generation` bigint NOT NULL DEFAULT 0', '`auth_generation` INTEGER NOT NULL DEFAULT 0');
+            } catch (\Dibi\Exception $e) {
+                if (!$this->platform->columnExists('users', 'auth_generation')) {
+                    throw $e;
+                }
+            }
+        }
 
         $this->platform->createTable(
             'CREATE TABLE IF NOT EXISTS `login_attempts` (
@@ -126,6 +138,7 @@ class Database
         );
         $this->platform->createSqliteIndex('idx_auth_remember_user', 'auth_remember_tokens', ['user_id']);
         foreach ([
+            'auth_generation' => ['`auth_generation` bigint NOT NULL DEFAULT 0', '`auth_generation` INTEGER NOT NULL DEFAULT 0'],
             'previous_validator_hash' => ['`previous_validator_hash` char(64) DEFAULT NULL', '`previous_validator_hash` TEXT DEFAULT NULL'],
             'rotation_nonce' => ['`rotation_nonce` char(32) DEFAULT NULL', '`rotation_nonce` TEXT DEFAULT NULL'],
             'rotation_valid_until' => ['`rotation_valid_until` bigint NOT NULL DEFAULT 0', '`rotation_valid_until` INTEGER NOT NULL DEFAULT 0'],
@@ -223,14 +236,14 @@ class Database
 
         $userId = $this->dibi->select('id')->from('users')
             ->where('username = %s', trim(strtolower($username)))->fetchSingle();
-        if ($userId === false) {
+        if ($userId === null || $userId === false) {
             return false;
         }
 
         $this->dibi->begin();
         try {
-            $this->dibi->update('users', ['password' => password_hash($password, PASSWORD_DEFAULT)])
-                ->where('id = %i', $userId)->execute();
+            $this->dibi->query('UPDATE users SET password = %s, auth_generation = auth_generation + 1 WHERE id = %i',
+                password_hash($password, PASSWORD_DEFAULT), $userId);
             $this->dibi->delete('auth_remember_tokens')->where('user_id = %i', $userId)->execute();
             $this->dibi->commit();
         } catch (\Throwable $e) {
@@ -257,7 +270,7 @@ class Database
 
     public function getUser($id): ?array
     {
-        $row = $this->dibi->select('id, username, name, role')
+        $row = $this->dibi->select('id, username, name, role, auth_generation')
             ->from('users')->where('id = %i', $id)->limit(1)->fetch();
 
         return $row?->toArray();

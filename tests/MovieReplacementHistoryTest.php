@@ -136,6 +136,230 @@ final class MovieReplacementHistoryTest extends TestCase
         )));
     }
 
+    public function testEquivalentFullGuidsShareMovieCardAndCompleteHistoryDrilldown(): void
+    {
+        $database = $this->database;
+        $replacements = $this->replacements;
+        $history = $this->history;
+        $source = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        $sourceDashed = 'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA';
+        $target = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        $db = $database->getDibi();
+        foreach ([$source, $sourceDashed, $target, 'a-b', 'ab', 'A-B', '12345'] as $index => $itemId) {
+            $db->insert('play_history', [
+                'session_key' => 'phpunit-replacement-view-guid-' . $index,
+                'item_id' => $itemId,
+                'item_type' => 'Movie',
+                'item_name' => 'Same title',
+                'user_name' => 'Viewer',
+                'watched_sec' => 60,
+                'watch_duration_sec' => 60,
+                'runtime_sec' => 600,
+                'play_method' => 'DirectPlay',
+                'library' => 'Movies',
+                'library_resolved_at' => '2099-06-10 18:00:00',
+                'started_at' => '2099-06-10 19:0' . $index . ':00',
+                'updated_at' => '2099-06-10 19:1' . $index . ':00',
+                'is_finished' => 0,
+            ])->execute();
+        }
+        $replacements->link($source, $target);
+
+        $cards = (new PlaybackStatisticsService($history))->data('all', new DateTimeImmutable('2099-06-11'))['mostWatched']['movies'];
+        $matching = array_values(array_filter($cards, static fn (array $card): bool => $card['itemId'] === $target));
+        self::assertCount(1, $matching);
+        self::assertSame(3, $matching[0]['plays']);
+        parse_str((string) parse_url($matching[0]['href'], PHP_URL_QUERY), $query);
+        $drilldown = HistoryFilters::fromQuery($query);
+        self::assertSame(3, $history->historyTotal($drilldown));
+        self::assertSame(180, $history->historyAggregate($drilldown)['watch_sec']);
+        self::assertSame(3, $history->historyTotal(new HistoryFilters(
+            range: 'all', mediaType: 'item', mediaId: $sourceDashed, mediaItemType: 'Movie', mediaTitle: 'Same title',
+        )));
+        self::assertSame(1, $history->historyTotal(new HistoryFilters(
+            range: 'all', mediaType: 'item', mediaId: 'a-b', mediaItemType: 'Movie', mediaTitle: 'Same title',
+        )));
+        self::assertSame(1, $history->historyTotal(new HistoryFilters(
+            range: 'all', mediaType: 'item', mediaId: 'ab', mediaItemType: 'Movie', mediaTitle: 'Same title',
+        )));
+        self::assertSame(1, $history->historyTotal(new HistoryFilters(
+            range: 'all', mediaType: 'item', mediaId: 'A-B', mediaItemType: 'Movie', mediaTitle: 'Same title',
+        )));
+        self::assertSame(1, $history->historyTotal(new HistoryFilters(
+            range: 'all', mediaType: 'item', mediaId: '12345', mediaItemType: 'Movie', mediaTitle: 'Same title',
+        )));
+    }
+
+    public function testNonMovieGuidSpellingsKeepSeparateTrendingDrilldowns(): void
+    {
+        $ids = ['cccccccccccccccccccccccccccccccc', 'CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC'];
+        foreach ($ids as $index => $itemId) {
+            $this->database->getDibi()->insert('play_history', [
+                'session_key' => 'phpunit-replacement-view-audio-' . $index,
+                'item_id' => $itemId,
+                'item_type' => 'Audio',
+                'item_name' => 'Same audio title',
+                'user_name' => 'Viewer',
+                'watched_sec' => 60,
+                'watch_duration_sec' => 60,
+                'runtime_sec' => 120,
+                'play_method' => 'DirectPlay',
+                'library' => 'Music',
+                'library_resolved_at' => '2099-06-10 18:00:00',
+                'started_at' => '2099-06-10 20:0' . $index . ':00',
+                'updated_at' => '2099-06-10 20:1' . $index . ':00',
+                'is_finished' => 0,
+            ])->execute();
+        }
+
+        $cards = (new PlaybackStatisticsService($this->history))->data('all', new DateTimeImmutable('2099-06-11'))['trending'];
+        $audio = array_values(array_filter($cards, static fn (array $card): bool => $card['title'] === 'Same audio title'));
+        self::assertCount(2, $audio);
+        foreach ($audio as $card) {
+            self::assertSame(1, $card['plays']);
+            parse_str((string) parse_url($card['href'], PHP_URL_QUERY), $query);
+            self::assertSame(1, $this->history->historyTotal(HistoryFilters::fromQuery($query)));
+        }
+    }
+
+    public function testConflictingGuidAliasesKeepEveryCardDrilldownWithinItsDisplayedGroup(): void
+    {
+        $ids = [
+            'e943a6b352fb46f98d3c1a287ca84b90',
+            'e943a6b3-52fb-46f9-8d3c-1a287ca84b90',
+            'E943A6B3-52FB-46F9-8D3C-1A287CA84B90',
+            'E943A6B352FB46F98D3C1A287CA84B90',
+        ];
+        foreach ($ids as $index => $itemId) {
+            $this->database->getDibi()->insert('play_history', [
+                'session_key' => 'phpunit-replacement-view-conflict-' . $index,
+                'item_id' => $itemId,
+                'item_type' => 'Movie',
+                'item_name' => 'Conflicting GUID movie',
+                'user_name' => 'Viewer',
+                'watched_sec' => 60 * ($index + 1),
+                'watch_duration_sec' => 60 * ($index + 1),
+                'runtime_sec' => 600,
+                'play_method' => 'DirectPlay',
+                'library' => 'Movies',
+                'library_resolved_at' => '2099-06-10 18:00:00',
+                'started_at' => '2099-06-10 20:0' . $index . ':00',
+                'updated_at' => '2099-06-10 20:1' . $index . ':00',
+                'is_finished' => 0,
+            ])->execute();
+        }
+        $before = $this->storedRows();
+        $targetX = 'phpunit-replacement-conflict-x';
+        $targetY = 'phpunit-replacement-conflict-y';
+        $this->replacements->link($ids[0], $targetX);
+        $this->replacements->link($ids[1], $targetX);
+        $this->replacements->link($ids[2], $targetY);
+
+        $cards = (new PlaybackStatisticsService($this->history))->data('all', new DateTimeImmutable('2099-06-11'))['mostWatched']['movies'];
+        $cards = array_values(array_filter($cards, static fn (array $card): bool => $card['title'] === 'Conflicting GUID movie'));
+        self::assertCount(3, $cards);
+        $expected = [
+            $targetX => ['ids' => [$ids[0], $ids[1]], 'watch_sec' => 180],
+            $targetY => ['ids' => [$ids[2]], 'watch_sec' => 180],
+            $ids[3] => ['ids' => [$ids[3]], 'watch_sec' => 240],
+        ];
+        foreach ($cards as $card) {
+            self::assertArrayHasKey($card['itemId'], $expected);
+            $group = $expected[$card['itemId']];
+            self::assertSame(count($group['ids']), $card['plays']);
+            parse_str((string) parse_url($card['href'], PHP_URL_QUERY), $query);
+            $filters = HistoryFilters::fromQuery($query);
+            self::assertSame(count($group['ids']), $this->history->historyTotal($filters), $card['itemId']);
+            $aggregate = $this->history->historyAggregate($filters);
+            self::assertSame(count($group['ids']), $aggregate['plays']);
+            self::assertSame($group['watch_sec'], $aggregate['watch_sec']);
+            $actualIds = array_map(static fn (Dibi\Row $row): string => (string) $row['item_id'], $this->history->historyRows($filters));
+            self::assertEqualsCanonicalizing($group['ids'], $actualIds);
+        }
+        self::assertSame($before, $this->storedRows());
+    }
+
+    public function testEquivalentGuidTargetAndSourceRolesDoNotInferAnotherAliasHop(): void
+    {
+        $source = 'phpunit-replacement-chain-source';
+        $compact = 'd56364d9fce2458795f2fc21c98ba543';
+        $dashed = 'D56364D9-FCE2-4587-95F2-FC21C98BA543';
+        $uppercase = strtoupper($compact);
+        $target = 'phpunit-replacement-chain-target';
+        $this->seedGuidChainRows([$source, $compact, $dashed, $uppercase]);
+        $before = $this->storedRows();
+        $this->replacements->link($source, $compact);
+        $this->replacements->link($dashed, $target);
+        $aliases = $this->replacements->all();
+
+        $cards = (new PlaybackStatisticsService($this->history))->data('all', new DateTimeImmutable('2099-06-11'))['mostWatched']['movies'];
+        $cards = array_values(array_filter($cards, static fn (array $card): bool => $card['title'] === 'GUID alias chain'));
+        self::assertCount(2, $cards);
+        $expected = [$uppercase => [$source, $compact, $uppercase], $target => [$dashed]];
+        foreach ($cards as $card) {
+            self::assertArrayHasKey($card['itemId'], $expected);
+            $ids = $expected[$card['itemId']];
+            self::assertSame(count($ids), $card['plays']);
+            parse_str((string) parse_url($card['href'], PHP_URL_QUERY), $query);
+            $filters = HistoryFilters::fromQuery($query);
+            self::assertSame(count($ids), $this->history->historyTotal($filters));
+            self::assertSame(count($ids) * 60, $this->history->historyAggregate($filters)['watch_sec']);
+            self::assertEqualsCanonicalizing($ids, array_map(
+                static fn (Dibi\Row $row): string => (string) $row['item_id'], $this->history->historyRows($filters),
+            ));
+        }
+        self::assertSame($aliases, $this->replacements->all());
+        self::assertSame($before, $this->storedRows());
+    }
+
+    public function testSelfEquivalentGuidAliasKeepsItsUnambiguousGroup(): void
+    {
+        $compact = 'cf57b5c26ecd4137b56d1c81e4357a40';
+        $dashed = 'CF57B5C2-6ECD-4137-B56D-1C81E4357A40';
+        $uppercase = strtoupper($compact);
+        $this->seedGuidChainRows([$compact, $dashed, $uppercase]);
+        $before = $this->storedRows();
+        $this->replacements->link($compact, $dashed);
+        $aliases = $this->replacements->all();
+
+        $cards = (new PlaybackStatisticsService($this->history))->data('all', new DateTimeImmutable('2099-06-11'))['mostWatched']['movies'];
+        $cards = array_values(array_filter($cards, static fn (array $card): bool => $card['title'] === 'GUID alias chain'));
+        self::assertCount(1, $cards);
+        self::assertSame(3, $cards[0]['plays']);
+        parse_str((string) parse_url($cards[0]['href'], PHP_URL_QUERY), $query);
+        $filters = HistoryFilters::fromQuery($query);
+        self::assertSame(3, $this->history->historyTotal($filters));
+        self::assertSame(180, $this->history->historyAggregate($filters)['watch_sec']);
+        self::assertEqualsCanonicalizing([$compact, $dashed, $uppercase], array_map(
+            static fn (Dibi\Row $row): string => (string) $row['item_id'], $this->history->historyRows($filters),
+        ));
+        self::assertSame($aliases, $this->replacements->all());
+        self::assertSame($before, $this->storedRows());
+    }
+
+    /** @param list<string> $ids */
+    private function seedGuidChainRows(array $ids): void
+    {
+        foreach ($ids as $index => $itemId) {
+            $this->database->getDibi()->insert('play_history', [
+                'session_key' => 'phpunit-replacement-view-guid-chain-' . $index,
+                'item_id' => $itemId,
+                'item_type' => 'Movie',
+                'item_name' => 'GUID alias chain',
+                'user_name' => 'Viewer',
+                'watched_sec' => 60,
+                'watch_duration_sec' => 60,
+                'runtime_sec' => 600,
+                'play_method' => 'DirectPlay',
+                'library' => 'Movies',
+                'library_resolved_at' => '2099-06-10 18:00:00',
+                'started_at' => '2099-06-10 20:0' . $index . ':00',
+                'updated_at' => '2099-06-10 20:1' . $index . ':00',
+                'is_finished' => 0,
+            ])->execute();
+        }
+    }
+
     private function filters(string $id, int $limit = 100, int $offset = 0, string $user = ''): HistoryFilters
     {
         return new HistoryFilters(

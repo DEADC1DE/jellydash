@@ -31,7 +31,7 @@ final class PlaybackReportingImporter
     /**
      * @param 'tsv'|'sqlite'|null $kind
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
-     * @return array{parsed: int, inserted: int, skipped: int, unresolved: int}
+     * @return array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int}
      */
     public function importFile(string $path, bool $dryRun = false, ?string $kind = null, ?callable $onProgress = null): array
     {
@@ -45,33 +45,43 @@ final class PlaybackReportingImporter
     }
 
     /**
-     * @return array{parsed: int, kind: 'tsv'|'sqlite'}
+     * @return array{parsed: int, kind: 'tsv'|'sqlite', importable: int, skipped: int, conflicts: int}
      */
     public function previewFile(string $path): array
     {
         $path = $this->readablePath($path);
         $kind = $this->detectKind($path);
 
+        $preview = $this->importFile($path, true, $kind);
+
         return [
-            'parsed' => iterator_count($this->iterateFile($path, $kind)),
+            'parsed' => $preview['parsed'],
             'kind' => $kind,
+            'importable' => $preview['inserted'],
+            'skipped' => $preview['skipped'],
+            'conflicts' => $preview['conflicts'],
         ];
     }
 
     /**
-     * @return array{parsed: int, kind: 'plugin'}
+     * @return array{parsed: int, kind: 'plugin', importable: int, skipped: int, conflicts: int}
      */
     public function previewPlugin(): array
     {
+        $preview = $this->importFromPlugin(true);
+
         return [
-            'parsed' => $this->plugin->count(),
+            'parsed' => $preview['parsed'],
             'kind' => 'plugin',
+            'importable' => $preview['inserted'],
+            'skipped' => $preview['skipped'],
+            'conflicts' => $preview['conflicts'],
         ];
     }
 
     /**
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
-     * @return array{parsed: int, inserted: int, skipped: int, unresolved: int}
+     * @return array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int}
      */
     public function importFromPlugin(bool $dryRun = false, ?callable $onProgress = null): array
     {
@@ -81,6 +91,7 @@ final class PlaybackReportingImporter
         $this->emitPreparing($onProgress, $total);
 
         $stats = $this->emptyStats();
+        $dryRunSeen = [];
         $cursor = 0;
 
         while (true) {
@@ -100,6 +111,8 @@ final class PlaybackReportingImporter
                     $total,
                     $stats['inserted'],
                     $stats['skipped'],
+                    $stats['conflicts'],
+                    $dryRunSeen,
                 ),
             );
             if ($chunk['cursor'] <= $cursor) {
@@ -195,10 +208,13 @@ final class PlaybackReportingImporter
             }
         }
 
+        $resolvedAt = new \DateTimeImmutable('now');
         foreach ($rows as &$row) {
             $library = $lookup[$this->normalizedItemId((string) ($row['item_id'] ?? ''))] ?? '';
             if ($library !== '') {
                 $row['library'] = $library;
+                $row['library_resolved_at'] = $resolvedAt->format('Y-m-d H:i:s');
+                $row['library_resolved_at_epoch'] = $resolvedAt->getTimestamp();
             }
         }
         unset($row);
@@ -225,7 +241,7 @@ final class PlaybackReportingImporter
     /**
      * @param iterable<int, array<string, mixed>> $rows
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
-     * @return array{parsed: int, inserted: int, skipped: int, unresolved: int, repaired: int}
+     * @return array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int, repaired: int}
      */
     private function importIterable(iterable $rows, int $total, bool $dryRun, ?callable $onProgress): array
     {
@@ -234,6 +250,7 @@ final class PlaybackReportingImporter
 
         $stats = $this->emptyStats();
         $batch = [];
+        $dryRunSeen = [];
 
         foreach ($rows as $row) {
             $batch[] = $row;
@@ -249,6 +266,8 @@ final class PlaybackReportingImporter
                         $total,
                         $stats['inserted'],
                         $stats['skipped'],
+                        $stats['conflicts'],
+                        $dryRunSeen,
                     ),
                 );
                 $batch = [];
@@ -267,6 +286,8 @@ final class PlaybackReportingImporter
                     $total,
                     $stats['inserted'],
                     $stats['skipped'],
+                    $stats['conflicts'],
+                    $dryRunSeen,
                 ),
             );
         }
@@ -280,7 +301,8 @@ final class PlaybackReportingImporter
      * @param list<array<string, mixed>> $rows
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
      * @param array<string, string> $userNames
-     * @return array{parsed: int, inserted: int, skipped: int, unresolved: int, repaired: int}
+     * @param array<string, true> $dryRunSeen
+     * @return array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int, repaired: int}
      */
     private function importChunk(
         array $rows,
@@ -291,6 +313,8 @@ final class PlaybackReportingImporter
         int $total,
         int $inserted,
         int $skipped,
+        int $conflicts,
+        array &$dryRunSeen,
     ): array {
         if ($rows === []) {
             return $this->emptyStats();
@@ -307,20 +331,25 @@ final class PlaybackReportingImporter
         $meta = $this->fetchItemMeta($named);
         $enriched = $this->applyRuntimes($named, $this->runtimesFromMeta($meta));
         $enriched = $this->applyLibraries($enriched, $this->librariesFromMeta($meta));
-        $progress = $this->wrapBatchProgress($onProgress, $processed, $total, $inserted, $skipped);
-        $result = $this->repository->importHistoricalPlays($enriched, $dryRun, $progress);
+        $progress = $this->wrapBatchProgress($onProgress, $processed, $total, $inserted, $skipped, $conflicts);
+        if ($dryRun) {
+            $result = $this->repository->importHistoricalPlays($enriched, true, $progress, $dryRunSeen);
+        } else {
+            $result = $this->repository->importHistoricalPlays($enriched, false, $progress);
+        }
 
         return [
             'parsed' => count($named),
             'inserted' => $result['inserted'],
             'skipped' => $result['skipped'],
+            'conflicts' => $result['conflicts'],
             'unresolved' => $this->unresolvedCount($enriched),
             'repaired' => $result['repaired'],
         ];
     }
 
     /**
-     * @return array{parsed: int, inserted: int, skipped: int, unresolved: int, repaired: int}
+     * @return array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int, repaired: int}
      */
     private function emptyStats(): array
     {
@@ -328,20 +357,22 @@ final class PlaybackReportingImporter
             'parsed' => 0,
             'inserted' => 0,
             'skipped' => 0,
+            'conflicts' => 0,
             'unresolved' => 0,
             'repaired' => 0,
         ];
     }
 
     /**
-     * @param array{parsed: int, inserted: int, skipped: int, unresolved: int, repaired: int} $stats
-     * @param array{parsed: int, inserted: int, skipped: int, unresolved: int, repaired: int} $chunk
+     * @param array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int, repaired: int} $stats
+     * @param array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int, repaired: int} $chunk
      */
     private function addStats(array &$stats, array $chunk): void
     {
         $stats['parsed'] += $chunk['parsed'];
         $stats['inserted'] += $chunk['inserted'];
         $stats['skipped'] += $chunk['skipped'];
+        $stats['conflicts'] += $chunk['conflicts'];
         $stats['unresolved'] += $chunk['unresolved'];
         $stats['repaired'] += $chunk['repaired'];
     }
@@ -361,11 +392,12 @@ final class PlaybackReportingImporter
             'total' => $total,
             'inserted' => 0,
             'skipped' => 0,
+            'conflicts' => 0,
         ]);
     }
 
     /**
-     * @param array{parsed: int, inserted: int, skipped: int, unresolved: int, repaired: int} $stats
+     * @param array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int, repaired: int} $stats
      * @param callable(array{phase: string, processed: int, total: int, inserted: int, skipped: int}): void|null $onProgress
      */
     private function finishImport(array $stats, bool $dryRun, ?callable $onProgress, int $total): void
@@ -377,6 +409,7 @@ final class PlaybackReportingImporter
                 'total' => $total,
                 'inserted' => 0,
                 'skipped' => 0,
+                'conflicts' => 0,
             ]);
         }
 
@@ -395,12 +428,13 @@ final class PlaybackReportingImporter
         int $total,
         int $inserted,
         int $skipped,
+        int $conflicts,
     ): ?callable {
         if ($onProgress === null) {
             return null;
         }
 
-        return static function (array $payload) use ($onProgress, $offset, $total, $inserted, $skipped): void {
+        return static function (array $payload) use ($onProgress, $offset, $total, $inserted, $skipped, $conflicts): void {
             if (($payload['phase'] ?? '') !== 'importing') {
                 return;
             }
@@ -411,6 +445,7 @@ final class PlaybackReportingImporter
                 'total' => $total,
                 'inserted' => $inserted + (int) $payload['inserted'],
                 'skipped' => $skipped + (int) $payload['skipped'],
+                'conflicts' => $conflicts + (int) ($payload['conflicts'] ?? 0),
             ]);
         };
     }
@@ -434,7 +469,7 @@ final class PlaybackReportingImporter
 
     private function normalizedItemId(string $id): string
     {
-        return strtolower(str_replace('-', '', trim($id)));
+        return ThemePlaybackExclusions::canonicalItemId($id);
     }
 
     /**

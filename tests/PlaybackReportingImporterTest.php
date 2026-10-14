@@ -22,6 +22,33 @@ final class PlaybackReportingImporterTest extends TestCase
         $this->assertSame(9, $preview['parsed']);
     }
 
+    public function testPreviewCountsEquivalentKeysAcrossChunkBoundary(): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'pr-preview-');
+        $this->assertNotFalse($path);
+        $first = "2024-04-01 12:00:00\t0e394f8a9bc64abeba29f63cdc7a12a0\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tMovie\tDune\tDirectPlay\tWeb\tChrome\t60";
+        $equivalent = "2024-04-01 12:00:00.000\t0E394F8A-9BC6-4ABE-BA29-F63CDC7A12A0\tAAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA\tMovie\tDune\tDirectPlay\tWeb\tChrome\t60";
+        $lines = [$first];
+        for ($i = 1; $i < PlaybackReportingClient::CHUNK_SIZE; ++$i) {
+            $lines[] = sprintf(
+                "2024-04-01 12:%02d:%02d\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tWeb\tChrome\t60",
+                intdiv($i, 60), $i % 60,
+            );
+        }
+        $lines[] = $equivalent;
+        file_put_contents($path, implode("\n", $lines));
+        $importer = new PlaybackReportingImporter(client: new JellyfinClient('', '', false));
+        try {
+            $preview = $importer->previewFile($path);
+            $this->assertSame(PlaybackReportingClient::CHUNK_SIZE + 1, $preview['parsed']);
+            $this->assertSame(PlaybackReportingClient::CHUNK_SIZE, $preview['importable']);
+            $this->assertSame(1, $preview['skipped']);
+            $this->assertSame(0, $preview['conflicts']);
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function testPreviewFileCountsEmbyTsvRows(): void
     {
         $path = tempnam(sys_get_temp_dir(), 'emby-prtsv');
@@ -165,6 +192,8 @@ final class PlaybackReportingImporterTest extends TestCase
         ]);
 
         $this->assertSame('Stand-Up Comedy', $enriched[0]['library']);
+        $this->assertNotEmpty($enriched[0]['library_resolved_at']);
+        $this->assertGreaterThan(0, $enriched[0]['library_resolved_at_epoch']);
     }
 
     public function testApplyLibrariesKeepsFallbackWhenItemIsUnknown(): void
@@ -173,6 +202,7 @@ final class PlaybackReportingImporterTest extends TestCase
         $enriched = (new PlaybackReportingImporter())->applyLibraries($rows, []);
 
         $this->assertSame('Movies', $enriched[0]['library']);
+        $this->assertArrayNotHasKey('library_resolved_at', $enriched[0]);
     }
 
     public function testSameDaySessionsStaySeparatePlays(): void
@@ -378,6 +408,33 @@ final class PlaybackReportingImporterTest extends TestCase
             ->from('play_history')
             ->where('item_id = %s', $itemId)
             ->fetchSingle());
+    }
+
+    public function testPluginPreviewCountsEquivalentKeysAcrossPagesWithoutWriting(): void
+    {
+        $database = Container::db();
+        $itemHex = bin2hex(random_bytes(16));
+        $rows = [];
+        for ($i = 0; $i < PlaybackReportingClient::CHUNK_SIZE; ++$i) {
+            $started = (new DateTimeImmutable('2024-06-02 00:00:00'))
+                ->modify('+' . $i . ' seconds')->format('Y-m-d H:i:s');
+            $rows[] = $this->parsedLine($started, $itemHex, 60)[0];
+        }
+        $rows[] = $this->parsedLine('2024-06-02 00:00:00.000', strtoupper($itemHex), 60)[0];
+        $plugin = new FakePlaybackReportingPlugin($rows);
+        $preview = (new PlaybackReportingImporter(
+            repository: new PlayHistoryRepository($database),
+            client: new JellyfinClient('', '', false),
+            plugin: $plugin,
+        ))->previewPlugin();
+
+        self::assertSame('plugin', $preview['kind']);
+        self::assertSame(PlaybackReportingClient::CHUNK_SIZE + 1, $preview['parsed']);
+        self::assertSame(PlaybackReportingClient::CHUNK_SIZE, $preview['importable']);
+        self::assertSame(1, $preview['skipped']);
+        self::assertSame(0, $preview['conflicts']);
+        self::assertSame(0, (int) $database->getDibi()->select('COUNT(*)')->from('play_history')
+            ->where('item_id = %s', (string) $rows[0]['item_id'])->fetchSingle());
     }
 
     public function testFailedLaterBatchKeepsCommittedBatchAndCanBeReplayedSafely(): void

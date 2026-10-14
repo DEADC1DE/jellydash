@@ -19,6 +19,11 @@
     let inFlight = false;
     let firstResult = true;
     let activeController = null;
+    let authExpired = false;
+    let pageSuspended = false;
+    let resumePending = false;
+    let renderedRows = [];
+    let failureState = null;
 
     function settleInitialAnchor() {
         if (firstResult && window.location.hash === '#system-status') {
@@ -44,8 +49,8 @@
     function renderNav(state) {
         const known = state === 'healthy' || state === 'attention' ? state : 'unknown';
         const label = known === 'healthy' ? 'Healthy' : known === 'attention' ? 'Needs attention' : 'Status unknown';
-        if (navLabel) navLabel.textContent = label;
-        if (navDot) navDot.className = 'is-' + known;
+        if (navLabel && navLabel.textContent !== label) navLabel.textContent = label;
+        if (navDot && navDot.className !== 'is-' + known) navDot.className = 'is-' + known;
         if (nav) nav.setAttribute('aria-label', 'System status, ' + label.toLowerCase());
     }
 
@@ -61,18 +66,24 @@
         renderNav(payload.state);
         diagnostics = payload.diagnostics;
         if (!root) return;
-        clearRows();
-        payload.components.forEach((component) => {
+        const hadFailure = failureState !== null;
+        failureState = null;
+        const nextRows = [];
+        payload.components.forEach((component, index) => {
             const state = allowedStates.includes(component.state) ? component.state : 'unknown';
-            const row = document.createElement('div');
-            row.className = 'system-status-row is-' + state;
-            const stateNode = document.createElement('span');
-            stateNode.className = 'system-status-state';
-            stateNode.textContent = state.charAt(0).toUpperCase() + state.slice(1);
-            const copy = document.createElement('span');
-            const label = document.createElement('strong');
-            const detail = document.createElement('small');
-            label.textContent = String(component.label || 'Unknown component');
+            const key = String(component.id || index);
+            const previous = renderedRows.find((entry) => entry.key === key);
+            const row = previous ? previous.row : document.createElement('div');
+            if (row.className !== 'system-status-row is-' + state) row.className = 'system-status-row is-' + state;
+            const stateNode = previous ? previous.stateNode : document.createElement('span');
+            if (stateNode.className !== 'system-status-state') stateNode.className = 'system-status-state';
+            const stateText = state.charAt(0).toUpperCase() + state.slice(1);
+            if (stateNode.textContent !== stateText) stateNode.textContent = stateText;
+            const copy = previous ? previous.copy : document.createElement('span');
+            const label = previous ? previous.label : document.createElement('strong');
+            const detail = previous ? previous.detail : document.createElement('small');
+            const labelText = String(component.label || 'Unknown component');
+            if (label.textContent !== labelText) label.textContent = labelText;
             const lastSuccess = Number(component.last_success_at);
             const details = [String(component.message || '')];
             if (state !== 'disabled' || (Number.isFinite(lastSuccess) && lastSuccess > 0)) {
@@ -83,19 +94,33 @@
             }
             const pending = Number(component.pending_retries || 0);
             if (pending > 0) details.push(pending + ' pending ' + (pending === 1 ? 'retry' : 'retries'));
-            detail.textContent = details.filter(Boolean).join(' · ');
-            copy.appendChild(label);
-            copy.appendChild(detail);
-            row.appendChild(stateNode);
-            row.appendChild(copy);
-            components.appendChild(row);
+            const detailText = details.filter(Boolean).join(' · ');
+            if (detail.textContent !== detailText) detail.textContent = detailText;
+            if (!previous) {
+                copy.appendChild(label);
+                copy.appendChild(detail);
+                row.appendChild(stateNode);
+                row.appendChild(copy);
+            }
+            nextRows.push({ key, row, stateNode, copy, label, detail });
         });
-        summary.textContent = payload.state === 'healthy' ? 'Background checks are healthy' : payload.state === 'attention' ? 'Some checks need attention' : 'System status is unknown';
+        if (hadFailure || nextRows.length !== renderedRows.length || nextRows.some((entry, index) => entry.row !== renderedRows[index].row)) {
+            clearRows();
+            nextRows.forEach((entry) => components.appendChild(entry.row));
+        }
+        renderedRows = nextRows;
+        const summaryText = payload.state === 'healthy' ? 'Background checks are healthy' : payload.state === 'attention' ? 'Some checks need attention' : 'System status is unknown';
+        if (summary.textContent !== summaryText) summary.textContent = summaryText;
         copyButton.disabled = false;
         settleInitialAnchor();
     }
 
     function renderFailure(error) {
+        const expired = error && (error.status === 401 || error.status === 403);
+        const nextFailure = expired ? 'auth' : 'outage';
+        if (failureState === nextFailure) return;
+        failureState = nextFailure;
+        renderedRows = [];
         diagnostics = null;
         renderNav('unknown');
         if (!root) return;
@@ -125,8 +150,14 @@
         settleInitialAnchor();
     }
 
+    function resume() {
+        pageSuspended = false;
+        if (inFlight) resumePending = true;
+        else refresh();
+    }
+
     async function refresh() {
-        if (inFlight || document.hidden) return;
+        if (authExpired || pageSuspended || inFlight || document.hidden) return;
         inFlight = true;
         const sequence = ++requestSequence;
         const controller = typeof AbortController === 'function' ? new AbortController() : null;
@@ -142,11 +173,15 @@
             const payload = await response.json();
             if (sequence === requestSequence) render(payload);
         } catch (error) {
-            if (sequence === requestSequence) renderFailure(error);
+            if (sequence === requestSequence) {
+                if (error.status === 401 || error.status === 403) authExpired = true;
+                renderFailure(error);
+            }
         } finally {
             window.clearTimeout(timeout);
             if (activeController === controller) activeController = null;
             inFlight = false;
+            if (resumePending) { resumePending = false; refresh(); }
         }
     }
 
@@ -168,10 +203,13 @@
     }
 
     if (copyButton) copyButton.addEventListener('click', copyDiagnostics);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) { ++requestSequence; activeController?.abort(); }
+        else resume();
+    });
     if (window.addEventListener) {
-        window.addEventListener('pagehide', () => activeController?.abort());
-        window.addEventListener('pageshow', refresh);
+        window.addEventListener('pagehide', () => { pageSuspended = true; ++requestSequence; activeController?.abort(); });
+        window.addEventListener('pageshow', resume);
     }
     if (window.JellydashFrontendTestHooks) window.JellydashFrontendTestHooks.systemStatus = { render, renderFailure, refresh, copyDiagnostics };
     refresh();

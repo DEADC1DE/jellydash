@@ -284,7 +284,9 @@ final class PlaybackStatisticsService
                 $libraryKey = $libraryConfirmed ? $library . ':' : '';
                 $key = 'series:' . $libraryKey . $series;
             } else {
-                $identity = $itemId !== '' ? $itemId : 'title:' . $title;
+                $identity = $itemId !== ''
+                    ? ($type === 'Movie' ? ThemePlaybackExclusions::canonicalItemId($itemId) : $itemId)
+                    : 'title:' . $title;
                 $key = 'item:' . $type . ':' . $identity;
             }
 

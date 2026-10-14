@@ -56,6 +56,45 @@ final class MovieReplacements
         return $members;
     }
 
+    /**
+     * Read-side group membership includes the full-GUID spellings that History
+     * presentation groups together. Stored aliases and their journals stay exact.
+     *
+     * @param array<string, string>|null $map
+     * @return list<string>
+     */
+    public function historyMembers(string $itemId, ?array $map = null): array
+    {
+        $map ??= $this->all();
+        $target = $map[$itemId] ?? $itemId;
+        $targetKey = ThemePlaybackExclusions::canonicalItemId($target);
+        $members = [$target];
+        foreach ($map as $oldId => $replacementId) {
+            if (ThemePlaybackExclusions::canonicalItemId($replacementId) === $targetKey) {
+                $members[] = (string) $oldId;
+            }
+        }
+        return array_values(array_unique($members));
+    }
+
+    /** @param list<string> $ids */
+    public function historyCondition(array $ids): string
+    {
+        $conditions = [];
+        foreach ($ids as $id) {
+            $key = ThemePlaybackExclusions::canonicalItemId($id);
+            if (preg_match('/^[0-9a-f]{32}$/D', $key) === 1) {
+                $dashed = substr($key, 0, 8) . '-' . substr($key, 8, 4) . '-'
+                    . substr($key, 12, 4) . '-' . substr($key, 16, 4) . '-' . substr($key, 20, 12);
+                $conditions[] = $this->db->translate('(LOWER(item_id) = %s OR LOWER(item_id) = %s)', $key, $dashed);
+            } else {
+                $conditions[] = $this->db->translate($this->platform->isSqlite()
+                    ? 'item_id COLLATE BINARY = %s' : 'BINARY item_id = %s', $id);
+            }
+        }
+        return $conditions === [] ? '1 = 0' : '(' . implode(' OR ', array_unique($conditions)) . ')';
+    }
+
     /** @return array<string, string> */
     public function all(): array
     {
@@ -122,6 +161,58 @@ final class MovieReplacements
         });
 
         return $removed;
+    }
+
+    /** Save only real alias changes, preserving an existing journal on an idempotent repeat. */
+    public function journaledLink(
+        string $oldId,
+        string $newId,
+        bool $automatic = false,
+        ?MovieIdentityRepository $identities = null,
+        ?int $now = null,
+    ): void {
+        $identities ??= $this->identities;
+        if ($identities->serverKey() !== $this->serverKey) {
+            throw new \InvalidArgumentException('The movie journal must belong to the same server.');
+        }
+        $now ??= time();
+        $lease = null;
+        if ($identities === $this->identities) {
+            $lease = $identities->acquireLease($now);
+            if ($lease === null) {
+                throw new \RuntimeException('Movie recovery is busy. Please try again shortly.');
+            }
+        }
+        try {
+            $this->atomic(function () use ($oldId, $newId, $automatic, $identities, $now): void {
+                $identities->assertLease($now);
+                $before = $this->all();
+                $this->link($oldId, $newId);
+                $after = $this->all();
+                $changedBefore = [];
+                $changedAfter = [];
+                foreach ($after as $id => $target) {
+                    if (($before[$id] ?? null) !== $target) {
+                        $changedBefore[$id] = $before[$id] ?? null;
+                        $changedAfter[$id] = $target;
+                    }
+                }
+                if ($changedAfter === []) {
+                    return;
+                }
+                $source = $identities->get($oldId) ?? [];
+                $source['candidateIds'] = [];
+                $source['suppressed'] = false;
+                $source['repairAutomatic'] = $automatic;
+                $source['repairBefore'] = $changedBefore;
+                $source['repairAfter'] = $changedAfter;
+                $identities->put($oldId, $source);
+            });
+        } finally {
+            if ($lease !== null) {
+                $identities->releaseLease($lease);
+            }
+        }
     }
 
     /**

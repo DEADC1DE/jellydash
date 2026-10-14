@@ -83,7 +83,7 @@ final class MonitoringExclusionsRepositoryTest extends TestCase
         $duplicate['watched_sec'] = 1800;
         $new = $this->historical('new', 'Admin');
 
-        $this->assertSame(['inserted' => 0, 'skipped' => 2, 'repaired' => 0], $repo->importHistoricalPlays([$duplicate, $new]));
+        $this->assertSame(['inserted' => 0, 'skipped' => 2, 'conflicts' => 0, 'repaired' => 0], $repo->importHistoricalPlays([$duplicate, $new]));
         $this->assertSame(['inserted' => 0, 'skipped' => 1], $repo->importNativeHistoricalPlays([$new]));
         $stored = $this->database->getDibi()->select('watched_sec, runtime_sec')->from('play_history')->fetch();
         $this->assertNotNull($stored);

@@ -4,7 +4,7 @@
     const indicator = document.querySelector('[data-download-indicator]');
     if (!indicator) return;
 
-    const state = { timer: null, controller: null, failures: 0, sequence: 0, stopped: false, lastData: null, lastSuccessAt: null };
+    const state = { timer: null, controller: null, failures: 0, sequence: 0, stopped: false, authExpired: false, resumePending: false, lastData: null, lastSuccessAt: null };
     const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
     const monitoringEnabled = (data) => data?.monitoring_enabled === undefined
         ? data?.workers_enabled !== false : data.monitoring_enabled === true;
@@ -126,13 +126,14 @@
     }
 
     function schedule(delay) {
-        if (state.stopped || document.hidden) return;
+        if (state.authExpired || state.stopped || document.hidden) return;
         window.clearTimeout(state.timer);
         state.timer = window.setTimeout(refresh, delay);
     }
 
     async function refresh() {
-        if (state.stopped || document.hidden || state.controller) return;
+        if (state.authExpired || state.stopped || document.hidden || state.controller) return;
+        state.resumePending = false;
         const sequence = ++state.sequence;
         const controller = new AbortController();
         state.controller = controller;
@@ -142,7 +143,11 @@
             const response = await fetch('/api/downloads/overview.php?summary=1', {
                 cache: 'no-store', credentials: 'same-origin', signal: controller.signal,
             });
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            if (!response.ok) {
+                const error = new Error(`HTTP ${response.status}`);
+                error.status = response.status;
+                throw error;
+            }
             const data = await response.json();
             if (sequence !== state.sequence) return;
             state.failures = 0;
@@ -152,28 +157,36 @@
             schedule(5000);
         } catch (error) {
             if (sequence !== state.sequence || (error?.name === 'AbortError' && !timedOut)) return;
+            if (error.status === 401 || error.status === 403) {
+                state.authExpired = true;
+                window.clearTimeout(state.timer);
+                state.timer = null;
+                renderWidget('Session expired', null, false, true, 'Downloads session expired. Sign in again.');
+                return;
+            }
             state.failures += 1;
             renderUnavailable();
             schedule(Math.min(60000, 5000 * (2 ** Math.min(state.failures, 4))));
         } finally {
             window.clearTimeout(timeout);
             if (state.controller === controller) state.controller = null;
+            if (state.resumePending) { state.resumePending = false; refresh(); }
         }
     }
 
     function stop() {
         window.clearTimeout(state.timer);
         state.timer = null;
+        ++state.sequence;
         if (state.controller) state.controller.abort();
-        state.controller = null;
     }
 
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) stop();
-        else refresh();
+        else { state.resumePending = true; refresh(); }
     });
     window.addEventListener('pagehide', () => { state.stopped = true; stop(); });
-    window.addEventListener('pageshow', () => { state.stopped = false; refresh(); });
+    window.addEventListener('pageshow', () => { state.stopped = false; state.resumePending = true; refresh(); });
     refresh();
 
     const hooks = window.JellydashDownloadIndicatorTestHooks = window.JellydashDownloadIndicatorTestHooks || {};

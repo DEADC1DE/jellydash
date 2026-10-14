@@ -143,6 +143,24 @@ final class MovieRecoveryService
         $repairs = [];
         $dismissed = [];
         $aliases = $this->replacements->all();
+        $journalMembers = [];
+        $groups = [];
+        $groupConflicts = [];
+        foreach ($aliases as $id => $targetId) {
+            $groups[$targetId][] = (string) $id;
+        }
+        foreach ($groups as $targetId => $members) {
+            $members = $this->replacements->historyMembers((string) $targetId, $aliases);
+            $groupConflicts[$targetId] = $this->historyEvidence($members)['conflict']
+                || $this->evidenceConflicts($this->identityEvidence($members, $items), $items[$targetId] ?? []);
+        }
+        foreach ($items as $item) {
+            if ($this->validJournal($item) && $this->journalIsCurrent($item, $aliases)) {
+                foreach (array_keys($item['repairAfter']) as $memberId) {
+                    $journalMembers[(string) $memberId] = true;
+                }
+            }
+        }
         foreach ($items as $id => $item) {
             $id = (string) $id;
             if (!empty($item['suppressed'])) {
@@ -163,30 +181,27 @@ final class MovieRecoveryService
                 }
             }
             if (isset($aliases[$id])) {
-                $journalIsCurrent = true;
-                foreach (($item['repairAfter'] ?? []) as $affectedId => $expectedTarget) {
-                    if (($aliases[$affectedId] ?? null) !== $expectedTarget) {
-                        $journalIsCurrent = false;
-                        break;
-                    }
-                }
-                if (!$journalIsCurrent) {
+                $validJournal = $this->validJournal($item);
+                $journalIsCurrent = $validJournal && $this->journalIsCurrent($item, $aliases);
+                if (!$journalIsCurrent && isset($journalMembers[$id])) {
                     continue;
                 }
                 $target = $items[$aliases[$id]] ?? [];
                 $repairs[] = ['sourceId' => $id, 'sourceTitle' => (string) ($item['title'] ?? ''),
                     'targetId' => $aliases[$id], 'targetTitle' => (string) ($target['title'] ?? ''),
-                    'automatic' => (bool) ($item['repairAutomatic'] ?? false)];
+                    'automatic' => (bool) ($item['repairAutomatic'] ?? false), 'undoMode' => $journalIsCurrent ? 'group' : 'remove',
+                    'needsReview' => $groupConflicts[$aliases[$id]] ?? false];
             }
         }
         foreach ($aliases as $id => $targetId) {
-            if (isset($items[$id])) {
+            if (isset($items[$id]) || isset($journalMembers[$id])) {
                 continue;
             }
             $evidence = $this->historyEvidence([(string) $id]);
             $target = $items[$targetId] ?? [];
             $repairs[] = ['sourceId' => (string) $id, 'sourceTitle' => $evidence['title'], 'targetId' => $targetId,
-                'targetTitle' => (string) ($target['title'] ?? ''), 'automatic' => false];
+                'targetTitle' => (string) ($target['title'] ?? ''), 'automatic' => false, 'undoMode' => 'remove',
+                'needsReview' => $groupConflicts[$targetId] ?? $evidence['conflict']];
         }
         $pages = max(1, (int) ceil(max(count($suggestions), count($repairs), count($dismissed)) / self::DISPLAY_PAGE_SIZE));
         $page = max(1, min($pages, $page));
@@ -202,6 +217,20 @@ final class MovieRecoveryService
     public function confirm(string $sourceId, string $targetId): void
     {
         $this->uiMutation(function (array &$state) use ($sourceId, $targetId): void {
+            $alreadyLinked = $this->replacements->atomic(function () use ($sourceId, $targetId): bool {
+                $this->identities->assertLease(($this->clock)());
+                $resolved = $this->replacements->resolve($sourceId);
+                if ($resolved === $sourceId) {
+                    return false;
+                }
+                if ($resolved !== $targetId) {
+                    throw new \RuntimeException('A later repair changed this movie group. Refresh the recovery list.');
+                }
+                return true;
+            });
+            if ($alreadyLinked) {
+                return;
+            }
             $source = $this->identities->get($sourceId);
             if ($source === null || !empty($source['suppressed']) || !in_array($targetId, $source['candidateIds'] ?? [], true)) {
                 throw new \RuntimeException('This replacement is no longer offered. Refresh the recovery list.');
@@ -221,23 +250,30 @@ final class MovieRecoveryService
                 throw new \RuntimeException('The movie metadata no longer matches this suggestion.');
             }
             $this->remember($targetId, $targetIdentity, true);
-            $this->link($sourceId, $targetId, false);
+            $this->link($sourceId, $targetId, false, $targetIdentity);
         });
     }
 
     public function dismiss(string $sourceId): void
     {
         $this->uiMutation(function (array &$state) use ($sourceId): void {
-            $item = $this->identities->get($sourceId);
-            if ($item === null) {
-                throw new \RuntimeException('This movie recovery entry is no longer available.');
-            }
-            $this->replacements->atomic(function () use ($sourceId, $item): void {
+            (new HistoryWriteGuard($this->database))->run(fn () => $this->replacements->atomic(function () use ($sourceId): void {
                 $this->identities->assertLease(($this->clock)());
+                $item = $this->identities->get($sourceId);
+                if ($this->replacements->resolve($sourceId) !== $sourceId || $item === null
+                    || (empty($item['suppressed']) && empty($item['candidateIds']))) {
+                    throw new \RuntimeException('This replacement is no longer offered. Refresh the recovery list.');
+                }
+                if (empty($item['suppressed'])) {
+                    $history = $this->historyEvidence($this->replacements->historyMembers($sourceId));
+                    if ($history['plays'] === 0 || $history['conflict']) {
+                        throw new \RuntimeException('The recorded movie group changed. Refresh the recovery list.');
+                    }
+                }
                 $item['suppressed'] = true;
                 $item['candidateIds'] = [];
                 $this->identities->put($sourceId, $item);
-            });
+            }));
         });
     }
 
@@ -248,8 +284,18 @@ final class MovieRecoveryService
             $this->replacements->atomic(function () use ($sourceId, $item): void {
                 $this->identities->assertLease(($this->clock)());
                 $current = $this->replacements->all();
-                $after = $item['repairAfter'] ?? [$sourceId => $current[$sourceId] ?? null];
-                $before = $item['repairBefore'] ?? [$sourceId => null];
+                if (!isset($current[$sourceId])) {
+                    throw new \RuntimeException('This replacement is no longer available. Refresh the recovery list.');
+                }
+                $validJournal = $this->validJournal($item);
+                if (!$validJournal && (!empty($item['repairAfter']) || !empty($item['repairBefore']))) {
+                    throw new \RuntimeException('The previous movie group cannot be restored. Remove the individual mapping instead.');
+                }
+                if (!$validJournal && $this->currentJournalOwns($sourceId, $current)) {
+                    throw new \RuntimeException('A later repair changed this movie group. Refresh the recovery list.');
+                }
+                $after = $validJournal ? $item['repairAfter'] : [$sourceId => $current[$sourceId]];
+                $before = $validJournal ? $item['repairBefore'] : [$sourceId => null];
                 foreach ($after as $id => $target) {
                     if (($current[$id] ?? null) !== $target) {
                         throw new \RuntimeException('A later repair changed this movie group. Refresh the recovery list.');
@@ -296,6 +342,70 @@ final class MovieRecoveryService
                 $this->identities->saveState($state);
             });
         });
+    }
+
+    public function removeMapping(string $sourceId, string $expectedTargetId): void
+    {
+        $this->uiMutation(function (array &$state) use ($sourceId, $expectedTargetId): void {
+            $this->replacements->atomic(function () use ($sourceId, $expectedTargetId): void {
+                $this->identities->assertLease(($this->clock)());
+                $item = $this->identities->get($sourceId) ?? [];
+                $current = $this->replacements->all();
+                if (($current[$sourceId] ?? null) !== $expectedTargetId) {
+                    throw new \RuntimeException('This replacement changed. Refresh the recovery list.');
+                }
+                if ($this->currentJournalOwns($sourceId, $current)) {
+                    throw new \RuntimeException('A later repair changed this movie group. Refresh the recovery list.');
+                }
+                $this->replacements->unlink($sourceId);
+                $item['suppressed'] = true;
+                $item['candidateIds'] = [];
+                unset($item['repairAfter'], $item['repairBefore']);
+                $this->identities->put($sourceId, $item);
+            });
+        });
+    }
+
+    /** @param array<string, string> $aliases */
+    private function currentJournalOwns(string $sourceId, array $aliases): bool
+    {
+        foreach ($this->identities->items() as $operation) {
+            if ($this->validJournal($operation) && $this->journalIsCurrent($operation, $aliases)
+                && array_key_exists($sourceId, $operation['repairAfter'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @param array<string, mixed> $item */
+    private function validJournal(array $item): bool
+    {
+        $before = $item['repairBefore'] ?? null;
+        $after = $item['repairAfter'] ?? null;
+        if (!is_array($before) || !is_array($after) || $after === [] || array_keys($before) !== array_keys($after)) {
+            return false;
+        }
+        foreach ($after as $id => $target) {
+            if (preg_match('/^[A-Za-z0-9_-]{1,64}$/D', (string) $id) !== 1
+                || !is_string($target) || preg_match('/^[A-Za-z0-9_-]{1,64}$/D', $target) !== 1
+                || ($before[$id] !== null && (!is_string($before[$id])
+                    || preg_match('/^[A-Za-z0-9_-]{1,64}$/D', $before[$id]) !== 1))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** @param array<string, mixed> $item @param array<string, string> $aliases */
+    private function journalIsCurrent(array $item, array $aliases): bool
+    {
+        foreach ($item['repairAfter'] as $id => $target) {
+            if (($aliases[$id] ?? null) !== $target) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** @param array<string, mixed> $state */
@@ -396,14 +506,14 @@ final class MovieRecoveryService
         if (isset($aliases[$id])) {
             return;
         }
-        $members = [$id];
-        foreach ($aliases as $memberId => $targetId) {
-            if ($targetId === $id) {
-                $members[] = (string) $memberId;
-            }
-        }
+        $members = $this->replacements->historyMembers($id, $aliases);
         $history = $this->historyEvidence($members);
         if ($history['plays'] === 0 || $history['conflict']) {
+            $source = $this->identities->get($id);
+            if ($source !== null) {
+                $source['candidateIds'] = [];
+                $this->identities->put($id, $source);
+            }
             return;
         }
         $source = $this->identities->get($id) ?? ['title' => $history['title'], 'providers' => [],
@@ -418,28 +528,24 @@ final class MovieRecoveryService
             $source['library'] = $history['library'];
         }
         $source['sourcePlays'] = $history['plays'];
-        $incomingEvidence = [];
-        foreach ($members as $memberId) {
-            $member = $this->identities->get($memberId);
+        $incomingEvidence = $this->identityEvidence($members);
+        foreach ($incomingEvidence as $member) {
             if (!empty($member['suppressed'])) {
                 return;
             }
-            if ($member !== null) {
-                $incomingEvidence[] = $member;
-                if (!empty($member['conflicted'])) {
+            if (!empty($member['conflicted'])) {
+                $source['conflicted'] = true;
+            }
+            foreach (['serverId', 'year', 'library'] as $field) {
+                if (($source[$field] ?? null) !== null && ($source[$field] ?? '') !== ''
+                    && ($member[$field] ?? null) !== null && ($member[$field] ?? '') !== ''
+                    && $source[$field] !== $member[$field]) {
                     $source['conflicted'] = true;
                 }
-                foreach (['serverId', 'year', 'library'] as $field) {
-                    if (($source[$field] ?? null) !== null && ($source[$field] ?? '') !== ''
-                        && ($member[$field] ?? null) !== null && ($member[$field] ?? '') !== ''
-                        && $source[$field] !== $member[$field]) {
-                        $source['conflicted'] = true;
-                    }
-                }
-                foreach (($member['providers'] ?? []) as $provider => $value) {
-                    if (isset($source['providers'][$provider]) && $source['providers'][$provider] !== $value) {
-                        $source['conflicted'] = true;
-                    }
+            }
+            foreach (($member['providers'] ?? []) as $provider => $value) {
+                if (isset($source['providers'][$provider]) && $source['providers'][$provider] !== $value) {
+                    $source['conflicted'] = true;
                 }
             }
         }
@@ -448,15 +554,17 @@ final class MovieRecoveryService
         }
         $live = ($source['seenScan'] ?? null) === $state['scan'] ? ['Type' => 'Movie'] : $this->lookup($id);
         if ($live !== null) {
+            $source['candidateIds'] = [];
+            $source['absent'] = false;
             if ($live['Type'] === 'Movie') {
                 if (isset($live['Id'])) {
                     $this->remember($id, $this->identity($live, (string) $state['serverId'], $state)
                         + ['sourcePlays' => $history['plays'], 'candidateIds' => [], 'absent' => false], true);
                 } else {
-                    $source['candidateIds'] = [];
-                    $source['absent'] = false;
                     $this->identities->put($id, $source);
                 }
+            } else {
+                $this->identities->put($id, $source);
             }
             return;
         }
@@ -497,32 +605,41 @@ final class MovieRecoveryService
                 || $this->evidenceConflicts($incomingEvidence, $current)) {
                 return;
             }
-            $this->link($id, $targetId, true);
+            $this->link($id, $targetId, true, $current);
         }
     }
 
-    private function link(string $sourceId, string $targetId, bool $automatic): void
+    /** @param array<string, mixed> $targetIdentity */
+    private function link(string $sourceId, string $targetId, bool $automatic, array $targetIdentity): void
     {
-        $this->replacements->atomic(function () use ($sourceId, $targetId, $automatic): void {
+        (new HistoryWriteGuard($this->database))->run(fn () => $this->replacements->atomic(function () use ($sourceId, $targetId, $automatic, $targetIdentity): void {
             $this->identities->assertLease(($this->clock)());
             $source = $this->identities->get($sourceId) ?? [];
-            $before = $this->replacements->all();
-            $this->replacements->link($sourceId, $targetId);
-            $after = $this->replacements->all();
-            $changedBefore = [];
-            $changedAfter = [];
-            foreach ($after as $id => $target) {
-                if (($before[$id] ?? null) !== $target) {
-                    $changedBefore[$id] = $before[$id] ?? null;
-                    $changedAfter[$id] = $target;
+            $members = $this->replacements->historyMembers($sourceId);
+            sort($members, SORT_STRING);
+            $history = $this->historyEvidence($members);
+            if ($history['plays'] === 0 || $history['conflict'] || $this->hasNonMovieHistory($targetId)) {
+                throw new \RuntimeException('The recorded movie group changed. Refresh the recovery list.');
+            }
+            if ($history['library'] !== '') {
+                if (!empty($source['library']) && $source['library'] !== $history['library']) {
+                    throw new \RuntimeException('The recorded movie library changed. Refresh the recovery list.');
+                }
+                $source['library'] = $history['library'];
+            }
+            $memberEvidence = $this->identityEvidence($members);
+            foreach ($memberEvidence as $member) {
+                if (!empty($member['conflicted'])) {
+                    $source['conflicted'] = true;
                 }
             }
-            $source['candidateIds'] = [];
-            $source['repairAutomatic'] = $automatic;
-            $source['repairBefore'] = $changedBefore;
-            $source['repairAfter'] = $changedAfter;
-            $this->identities->put($sourceId, $source);
-        });
+            $match = $this->matcher->match($source, $targetIdentity);
+            if ($match === null || ($automatic && $match !== 'automatic')
+                || $this->evidenceConflicts($memberEvidence, $targetIdentity)) {
+                throw new \RuntimeException('The movie metadata no longer matches this suggestion.');
+            }
+            $this->replacements->journaledLink($sourceId, $targetId, $automatic, $this->identities, ($this->clock)());
+        }));
     }
 
     /** @param array<string, mixed> $state */
@@ -603,16 +720,24 @@ final class MovieRecoveryService
             $id = (string) $row['item_id'];
             $ids[$aliases[$id] ?? $id] = true;
         }
+        // Revisit persisted offers even when their last Movie row was removed or changed type.
+        foreach ($this->identities->items() as $id => $item) {
+            if (!empty($item['candidateIds'])) {
+                $id = (string) $id;
+                $ids[$aliases[$id] ?? $id] = true;
+            }
+        }
 
-        return array_map('strval', array_keys($ids));
+        $ordered = array_map('strval', array_keys($ids));
+        sort($ordered, SORT_STRING);
+        return $ordered;
     }
 
     /** @param list<string> $ids @return array{title: string, plays: int, library: string, conflict: bool} */
     private function historyEvidence(array $ids): array
     {
         $rows = $this->database->getDibi()->select('item_type, item_name, library, library_resolved_at, COUNT(*) AS plays')
-            ->from('play_history')->where($this->database->getPlatform()->isSqlite()
-                ? 'item_id COLLATE BINARY IN %in' : 'BINARY item_id IN %in', $ids)
+            ->from('play_history')->where($this->replacements->historyCondition($ids))
             ->groupBy('item_type, item_name, library, library_resolved_at')->fetchAll();
         $plays = 0;
         $title = '';
@@ -634,7 +759,7 @@ final class MovieRecoveryService
     private function hasNonMovieHistory(string $id): bool
     {
         $rows = $this->database->getDibi()->select('item_type')->from('play_history')
-            ->where($this->database->getPlatform()->isSqlite() ? 'item_id COLLATE BINARY = %s' : 'BINARY item_id = %s', $id)->fetchAll();
+            ->where($this->replacements->historyCondition([$id]))->fetchAll();
         foreach ($rows as $row) {
             if ((string) $row['item_type'] !== 'Movie') {
                 return true;
@@ -647,15 +772,27 @@ final class MovieRecoveryService
     /** @param array<string, mixed> $target */
     private function incomingConflicts(string $id, array $target): bool
     {
+        return $this->evidenceConflicts($this->identityEvidence($this->replacements->historyMembers($id)), $target);
+    }
+
+    /**
+     * @param list<string> $ids
+     * @param array<string, array<string, mixed>>|null $items
+     * @return list<array<string, mixed>>
+     */
+    private function identityEvidence(array $ids, ?array $items = null): array
+    {
+        $keys = [];
+        foreach ($ids as $id) {
+            $keys[ThemePlaybackExclusions::canonicalItemId($id)] = true;
+        }
         $evidence = [];
-        foreach ($this->replacements->members($id) as $memberId) {
-            $member = $this->identities->get($memberId);
-            if ($member !== null) {
-                $evidence[] = $member;
+        foreach ($items ?? $this->identities->items() as $id => $item) {
+            if (isset($keys[ThemePlaybackExclusions::canonicalItemId((string) $id)])) {
+                $evidence[] = $item;
             }
         }
-
-        return $this->evidenceConflicts($evidence, $target);
+        return $evidence;
     }
 
     /** @param list<array<string, mixed>> $evidence @param array<string, mixed> $target */
@@ -751,13 +888,12 @@ final class MovieRecoveryService
             throw new \RuntimeException('Invalid movie year.');
         }
         $library = '';
-        $path = str_replace('\\', '/', (string) ($item['Path'] ?? ''));
+        $path = MediaPath::normalize((string) ($item['Path'] ?? ''));
         $length = 0;
         foreach ($state['roots'] as $root) {
-            if ($root['path'] !== '' && ($path === $root['path'] || str_starts_with($path, $root['path'] . '/'))
-                && strlen($root['path']) > $length) {
+            if (MediaPath::isWithin($path, $root['path']) && strlen(MediaPath::normalize($root['path'])) > $length) {
                 $library = $root['name'];
-                $length = strlen($root['path']);
+                $length = strlen(MediaPath::normalize($root['path']));
             }
         }
 

@@ -4,6 +4,7 @@ use Mk\Framework\AppSettings;
 use Mk\Framework\Container;
 use Mk\Framework\Jellyfin\HistoryFilters;
 use Mk\Framework\Jellyfin\MonitoringExclusions;
+use Mk\Framework\Jellyfin\PlaybackReportingImporter;
 use Mk\Framework\Jellyfin\PlaybackReportingParser;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use PHPUnit\Framework\TestCase;
@@ -58,12 +59,12 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertStringContainsString('Audio codec not supported', (string) $row['transcode_reasons']);
     }
 
-    public function testLogActiveStreamsStartsFreshPlayAfterLongGap(): void
+    public function testLogActiveStreamsStartsFreshPlayWhenFinishedPlaybackRestarts(): void
     {
         $start = new \DateTimeImmutable('2099-06-19 12:00:00');
 
-        // First viewing reaches the half-way point (not finished).
-        $this->repository->logActiveStreams([$this->stream(1800, 3600)], $start);
+        // A finished viewing restarts near the beginning after a long gap.
+        $this->repository->logActiveStreams([$this->stream(3500, 3600)], $start);
         $this->dibi->update('play_history', [
             'notified' => 0,
             'notification_attempts' => 2,
@@ -72,9 +73,8 @@ final class PlayHistoryRepositoryTest extends TestCase
             'notification_next_attempt_at_epoch' => $start->getTimestamp() + 300,
         ])->execute();
 
-        // Three hours later the same long-lived session+item shows up again near
-        // the beginning: a re-watch, which must become a fresh play, not an
-        // update of the old row.
+        // The same long-lived session+item now reports a position well behind
+        // the completed viewing, so this is the existing explicit restart case.
         $this->repository->logActiveStreams([$this->stream(120, 3600)], $start->modify('+3 hours'));
 
         $row = $this->dibi->select('*')
@@ -88,7 +88,7 @@ final class PlayHistoryRepositoryTest extends TestCase
             : new \DateTimeImmutable((string) $row['started_at']);
 
         $this->assertNotNull($row);
-        $this->assertSame(120, (int) $row['watched_sec']); // reset to the new play, not kept at 1800
+        $this->assertSame(120, (int) $row['watched_sec']);
         $this->assertSame('2099-06-19 15:00:00', $started->format('Y-m-d H:i:s'));
         $this->assertSame(0, (int) $row['notification_attempts']);
         $this->assertNull($row['notification_claim_token']);
@@ -743,6 +743,64 @@ final class PlayHistoryRepositoryTest extends TestCase
         $this->assertSame(1, $second['skipped']);
     }
 
+    public function testEquivalentPluginGuidSpellingsImportOnlyOnce(): void
+    {
+        $parser = new PlaybackReportingParser();
+        $first = $parser->parseTsv(
+            "2024-01-01 12:00:00\t0e394f8a9bc64abeba29f63cdc7a12a0\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tMovie\tDune\tDirectPlay\tWeb\tChrome\t600"
+        );
+        $equivalent = $parser->parseTsv(
+            "2024-01-01 12:00:00.000\t0E394F8A-9BC6-4ABE-BA29-F63CDC7A12A0\tAAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA\tMovie\tDune\tDirectPlay\tWeb\tChrome\t600"
+        );
+        $this->assertSame(1, $this->repository->importHistoricalPlays($first)['inserted']);
+        $this->assertSame(1, $this->repository->importHistoricalPlays($equivalent, true)['skipped']);
+        $second = $this->repository->importHistoricalPlays($equivalent);
+        $this->assertSame(0, $second['inserted']);
+        $this->assertSame(1, $second['skipped']);
+        $this->assertSame(0, $second['conflicts']);
+        $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('play_history')
+            ->where('session_key = %s', $first[0]['session_key'])->fetchSingle());
+    }
+
+    public function testLegacyPluginKeyIsSkippedExactlyAndAmbiguousSameSecondConflicts(): void
+    {
+        $parser = new PlaybackReportingParser();
+        $first = $parser->parseTsv(
+            "2024-01-02 12:00:00.001\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tWeb\tChrome\t600"
+        );
+        $legacy = $first[0];
+        $legacy['session_key'] = $legacy['legacy_session_key'];
+        unset($legacy['legacy_session_key']);
+        $this->assertSame(1, $this->repository->importNativeHistoricalPlays([$legacy])['inserted']);
+        $exact = $this->repository->importHistoricalPlays($first);
+        $this->assertSame(1, $exact['skipped']);
+        $this->assertSame(0, $exact['conflicts']);
+
+        $ambiguous = $parser->parseTsv(
+            "2024-01-02 12:00:00.002\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tWeb\tChrome\t600"
+        );
+        $preview = $this->repository->importHistoricalPlays($ambiguous, true);
+        $commit = $this->repository->importHistoricalPlays($ambiguous);
+        $this->assertSame(1, $preview['conflicts']);
+        $this->assertSame(1, $commit['conflicts']);
+        $this->assertSame(0, $commit['inserted']);
+        $this->assertSame(0, $commit['skipped']);
+        $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('play_history')
+            ->where('item_id = %s', '1234567')->fetchSingle());
+    }
+
+    public function testDistinctFractionalPluginEventsRemainSeparateWithoutLegacyRows(): void
+    {
+        $parser = new PlaybackReportingParser();
+        $rows = $parser->parseTsv(
+            "2024-01-03 12:00:00.001\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tWeb\tChrome\t600\n"
+            . "2024-01-03 12:00:00.002\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tWeb\tChrome\t600"
+        );
+        $result = $this->repository->importHistoricalPlays($rows);
+        $this->assertSame(2, $result['inserted']);
+        $this->assertSame(0, $result['conflicts']);
+    }
+
     public function testImportSkipsPlaysAlreadyRecordedByThePoller(): void
     {
         $itemId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
@@ -904,6 +962,75 @@ final class PlayHistoryRepositoryTest extends TestCase
             ->fetch();
 
         $this->assertSame('Anime', $stored['library']);
+    }
+
+    public function testImportRepairsMissingConfirmedLibraryMarkerEvenWhenNameIsGeneric(): void
+    {
+        $rows = (new PlaybackReportingParser())->parseTsv(
+            "2024-01-11 12:00:00.1234567\t0e394f8a9bc64abeba29f63cdc7a12a0\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tMovie\tDune\tDirectPlay\tWeb\tChrome\t120"
+        );
+        $this->assertSame(1, $this->repository->importHistoricalPlays($rows)['inserted']);
+        $this->assertNull($this->dibi->select('library_resolved_at')->from('play_history')
+            ->where('session_key = %s', $rows[0]['session_key'])->fetchSingle());
+
+        $confirmed = (new PlaybackReportingImporter())->applyLibraries($rows, [
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' => 'Movies',
+        ]);
+        $second = $this->repository->importHistoricalPlays($confirmed);
+        $this->assertSame(1, $second['repaired']);
+        $stored = $this->dibi->select('library, library_resolved_at, library_resolved_at_epoch')
+            ->from('play_history')->where('session_key = %s', $rows[0]['session_key'])->fetch();
+        $this->assertNotNull($stored);
+        $this->assertSame('Movies', $stored['library']);
+        $this->assertNotEmpty($stored['library_resolved_at']);
+        $this->assertGreaterThan(0, (int) $stored['library_resolved_at_epoch']);
+    }
+
+    public function testRuntimeRepairKeepsElapsedEndWhenPlaybackIncludedPause(): void
+    {
+        $rows = (new PlaybackReportingParser())->parseTsv(
+            "2024-01-12 10:00:00.0000000\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t900\t300"
+        );
+        $this->assertSame('2024-01-12 10:15:00', $rows[0]['updated_at']);
+        $this->assertSame(1, $this->repository->importHistoricalPlays($rows)['inserted']);
+        $rows[0]['runtime_sec'] = 600;
+        $this->assertSame(1, $this->repository->importHistoricalPlays($rows)['repaired']);
+        $stored = $this->dibi->select('watched_sec, watch_duration_sec, updated_at, ended_at, is_finished')
+            ->from('play_history')->where('session_key = %s', $rows[0]['session_key'])->fetch();
+        $this->assertNotNull($stored);
+        $this->assertSame(600, (int) $stored['watched_sec']);
+        $this->assertSame(600, (int) $stored['watch_duration_sec']);
+        $this->assertSame(1, (int) $stored['is_finished']);
+        $this->assertStringStartsWith('2024-01-12 10:15:00', (string) $stored['updated_at']);
+        $this->assertStringStartsWith('2024-01-12 10:15:00', (string) $stored['ended_at']);
+    }
+
+    public function testRuntimeRepairPreservesKnownEpochAcrossAmbiguousLocalTime(): void
+    {
+        $originalTimezone = date_default_timezone_get();
+        date_default_timezone_set('Europe/Prague');
+        try {
+            $rows = (new PlaybackReportingParser())->parseTsv(
+                "2026-10-25 01:55:00.000\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tWeb\tChrome\t1200"
+            );
+            self::assertSame('2026-10-25 02:15:00', $rows[0]['updated_at']);
+            self::assertSame(1, $this->repository->importHistoricalPlays($rows)['inserted']);
+            $knownEpoch = (new DateTimeImmutable('2026-10-25T02:15:00+02:00'))->getTimestamp();
+            $this->dibi->update('play_history', [
+                'updated_at_epoch' => $knownEpoch,
+                'ended_at_epoch' => $knownEpoch,
+            ])->where('session_key = %s', $rows[0]['session_key'])->execute();
+
+            $rows[0]['runtime_sec'] = 1200;
+            self::assertSame(1, $this->repository->importHistoricalPlays($rows)['repaired']);
+            $stored = $this->dibi->select('updated_at_epoch, ended_at_epoch')
+                ->from('play_history')->where('session_key = %s', $rows[0]['session_key'])->fetch();
+            self::assertNotNull($stored);
+            self::assertSame($knownEpoch, (int) $stored['updated_at_epoch']);
+            self::assertSame($knownEpoch, (int) $stored['ended_at_epoch']);
+        } finally {
+            date_default_timezone_set($originalTimezone);
+        }
     }
 
     public function testImportDoesNotReplaceResolvedLibraryWithGenericLabel(): void

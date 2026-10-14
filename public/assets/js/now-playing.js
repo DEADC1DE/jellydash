@@ -4,6 +4,10 @@
     const dot = document.querySelector('[data-live-dot]');
     let hasLoaded = false;
     let refreshInFlight = false;
+    let authExpired = false;
+    let authRendered = false;
+    let pageSuspended = false;
+    let resumePending = false;
     let activeController = null;
     let requestSequence = 0;
     let latestAppliedSequence = 0;
@@ -487,20 +491,26 @@
     }
 
     function renderError(error) {
-        if (hasLoaded) {
-            const authExpired = error && (error.status === 401 || error.status === 403);
+        const expired = error && (error.status === 401 || error.status === 403);
+        if (expired) {
+            if (authRendered) return;
+            authRendered = true;
             root.classList.add('is-stale');
             dot.classList.remove('is-live', 'is-idle');
             dot.classList.add('is-stale');
-            label.textContent = authExpired
-                ? 'Session expired. '
-                : 'Updates paused' + (lastSuccessfulRefresh ? ' since ' + lastSuccessfulRefresh : '') + '.';
-            if (authExpired) {
-                const link = document.createElement('a');
-                link.href = '/login';
-                link.textContent = 'Sign in again';
-                label.appendChild(link);
-            }
+            label.textContent = 'Session expired. ';
+            const link = document.createElement('a');
+            link.href = '/login';
+            link.textContent = 'Sign in again';
+            label.appendChild(link);
+            setText('[data-nav-count]', '-');
+            return;
+        }
+        if (hasLoaded) {
+            root.classList.add('is-stale');
+            dot.classList.remove('is-live', 'is-idle');
+            dot.classList.add('is-stale');
+            label.textContent = 'Updates paused' + (lastSuccessfulRefresh ? ' since ' + lastSuccessfulRefresh : '') + '.';
             setText('[data-nav-count]', '-');
             return;
         }
@@ -519,8 +529,14 @@
         });
     }
 
+    function resume() {
+        pageSuspended = false;
+        if (refreshInFlight) resumePending = true;
+        else refreshNowPlaying().catch(renderError);
+    }
+
     async function refreshNowPlaying() {
-        if (refreshInFlight || document.hidden) {
+        if (authExpired || pageSuspended || refreshInFlight || document.hidden) {
             return;
         }
 
@@ -544,7 +560,7 @@
             }
 
             const payload = await response.json();
-            if (sequence < latestAppliedSequence) {
+            if (sequence !== requestSequence || sequence < latestAppliedSequence) {
                 return;
             }
             latestAppliedSequence = sequence;
@@ -554,6 +570,10 @@
             lastSuccessfulRefresh = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             window.dispatchEvent(new CustomEvent('jellydash:now-playing', { detail: payload }));
+        } catch (error) {
+            if (sequence !== requestSequence) return;
+            if (error.status === 401 || error.status === 403) authExpired = true;
+            throw error;
         } finally {
             if (timer !== null && window.clearTimeout) {
                 window.clearTimeout(timer);
@@ -562,6 +582,7 @@
                 activeController = null;
             }
             refreshInFlight = false;
+            if (resumePending) { resumePending = false; refreshNowPlaying().catch(renderError); }
         }
     }
 
@@ -603,12 +624,13 @@
         refreshNowPlaying().catch(renderError);
     }, 5000);
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            refreshNowPlaying().catch(renderError);
+        if (document.hidden) { ++requestSequence; activeController?.abort(); }
+        else {
+            resume();
         }
     });
     if (window.addEventListener) {
-        window.addEventListener('pagehide', () => activeController?.abort());
-        window.addEventListener('pageshow', () => refreshNowPlaying().catch(renderError));
+        window.addEventListener('pagehide', () => { pageSuspended = true; ++requestSequence; activeController?.abort(); });
+        window.addEventListener('pageshow', resume);
     }
 }());

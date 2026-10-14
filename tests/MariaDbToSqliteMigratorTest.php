@@ -83,6 +83,8 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $destination = Database::sqlite($this->destinationPath);
         $sqlite = $destination->getDibi();
         $this->assertSame(101, (int) $sqlite->select('id')->from('users')->fetchSingle());
+        $this->assertSame(7, (int) $sqlite->select('auth_generation')->from('users')->fetchSingle());
+        $this->assertSame(7, (int) $sqlite->select('auth_generation')->from('auth_remember_tokens')->fetchSingle());
         $this->assertSame('migration-value', (string) $sqlite->select('setting_value')->from('app_settings')->fetchSingle());
         $this->assertStringStartsWith(
             '2026-08-11 11:55:00',
@@ -404,6 +406,7 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $this->sourceConnection->insert('users', [
             'id' => 101,
             'username' => 'migration-user',
+            'auth_generation' => 7,
             'password' => 'password-hash',
             'name' => 'Migration User',
             'role' => 2,
@@ -419,6 +422,7 @@ final class MariaDbToSqliteMigratorTest extends TestCase
         $this->sourceConnection->insert('auth_remember_tokens', [
             'id' => 107,
             'user_id' => 101,
+            'auth_generation' => 7,
             'selector' => str_repeat('a', 24),
             'validator_hash' => str_repeat('b', 64),
             'expires_at' => '2026-11-11 12:00:00',

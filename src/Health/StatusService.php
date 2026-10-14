@@ -50,6 +50,12 @@ final class StatusService
             $this->worker('jellyseerr', 'Jellyseerr sync', $rows, $jellyseerr, $requestInterval, $workersEnabled, $now),
             $this->worker('libraries', 'Library refresh', $rows, $jellyfin, Config::interval('LIBRARIES_CACHE_TTL', 300), $workersEnabled, $now),
         ];
+        if ($historyInterval >= 120 && $jellyfin === 'configured' && $components[0]['state'] !== 'disabled') {
+            if ($components[0]['state'] === 'healthy') {
+                $components[0]['state'] = 'delayed';
+            }
+            $components[0]['message'] .= ' POLL_INTERVAL is 120 seconds or more, so measured watch time may miss playback between checks. Set it below 120 seconds.';
+        }
 
         try {
             if (!Feature::enabled()) {

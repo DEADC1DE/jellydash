@@ -801,16 +801,17 @@
         });
     }
 
-    const polling = { timer: null, controller: null, failures: 0, sequence: 0, stopped: false };
+    const polling = { timer: null, controller: null, failures: 0, sequence: 0, stopped: false, authExpired: false, refreshPending: false };
 
     function scheduleOverview(delay) {
-        if (!root || polling.stopped || document.hidden) return;
+        if (!root || polling.authExpired || polling.stopped || document.hidden) return;
         window.clearTimeout(polling.timer);
         polling.timer = window.setTimeout(refreshOverview, delay);
     }
 
     async function refreshOverview() {
-        if (!root || polling.stopped || document.hidden || polling.controller) return;
+        if (!root || polling.authExpired || polling.stopped || document.hidden || polling.controller) return;
+        polling.refreshPending = false;
         const sequence = ++polling.sequence;
         const controller = new AbortController();
         polling.controller = controller;
@@ -818,7 +819,11 @@
         const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 8000);
         try {
             const response = await fetch(OVERVIEW_URL, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
-            if (!response.ok) throw new Error(response.status === 401 ? 'Your session expired. Sign in again to refresh downloads.' : 'The latest download update could not be loaded.');
+            if (!response.ok) {
+                const error = new Error('The latest download update could not be loaded.');
+                error.status = response.status;
+                throw error;
+            }
             const data = await response.json();
             if (sequence !== polling.sequence || !data || typeof data !== 'object') return;
             pageState.overview = data;
@@ -827,6 +832,17 @@
             scheduleOverview(5000);
         } catch (error) {
             if (sequence !== polling.sequence || (error?.name === 'AbortError' && !timedOut)) return;
+            if (error.status === 401 || error.status === 403) {
+                polling.authExpired = true;
+                window.clearTimeout(polling.timer);
+                polling.timer = null;
+                const notice = renderNotice('Session expired.', null, true);
+                const link = node('a', '', 'Sign in again');
+                link.href = '/login';
+                notice.append(link);
+                root.replaceChildren(notice);
+                return;
+            }
             polling.failures += 1;
             const message = timedOut ? 'The latest download update timed out.' : error instanceof Error ? error.message : 'The latest download update could not be loaded.';
             if (pageState.overview) {
@@ -838,23 +854,34 @@
         } finally {
             window.clearTimeout(timeout);
             if (polling.controller === controller) polling.controller = null;
+            if (polling.refreshPending) refreshOverview();
         }
+    }
+
+    function requestFreshOverview() {
+        if (polling.authExpired) return;
+        window.clearTimeout(polling.timer);
+        polling.timer = null;
+        polling.refreshPending = true;
+        ++polling.sequence;
+        if (polling.controller) polling.controller.abort();
+        else refreshOverview();
     }
 
     function stopOverview() {
         window.clearTimeout(polling.timer);
         polling.timer = null;
+        ++polling.sequence;
         if (polling.controller) polling.controller.abort();
-        polling.controller = null;
     }
 
     if (root) {
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) stopOverview();
-            else refreshOverview();
+            else { polling.refreshPending = true; refreshOverview(); }
         });
         window.addEventListener('pagehide', () => { polling.stopped = true; stopOverview(); });
-        window.addEventListener('pageshow', () => { polling.stopped = false; refreshOverview(); });
+        window.addEventListener('pageshow', () => { polling.stopped = false; polling.refreshPending = true; refreshOverview(); });
         refreshOverview();
     }
 
@@ -1254,7 +1281,7 @@
             pageState.activeLimit = 6;
             pageState.queueLimit = 3;
             pageState.queueOffset = 0;
-            if (root) refreshOverview();
+            if (root) requestFreshOverview();
             closeEditor();
         } catch (error) {
             setMessage(editorError(), error.message, true);
@@ -1273,7 +1300,7 @@
             if (index >= 0) management.clients[index] = result.client;
             renderManager();
             showToast(result.client.enabled ? 'Client monitoring enabled.' : 'Client monitoring disabled.');
-            if (root) refreshOverview();
+            if (root) requestFreshOverview();
         } catch (error) {
             setMessage(managerError(), error.message, true);
             button.disabled = false;
@@ -1304,7 +1331,7 @@
             management.clients = management.clients.filter((item) => item.id !== client.id);
             removeDialog.close();
             showToast(client.id === 'legacy-sabnzbd-env' ? 'Environment settings restored.' : 'Download client removed.');
-            if (root) refreshOverview();
+            if (root) requestFreshOverview();
         } catch (error) {
             setMessage(removeDialog.querySelector('[data-downloads-remove-error]'), error.message, true);
         } finally {
@@ -1371,4 +1398,5 @@
     hooks.parseValues = parseValues;
     hooks.renderOverview = renderOverview;
     hooks.refreshOverview = refreshOverview;
+    hooks.requestFreshOverview = requestFreshOverview;
 })();

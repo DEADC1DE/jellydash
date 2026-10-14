@@ -155,9 +155,10 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
             $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN %n', $column);
             $this->dibi->query('ALTER TABLE `seerr_requests` DROP COLUMN %n', $column);
         }
-        foreach (['previous_validator_hash', 'rotation_nonce', 'rotation_valid_until'] as $column) {
+        foreach (['auth_generation', 'previous_validator_hash', 'rotation_nonce', 'rotation_valid_until'] as $column) {
             $this->dibi->query('ALTER TABLE `auth_remember_tokens` DROP COLUMN %n', $column);
         }
+        $this->dibi->query('ALTER TABLE `users` DROP COLUMN `auth_generation`');
         $this->dibi->query('ALTER TABLE `login_attempts` DROP COLUMN `window_started_at`');
         $this->dibi->query('DROP INDEX `idx_login_attempts_updated`');
         $this->dibi->query('DROP INDEX `idx_push_subscription_user`');
@@ -200,9 +201,11 @@ final class SQLiteSchemaCompatibilityTest extends TestCase
         foreach (['notification_attempts', 'notification_claim_token', 'notification_claimed_at_epoch', 'notification_next_attempt_at_epoch'] as $column) {
             $this->assertTrue($this->database->getPlatform()->columnExists('seerr_requests', $column));
         }
-        $remember = $this->dibi->select('previous_validator_hash, rotation_nonce, rotation_valid_until')
+        $this->assertSame(0, (int) $this->dibi->select('auth_generation')->from('users')->fetchSingle());
+        $remember = $this->dibi->select('auth_generation, previous_validator_hash, rotation_nonce, rotation_valid_until')
             ->from('auth_remember_tokens')->fetch();
         $this->assertNotFalse($remember);
+        $this->assertSame(0, (int) $remember['auth_generation']);
         $this->assertNull($remember['previous_validator_hash']);
         $this->assertNull($remember['rotation_nonce']);
         $this->assertSame(0, (int) $remember['rotation_valid_until']);

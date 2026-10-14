@@ -76,13 +76,6 @@ try {
     if (!$removed) {
         $removed = $repository->revokeCurrentEndpointWithKeys($endpoint, $p256dh, $auth, $userId, $authEnabled);
     }
-    if (!$removed && $repository->containsEndpoint($endpoint)) {
-        http_response_code(404);
-        echo json_encode(['error' => 'No matching notification device was found.']);
-
-        return;
-    }
-
     echo json_encode(['ok' => true]);
 } catch (\LengthException) {
     http_response_code(413);

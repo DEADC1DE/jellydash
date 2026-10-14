@@ -127,17 +127,21 @@ async function testNowPlayingTransitions() {
     assert.equal(root.classList.contains('is-stale'), true);
     assert.match(label.textContent, /^Updates paused/);
 
-    response = { ok: false, status: 401 };
-    await hooks.refreshNowPlaying().catch(hooks.renderNowPlayingError);
-    assert.equal(label.children[0].href, '/login');
-    assert.equal(label.children[0].textContent, 'Sign in again');
-
     response = { ok: true, status: 200, json: async () => ({ streams: [], stats: { active_streams: 0, active_users: 0 } }) };
     await hooks.refreshNowPlaying();
     assert.equal(root.classList.contains('is-stale'), false);
     assert.equal(dot.classList.contains('is-stale'), false);
     assert.equal(label.textContent, 'No active sessions');
     assert.equal(nav.textContent, '0');
+    response = { ok: false, status: 401 };
+    await hooks.refreshNowPlaying().catch(hooks.renderNowPlayingError);
+    assert.equal(label.children[0].href, '/login');
+    assert.equal(label.children[0].textContent, 'Sign in again');
+
+    const loginLink = label.children[0];
+    await hooks.refreshNowPlaying();
+    assert.equal(label.children[0], loginLink, 'Authentication expiry remains terminal until reload.');
+
 }
 
 async function testNowPlayingDiagnosticsRefresh() {

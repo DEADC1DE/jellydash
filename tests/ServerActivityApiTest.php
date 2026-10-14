@@ -44,7 +44,7 @@ final class ServerActivityApiTest extends TestCase
                 $directory = $argv[1] . '/var/sessions';
                 if (!is_dir($directory)) { mkdir($directory, 0770, true); }
                 $sessionFile = $directory . '/sess_' . $sessionId;
-                file_put_contents($sessionFile, 'auth_user|' . serialize(['id' => $id, 'username' => 'activity-api', 'name' => 'Tester', 'role' => 1]) . 'auth_login_time|' . serialize(time()) . 'auth_last_activity|' . serialize(time()));
+                file_put_contents($sessionFile, 'auth_user|' . serialize(['id' => $id, 'username' => 'activity-api', 'name' => 'Tester', 'role' => 1, 'auth_generation' => 0]) . 'auth_login_time|' . serialize(time()) . 'auth_last_activity|' . serialize(time()));
                 $_COOKIE['jellydash_session'] = $sessionId;
             }
             $_SERVER['REQUEST_METHOD'] = $argv[3];

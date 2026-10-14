@@ -371,7 +371,7 @@ final class NotificationRetryTest extends TestCase
     {
         $history = new PlayHistoryRepository($this->database);
         $start = new \DateTimeImmutable('2026-09-08 12:00:00');
-        $history->logActiveStreams([$this->stream(1800)], $start);
+        $history->logActiveStreams([$this->stream(3500)], $start);
         $interleaved = false;
         $listener = function (\Dibi\Event $event) use ($history, $start, &$interleaved): void {
             if (!$interleaved && preg_match('/\bFROM\s+[`"\[]?play_history\b/i', (string) $event->sql) === 1) {

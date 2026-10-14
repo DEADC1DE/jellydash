@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Jellyfin\HistoryLibraryBackfillService;
+use Mk\Framework\Jellyfin\HistoryWriteGuard;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use PHPUnit\Framework\TestCase;
 
@@ -162,6 +163,33 @@ final class HistoryLibraryBackfillServiceTest extends TestCase
         $this->assertNotFalse($row);
         $this->assertSame('Movies', (string) $row['library']);
         $this->assertNull($row['library_resolved_at']);
+    }
+
+    public function testLookupAllowsAnotherHistoryWriterAndPreservesItsResolvedProvenance(): void
+    {
+        $this->seedPlay('backfill-concurrent-resolution', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'Movies');
+        $second = new \Dibi\Connection($this->connection->getConfig());
+        $resolved = new \DateTimeImmutable('2026-10-14 12:00:00');
+        $service = $this->service(static function (array $ids) use ($second, $resolved): array {
+            (new HistoryWriteGuard(new Database($second)))->run(static function () use ($second, $resolved): void {
+                $second->update('play_history', [
+                    'library' => 'Confirmed Movies',
+                    'library_resolved_at' => $resolved->format('Y-m-d H:i:s'),
+                    'library_resolved_at_epoch' => $resolved->getTimestamp(),
+                ])->where('session_key = %s', 'backfill-concurrent-resolution')->execute();
+            });
+            return [$ids[0] => ['runtime_sec' => 3600, 'library' => 'Stale lookup library']];
+        });
+        try {
+            self::assertSame('complete', $service->runBatch()['state']);
+            $row = $this->connection->select('library, library_resolved_at, library_resolved_at_epoch')->from('play_history')->fetch();
+            self::assertNotFalse($row);
+            self::assertSame('Confirmed Movies', (string) $row['library']);
+            self::assertSame($resolved->format('Y-m-d H:i:s'), (new \DateTimeImmutable((string) $row['library_resolved_at']))->format('Y-m-d H:i:s'));
+            self::assertSame($resolved->getTimestamp(), (int) $row['library_resolved_at_epoch']);
+        } finally {
+            $second->disconnect();
+        }
     }
 
     public function testFailedLookupKeepsProgressResumable(): void

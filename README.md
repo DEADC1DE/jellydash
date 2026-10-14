@@ -338,6 +338,8 @@ On the login page, **Keep me signed in** lets that browser restore your login fo
 
 Both supplied Compose setups keep ordinary sessions in a named volume, so later container recreations do not sign you out early. When you first adopt an updated Compose file, the new volume starts empty and you may need to sign in once. Sessions still expire after one hour idle or eight hours since login.
 
+Resetting an account's password signs out its existing sessions and remembered browsers. After upgrading to session revocation support, existing sessions need to sign in once.
+
 ## Exclusions in Settings or the environment
 
 Open **Settings > Exclusions** to manage these options:

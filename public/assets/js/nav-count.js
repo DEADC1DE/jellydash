@@ -2,6 +2,9 @@
     const navCount = document.querySelector('[data-nav-count]');
     let hasLoaded = false;
     let refreshInFlight = false;
+    let authExpired = false;
+    let pageSuspended = false;
+    let resumePending = false;
     let activeController = null;
     let requestSequence = 0;
     let latestAppliedSequence = 0;
@@ -17,8 +20,14 @@
         return;
     }
 
+    function resume() {
+        pageSuspended = false;
+        if (refreshInFlight) resumePending = true;
+        else refresh().catch(clearLoadingState);
+    }
+
     async function refresh() {
-        if (refreshInFlight || document.hidden) {
+        if (authExpired || pageSuspended || refreshInFlight || document.hidden) {
             return;
         }
         refreshInFlight = true;
@@ -35,11 +44,13 @@
         });
 
         if (!response.ok) {
-            throw new Error('Now Playing count request failed with HTTP ' + response.status);
+            const error = new Error('Request failed with HTTP ' + response.status);
+            error.status = response.status;
+            throw error;
         }
 
         const payload = await response.json();
-        if (sequence < latestAppliedSequence) {
+        if (sequence !== requestSequence || sequence < latestAppliedSequence) {
             return;
         }
         latestAppliedSequence = sequence;
@@ -49,6 +60,10 @@
         navCount.classList.remove('is-stale');
         navCount.removeAttribute('title');
         hasLoaded = true;
+        } catch (error) {
+            if (sequence !== requestSequence) return;
+            if (error.status === 401 || error.status === 403) authExpired = true;
+            throw error;
         } finally {
             if (timer !== null && window.clearTimeout) {
                 window.clearTimeout(timer);
@@ -57,6 +72,7 @@
                 activeController = null;
             }
             refreshInFlight = false;
+            if (resumePending) { resumePending = false; refresh().catch(clearLoadingState); }
         }
     }
 
@@ -64,7 +80,7 @@
         navCount.textContent = '-';
         navCount.classList.remove('is-loading');
         navCount.classList.add('is-stale');
-        navCount.setAttribute('title', hasLoaded ? 'Now Playing count is unavailable' : 'Could not load Now Playing count');
+        navCount.setAttribute('title', authExpired ? 'Session expired. Sign in again.' : hasLoaded ? 'Now Playing count is unavailable' : 'Could not load Now Playing count');
     }
 
     if (window.JellydashFrontendTestHooks) {
@@ -78,13 +94,14 @@
     }, 10000);
     if (document.addEventListener) {
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) {
-                refresh().catch(clearLoadingState);
+            if (document.hidden) { ++requestSequence; activeController?.abort(); }
+            else {
+                resume();
             }
         });
     }
     if (window.addEventListener) {
-        window.addEventListener('pagehide', () => activeController?.abort());
-        window.addEventListener('pageshow', () => refresh().catch(clearLoadingState));
+        window.addEventListener('pagehide', () => { pageSuspended = true; ++requestSequence; activeController?.abort(); });
+        window.addEventListener('pageshow', resume);
     }
 }());
