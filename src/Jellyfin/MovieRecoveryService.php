@@ -6,6 +6,7 @@ namespace Mk\Framework\Jellyfin;
 
 use Mk\Framework\Container;
 use Mk\Framework\Database;
+use Mk\Framework\Log;
 
 /** Keeps movie identity evidence and repairs verified replacements in bounded batches. */
 final class MovieRecoveryService
@@ -80,6 +81,11 @@ final class MovieRecoveryService
         } catch (\Throwable $error) {
             if ($state === null) {
                 throw $error;
+            }
+            try {
+                Log::logException($error);
+            } catch (\Throwable) {
+                // A failed diagnostic write must not prevent the recovery retry.
             }
             if (!$state['blocked']) {
                 $state['state'] = 'unavailable';
@@ -432,6 +438,7 @@ final class MovieRecoveryService
         }
         $payload = $this->client->getJson('/Items?' . http_build_query([
             'Recursive' => 'true', 'IncludeItemTypes' => 'Movie', 'SortBy' => 'SortName', 'SortOrder' => 'Ascending',
+            'CollapseBoxSetItems' => 'false',
             'StartIndex' => $state['offset'], 'Limit' => self::PAGE_SIZE,
             'Fields' => 'ProviderIds,OriginalTitle,Path,DateLastSaved', 'EnableTotalRecordCount' => 'true',
         ], '', '&', PHP_QUERY_RFC3986), 6);
@@ -810,7 +817,7 @@ final class MovieRecoveryService
     /** @return array<string, mixed>|null */
     private function lookup(string $id): ?array
     {
-        $payload = $this->client->getJson('/Items?' . http_build_query(['Ids' => $id, 'Limit' => 2,
+        $payload = $this->client->getJson('/Items?' . http_build_query(['Ids' => $id, 'Limit' => 2, 'CollapseBoxSetItems' => 'false',
             'Fields' => 'ProviderIds,OriginalTitle,Path,DateLastSaved'], '', '&', PHP_QUERY_RFC3986), 6);
         $items = $this->validatedItems($payload);
         if (count($items) > 1 || (isset($payload['TotalRecordCount']) && $payload['TotalRecordCount'] !== count($items))) {

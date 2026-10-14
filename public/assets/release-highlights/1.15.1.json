@@ -1,0 +1,23 @@
+{
+  "version": "1.15.1",
+  "auto_show": true,
+  "title": "Movie replacement recovery hotfix",
+  "summary": "Fixes movie recovery getting stuck when Jellyfin groups movies into collections. The highlights below are included from v1.15.0.",
+  "highlights": [
+    "Jellydash can reconnect a deleted movie to its replacement when saved TMDB or IMDb identity confirms a single match. Review older title-based suggestions in Settings > Movie replacements.",
+    "Replacement groups keep their original History records and use current artwork. Settings supports Undo, Keep separate and Check again, with conflict checks for stale actions.",
+    "History keeps previously measured watch time across long polling gaps. Playback Reporting imports preserve library information and report uncertain legacy matches as conflicts instead of guessing.",
+    "Movie Statistics cards and History drilldowns agree across equivalent item ID formats, including conflicting replacement mappings.",
+    "Password resets revoke existing sessions and remembered logins. Live widgets stop retrying after sign-in expires. If you are updating from before v1.15.0, you may need to sign in again once."
+  ],
+  "links": [
+    {
+      "label": "Movie replacement guide",
+      "url": "https://github.com/themartz90/jellydash/blob/v1.15.1/docs/MOVIE_REPLACEMENTS.md"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.15.1"
+    }
+  ]
+}

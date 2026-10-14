@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Mk\Framework\Database;
+use Mk\Framework\Container;
 use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Jellyfin\HistoryLibraryBackfillService;
 use Mk\Framework\Jellyfin\JellyfinClient;
@@ -12,6 +13,9 @@ use Mk\Framework\Jellyfin\MovieReplacements;
 use Mk\Framework\Jellyfin\MovieReplacementService;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use PHPUnit\Framework\TestCase;
+use Monolog\Handler\TestHandler;
+use Monolog\Logger;
+use Psr\Log\LoggerInterface;
 
 final class MovieRecoveryServiceTest extends TestCase
 {
@@ -31,9 +35,14 @@ final class MovieRecoveryServiceTest extends TestCase
     /** @var list<string> */
     private array $requests = [];
     private ?\Closure $override = null;
+    private TestHandler $logs;
+    private LoggerInterface $originalLogger;
 
     protected function setUp(): void
     {
+        $this->originalLogger = Container::logger();
+        $this->logs = new TestHandler();
+        Container::set('logger', new Logger('movie-recovery-tests', [$this->logs]));
         if (DatabasePlatform::isSqliteDriver(DATABASE_DRIVER_DIBI)) {
             $this->sqlitePath = sys_get_temp_dir() . DIRECTORY_SEPARATOR
                 . 'jellydash-movie-recovery-' . getmypid() . '-' . bin2hex(random_bytes(4)) . '.sqlite';
@@ -88,6 +97,7 @@ final class MovieRecoveryServiceTest extends TestCase
 
     protected function tearDown(): void
     {
+        Container::set('logger', $this->originalLogger);
         if (isset($this->connection) && $this->connection->isConnected()) {
             $this->connection->disconnect();
         }
@@ -119,6 +129,110 @@ final class MovieRecoveryServiceTest extends TestCase
         self::assertTrue($this->service->status()['repairs'][0]['automatic']);
         self::assertSame($before, $this->rows());
         self::assertSame(1, (int) $this->connection->select('COUNT(*)')->from('play_history')->fetchSingle());
+    }
+
+    public function testBoxSetCollapseCannotStallLegacyMovieSuggestions(): void
+    {
+        $this->seed('old');
+        $this->live = ['new' => $this->movie('new')];
+        $this->simulateDefaultBoxSetCollapse();
+        $this->settle();
+
+        self::assertSame(1, $this->service->status()['suggestionCount']);
+        self::assertSame('new', $this->service->status()['suggestions'][0]['candidates'][0]['id']);
+        $this->assertMetadataQueriesDisableBoxSetCollapse();
+    }
+
+    public function testBoxSetCollapseCannotStallAutomaticMovieReconnection(): void
+    {
+        $this->seed('old');
+        $this->service->captureSessions([['NowPlayingItem' => $this->movie('old') + ['ServerId' => $this->server]]]);
+        $before = $this->rows();
+        $this->live = ['new' => $this->movie('new')];
+        $this->simulateDefaultBoxSetCollapse();
+        $this->settle();
+
+        self::assertSame('new', $this->replacements->resolve('old'));
+        self::assertSame($before, $this->rows());
+        $this->assertMetadataQueriesDisableBoxSetCollapse();
+    }
+
+    public function testServerIgnoringCollapseFlagStillCannotSupplyBoxSetsAsMovies(): void
+    {
+        $this->seed('old');
+        $this->override = static fn (string $path): mixed => str_contains($path, 'StartIndex=')
+            ? ['Items' => [['Id' => 'collection', 'Name' => 'Example collection', 'Type' => 'BoxSet']], 'TotalRecordCount' => 1]
+            : null;
+
+        self::assertSame('unavailable', $this->service->runBatch()['state']);
+        self::assertSame('old', $this->replacements->resolve('old'));
+        self::assertSame(0, $this->service->status()['suggestionCount']);
+    }
+
+    public function testRecoveryFailureLogsTheCauseWithoutPuttingItInPublicStatus(): void
+    {
+        $cause = new \RuntimeException('Specific fixture metadata failure');
+        $this->override = static function (string $path) use ($cause): mixed {
+            if ($path === '/System/Info/Public') {
+                throw $cause;
+            }
+            return null;
+        };
+
+        self::assertSame('unavailable', $this->service->runBatch()['state']);
+        self::assertTrue($this->logs->hasErrorRecords());
+        $record = $this->logs->getRecords()[0];
+        self::assertSame($cause, $record->context['exception']);
+        self::assertSame($cause->getMessage(), $record->message);
+        self::assertStringNotContainsString('Specific fixture', $this->service->status()['message']);
+    }
+
+    public function testLoggerFailureCannotPreventRecoveryRetryOrLeaseRelease(): void
+    {
+        Container::set('logger', new class extends \Psr\Log\AbstractLogger {
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                throw new \RuntimeException('Fixture log destination is unavailable.');
+            }
+        });
+        $this->override = static function (string $path): mixed {
+            if ($path === '/System/Info/Public') {
+                throw new \RuntimeException('Fixture metadata request failed.');
+            }
+            return null;
+        };
+
+        self::assertSame('unavailable', $this->service->runBatch()['state']);
+        self::assertSame($this->now + 60, $this->identities->state()['retryAfter']);
+        self::assertSame('Movie metadata is unavailable. Recovery will retry.', $this->service->status()['message']);
+        $lease = $this->identities->acquireLease($this->now);
+        self::assertNotNull($lease);
+        $this->identities->releaseLease($lease);
+    }
+
+    private function simulateDefaultBoxSetCollapse(): void
+    {
+        $this->override = static function (string $path): mixed {
+            if (!str_starts_with($path, '/Items?')) {
+                return null;
+            }
+            parse_str((string) parse_url($path, PHP_URL_QUERY), $query);
+            return ($query['CollapseBoxSetItems'] ?? '') === 'false' ? null
+                : ['Items' => [['Id' => 'collection', 'Name' => 'Example collection', 'Type' => 'BoxSet']], 'TotalRecordCount' => 1];
+        };
+    }
+
+    private function assertMetadataQueriesDisableBoxSetCollapse(): void
+    {
+        $lookups = 0;
+        foreach ($this->requests as $path) {
+            if (str_starts_with($path, '/Items?')) {
+                parse_str((string) parse_url($path, PHP_URL_QUERY), $query);
+                self::assertSame('false', $query['CollapseBoxSetItems'] ?? null);
+                $lookups += isset($query['Ids']) ? 1 : 0;
+            }
+        }
+        self::assertGreaterThan(0, $lookups);
     }
 
     public function testLibraryContainmentUsesPlatformPathRulesAndLongestRoot(): void
