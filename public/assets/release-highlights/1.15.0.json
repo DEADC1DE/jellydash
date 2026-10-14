@@ -1,0 +1,23 @@
+{
+  "version": "1.15.0",
+  "auto_show": true,
+  "title": "Automatic movie replacements and History fixes",
+  "summary": "Reconnect deleted and re-added movies from Settings, with fixes for watch time, imports and sign-in sessions.",
+  "highlights": [
+    "Jellydash can reconnect a deleted movie to its replacement when saved TMDB or IMDb identity confirms a single match. Review older title-based suggestions in Settings > Movie replacements.",
+    "Replacement groups keep their original History records and use current artwork. Settings supports Undo, Keep separate and Check again, with conflict checks for stale actions.",
+    "History keeps previously measured watch time across long polling gaps. Playback Reporting imports preserve library information and report uncertain legacy matches as conflicts instead of guessing.",
+    "Movie Statistics cards and History drilldowns agree across equivalent item ID formats, including conflicting replacement mappings.",
+    "Password resets revoke existing sessions and remembered logins. Live widgets stop retrying after sign-in expires. You may need to sign in again once after this update."
+  ],
+  "links": [
+    {
+      "label": "Movie replacement guide",
+      "url": "https://github.com/themartz90/jellydash/blob/v1.15.0/docs/MOVIE_REPLACEMENTS.md"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.15.0"
+    }
+  ]
+}
