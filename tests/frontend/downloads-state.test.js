@@ -597,6 +597,37 @@ async function testLateConnectionTestsCannotRestoreStaleReceipts() {
     await finish('reopened-editor');
     await reopenedEditor;
     assert.equal(hooks.management.receipt, 'reopened-editor', 'the new editor test stays usable');
+
+    const failures = [
+        { name: 'rejected credentials', status: 502, body: '{"error":"The client rejected the credentials."}', expected: 'The client rejected the credentials.' },
+        { name: 'client timeout', status: 502, body: '{"error":"The client did not respond in time."}', expected: 'The client did not respond in time.' },
+        { name: 'HTML gateway response', status: 502, body: '<html>Bad Gateway</html>', expected: 'Request failed (HTTP 502).' },
+        { name: 'empty gateway response', status: 502, body: '', expected: 'Request failed (HTTP 502).' },
+        { name: 'JSON without an error message', status: 502, body: '{}', expected: 'Request failed (HTTP 502).' },
+        { name: 'management access denied', status: 403, body: '{"error":"You do not have permission to manage download clients."}', expected: 'You do not have permission to manage download clients.' },
+        { name: 'expired session token', status: 419, body: '{"error":"Your session token expired. Refresh the page and try again."}', expected: 'Your session token expired. Refresh the page and try again.' },
+    ];
+    for (const failure of failures) {
+        const failedTest = hooks.testConnection(button);
+        assert.equal(button.disabled, true, `${failure.name}: the button is disabled while testing`);
+        assert.equal(button.textContent, 'Testing...');
+        assert.equal(resultMessage.textContent, 'Testing the connection...');
+        pending.shift()({ ok: false, status: failure.status, json: async () => JSON.parse(failure.body) });
+        await failedTest;
+        assert.equal(resultMessage.textContent, failure.expected, `${failure.name}: show the safe API message or HTTP fallback`);
+        assert.equal(resultMessage.hidden, false, `${failure.name}: the result remains visible`);
+        assert.equal(hooks.management.receipt, null, `${failure.name}: a failed test clears the previous receipt`);
+        assert.equal(button.disabled, false, `${failure.name}: the button is ready to retry`);
+        assert.equal(button.textContent, 'Test connection');
+
+        const retry = hooks.testConnection(button);
+        await finish(`retry-${failure.name}`);
+        await retry;
+        assert.equal(hooks.management.receipt, `retry-${failure.name}`, `${failure.name}: a successful retry creates a new receipt`);
+        assert.equal(resultMessage.textContent, 'Connected to qBittorrent 5.1.');
+        assert.equal(button.disabled, false);
+        assert.equal(button.textContent, 'Test connection');
+    }
 }
 
 function testDownloadsScriptsKeepTheSecurityAndPollingContract() {

@@ -16,6 +16,7 @@ use Mk\Framework\Downloads\Providers\SabnzbdProvider;
 use Mk\Framework\Integrations\Connection;
 use Mk\Framework\Integrations\ConnectionRepository;
 use Mk\Framework\Integrations\CredentialStore;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class DownloadStorageDatabaseTest extends TestCase
@@ -80,7 +81,16 @@ final class DownloadStorageDatabaseTest extends TestCase
         $this->environment('SAB_API_KEY', null);
     }
 
-    public function testCredentialsAndSessionsSurviveContainerReplacementWithOnlyTheDatabase(): void
+    /** @return iterable<string,array{string}> */
+    public static function reusableSessions(): iterable
+    {
+        yield 'short token' => ['replacement-session'];
+        yield 'framework ticket' => [str_repeat('a', 624)];
+        yield 'maximum cookie' => [str_repeat('b', 4096)];
+    }
+
+    #[DataProvider('reusableSessions')]
+    public function testCredentialsAndSessionsSurviveContainerReplacementWithOnlyTheDatabase(string $sid): void
     {
         $connections = new ConnectionRepository($this->database, new CredentialStore($this->keyPath));
         $downloads = new DownloadRepository($this->database, new CredentialStore($this->keyPath));
@@ -90,7 +100,7 @@ final class DownloadStorageDatabaseTest extends TestCase
         $token = $downloads->claim($connection, 1_800_100_000);
         self::assertNotNull($token);
         self::assertTrue($downloads->succeed($connection, $token, new CollectionBatch(
-            session: ['sid' => 'replacement-session'],
+            session: ['sid' => $sid],
         ), 1_800_100_001));
         self::assertFileDoesNotExist($this->keyPath);
         self::assertFileDoesNotExist($this->keyPath . '.lock');
@@ -109,9 +119,9 @@ final class DownloadStorageDatabaseTest extends TestCase
         $loaded = $replacementConnections->find($connection->id);
         self::assertNotNull($loaded);
         self::assertSame('replacement-secret', $replacementConnections->credentials($loaded)['secret']);
-        self::assertSame(['sid' => 'replacement-session'], $replacementDownloads->session($loaded));
+        self::assertSame(['sid' => $sid], $replacementDownloads->session($loaded));
         self::assertStringNotContainsString('replacement-secret', json_encode($loaded->managementData(), JSON_THROW_ON_ERROR));
-        self::assertStringNotContainsString('replacement-session', json_encode($replacementDownloads->state($loaded->id), JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString($sid, json_encode($replacementDownloads->state($loaded->id), JSON_THROW_ON_ERROR));
         self::assertFileDoesNotExist($this->keyPath . '-different');
     }
 

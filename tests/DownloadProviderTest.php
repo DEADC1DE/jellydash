@@ -818,7 +818,8 @@ final class DownloadProviderTest extends TestCase
         );
 
         self::assertCount(1000, $batch->items);
-        self::assertCount(19, $batch->completions);
+        self::assertCount(20, $batch->completions);
+        self::assertNotContains(sprintf('%040x', 1), array_column($batch->completions, 'source_id'));
         self::assertSame('error', $batch->items[0]['state']);
         self::assertNull($batch->items[0]['progress']);
         self::assertNull($batch->items[0]['size']);
