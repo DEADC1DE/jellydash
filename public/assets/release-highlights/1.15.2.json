@@ -1,0 +1,22 @@
+{
+  "version": "1.15.2",
+  "auto_show": true,
+  "title": "Download client connection fixes",
+  "summary": "Fixes long session cookies and adds a compatibility path for rdt-client's qBittorrent API.",
+  "highlights": [
+    "qBittorrent-compatible clients can return session cookies up to 4,096 bytes. Jellydash keeps the full cookie when reusing the session.",
+    "A successful login without a usable session cookie now has its own error message instead of reporting rejected credentials.",
+    "Older compatible APIs, including the version advertised by rdt-client, can pass the connection test after additional checks. Choose qBittorrent and keep the client's authentication enabled.",
+    "Recent activity handles clients that return unordered history and ignore pagination, while keeping the existing response and scan limits."
+  ],
+  "links": [
+    {
+      "label": "Downloads guide",
+      "url": "https://github.com/themartz90/jellydash/blob/v1.15.2/docs/DOWNLOADS.md"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.15.2"
+    }
+  ]
+}
