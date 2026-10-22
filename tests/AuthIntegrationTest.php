@@ -69,6 +69,88 @@ final class AuthIntegrationTest extends TestCase
         $this->assertFalse($auth->hasRole(Authorization::ROLE_OWNER));
     }
 
+    public function testPasswordResetRevokesOrdinarySessionsAndKeepsOtherUsersValid(): void
+    {
+        $otherId = $this->db->addAuthUser(self::USER_USERNAME, self::PASSWORD, 'Other', Authorization::ROLE_USER);
+        $other = new Authorization($this->db);
+        $this->assertTrue($other->userLogin(self::USER_USERNAME, self::PASSWORD));
+        $otherSession = $_SESSION;
+        $_SESSION = [];
+        $auth = new Authorization($this->db);
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD));
+        $firstSession = $_SESSION;
+        $_SESSION = [];
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD));
+        $secondSession = $_SESSION;
+        $this->assertTrue($this->db->setUserPassword(self::USERNAME, 'replacement-password-123'));
+        foreach ([$firstSession, $secondSession] as $session) {
+            $_SESSION = $session;
+            $request = new Authorization($this->db);
+            $this->assertFalse($request->isUserLoggedIn());
+            $this->assertNull($request->verifiedUser());
+            $this->assertArrayNotHasKey('auth_user', $_SESSION);
+        }
+        $_SESSION = $otherSession;
+        $this->assertTrue((new Authorization($this->db))->isUserLoggedIn());
+        $this->assertSame($otherId, $_SESSION['auth_user']['id']);
+    }
+
+    public function testDeletedAccountAndLegacyOrMalformedSessionLoseReadAccess(): void
+    {
+        $auth = new Authorization($this->db);
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD));
+        $validSession = $_SESSION;
+        unset($_SESSION['auth_user']['auth_generation']);
+        $this->assertFalse((new Authorization($this->db))->isUserLoggedIn());
+        foreach (['0', -1, [], null] as $generation) {
+            $_SESSION = $validSession;
+            $_SESSION['auth_user']['auth_generation'] = $generation;
+            $this->assertFalse((new Authorization($this->db))->isUserLoggedIn());
+        }
+        $_SESSION = ['auth_user' => 'invalid'];
+        $this->assertFalse((new Authorization($this->db))->isUserLoggedIn());
+        $_SESSION = $validSession;
+        $this->dibi->delete('users')->where('id = %i', $this->userId)->execute();
+        $this->assertFalse((new Authorization($this->db))->isUserLoggedIn());
+    }
+
+    public function testResetRevokesRememberedRestorationSession(): void
+    {
+        $tokens = new RememberTokenRepository($this->db);
+        $auth = new Authorization($this->db, $tokens, rememberCookieWriter: static function (): void {});
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD, true));
+        $_SESSION = [];
+        $restored = new Authorization($this->db, $tokens, rememberCookieWriter: static function (): void {});
+        $this->assertTrue($restored->isUserLoggedIn());
+        $this->assertTrue($this->db->setUserPassword(self::USERNAME, 'replacement-password-123'));
+        $this->assertFalse($restored->isUserLoggedIn());
+        $this->assertSame(0, $this->rememberTokenCount($this->userId));
+    }
+
+    public function testResetAfterLoginCredentialReadCannotEstablishNewGeneration(): void
+    {
+        $interleaved = false;
+        $listener = function (\Dibi\Event $event) use (&$interleaved): void {
+            if (!$interleaved && preg_match('/DELETE FROM [`\[]login_attempts/', (string) $event->sql)) {
+                $interleaved = true;
+                $this->db->setUserPassword(self::USERNAME, 'replacement-password-123');
+            }
+        };
+        $this->dibi->onEvent[] = $listener;
+        try {
+            $auth = new Authorization($this->db);
+            $auth->userLogin(self::USERNAME, self::PASSWORD, true);
+            $this->assertTrue($interleaved);
+            $this->assertFalse($auth->isUserLoggedIn());
+            $this->assertSame(0, $this->rememberTokenCount($this->userId));
+        } finally {
+            array_pop($this->dibi->onEvent);
+            // Dibi's profiling events retain unbuffered SQLite statements.
+            // Release this instrumented connection before subprocess checks.
+            $this->dibi->disconnect();
+        }
+    }
+
     public function testNewUsernameIsTrimmedForLoginAndPasswordReset(): void
     {
         $id = $this->db->addAuthUser('  ' . self::USER_USERNAME . '  ', self::PASSWORD, 'Spaced', Authorization::ROLE_USER);
@@ -349,6 +431,29 @@ final class AuthIntegrationTest extends TestCase
         $this->assertSame(0, $this->rememberTokenCount($this->userId));
     }
 
+    public function testOrdinarySessionStillExpiresAfterIdleTimeout(): void
+    {
+        $now = 1_788_192_000;
+        $clock = static function () use (&$now): int { return $now; };
+        $auth = new Authorization($this->db, clock: $clock);
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD));
+        $now += Authorization::SESSION_IDLE_TIMEOUT + 1;
+        $this->assertFalse((new Authorization($this->db, clock: $clock))->isUserLoggedIn());
+    }
+
+    public function testTransparentHashUpgradePreservesExistingSessionGeneration(): void
+    {
+        $auth = new Authorization($this->db);
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD));
+        $firstSession = $_SESSION;
+        $this->dibi->update('users', ['password' => password_hash(self::PASSWORD, PASSWORD_BCRYPT, ['cost' => 4])])
+            ->where('id = %i', $this->userId)->execute();
+        $_SESSION = [];
+        $this->assertTrue($auth->userLogin(self::USERNAME, self::PASSWORD));
+        $_SESSION = $firstSession;
+        $this->assertTrue((new Authorization($this->db))->isUserLoggedIn());
+    }
+
     public function testLogoutRevokesRememberedLogin(): void
     {
         $now = 1_788_192_000;
@@ -387,6 +492,14 @@ final class AuthIntegrationTest extends TestCase
         $this->assertSame(self::ENV_USERNAME, (string) $row['username']);
         $this->assertTrue(password_verify(self::ENV_PASSWORD, (string) $row['password']));
         $this->assertSame(Authorization::ROLE_OWNER, (int) $row['role']);
+    }
+
+    public function testInvalidAuthConfigurationStopsConsoleBeforeDatabaseAccess(): void
+    {
+        $result = $this->runConsole(['user:list'], ['AUTH_ENABLED' => 'invalid-auth-token', 'DB_NAME' => 'does-not-exist']);
+        $this->assertNotSame(0, $result['exitCode']);
+        $this->assertStringContainsString('AUTH_ENABLED must be a valid boolean.', $result['error']);
+        $this->assertStringNotContainsString('invalid-auth-token', $result['error'] . $result['output']);
     }
 
     public function testUserEnsureStillAcceptsCommandLineCredentials(): void

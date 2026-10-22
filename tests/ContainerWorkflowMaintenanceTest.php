@@ -11,7 +11,7 @@ final class ContainerWorkflowMaintenanceTest extends TestCase
         $dockerfile = (string) file_get_contents(ROOT_DIR . '/Dockerfile');
 
         self::assertStringContainsString(
-            'FROM php:8.3.33-apache-bookworm@sha256:fa8852a2e01747ffe8c8768bfd6bbc2f296f974aa0de90ee157a66664996d263',
+            'FROM php:8.3.36-apache-bookworm@sha256:28e0194d65d1c25ae279366137a027e2d8a835f1b37d8b96724a32c401ef99eb',
             $dockerfile,
         );
         self::assertStringContainsString(

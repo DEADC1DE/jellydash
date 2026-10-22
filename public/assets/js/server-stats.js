@@ -6,6 +6,9 @@
     const ram = card ? card.querySelector('[data-server-ram]') : null;
     const ramBar = card ? card.querySelector('[data-server-ram-bar]') : null;
     let refreshInFlight = false;
+    let authExpired = false;
+    let pageSuspended = false;
+    let resumePending = false;
     let activeController = null;
     let requestSequence = 0;
     let latestAppliedSequence = 0;
@@ -39,8 +42,18 @@
         }
     }
 
+    function renderFailure() {
+        apply({ available: false, status: authExpired ? 'Session expired. Sign in again.' : 'Unavailable' });
+    }
+
+    function resume() {
+        pageSuspended = false;
+        if (refreshInFlight) resumePending = true;
+        else refresh().catch(renderFailure);
+    }
+
     async function refresh() {
-        if (refreshInFlight || document.hidden) {
+        if (authExpired || pageSuspended || refreshInFlight || document.hidden) {
             return;
         }
         refreshInFlight = true;
@@ -57,14 +70,20 @@
         });
 
         if (!response.ok) {
-            throw new Error('Server stats request failed with HTTP ' + response.status);
+            const error = new Error('Request failed with HTTP ' + response.status);
+            error.status = response.status;
+            throw error;
         }
 
         const payload = await response.json();
-        if (sequence >= latestAppliedSequence) {
+        if (sequence === requestSequence && sequence >= latestAppliedSequence) {
             latestAppliedSequence = sequence;
             apply(payload);
         }
+        } catch (error) {
+            if (sequence !== requestSequence) return;
+            if (error.status === 401 || error.status === 403) authExpired = true;
+            throw error;
         } finally {
             if (timer !== null && window.clearTimeout) {
                 window.clearTimeout(timer);
@@ -73,18 +92,20 @@
                 activeController = null;
             }
             refreshInFlight = false;
+            if (resumePending) { resumePending = false; refresh().catch(renderFailure); }
         }
     }
 
-    refresh().catch(() => apply({ available: false, status: 'Unavailable' }));
+    refresh().catch(renderFailure);
     window.setInterval(() => {
-        refresh().catch(() => apply({ available: false, status: 'Unavailable' }));
+        refresh().catch(renderFailure);
     }, 10000);
     document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-            refresh().catch(() => apply({ available: false, status: 'Unavailable' }));
+        if (document.hidden) { ++requestSequence; activeController?.abort(); }
+        else {
+            resume();
         }
     });
-    window.addEventListener('pagehide', () => activeController?.abort());
-    window.addEventListener('pageshow', () => refresh().catch(() => apply({ available: false, status: 'Unavailable' })));
+    window.addEventListener('pagehide', () => { pageSuspended = true; ++requestSequence; activeController?.abort(); });
+    window.addEventListener('pageshow', resume);
 }());

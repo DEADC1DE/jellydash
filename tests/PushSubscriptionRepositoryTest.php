@@ -447,6 +447,60 @@ final class PushSubscriptionRepositoryTest extends TestCase
         $this->assertNull($row['last_success_at']);
     }
 
+    public function testAbsentEndpointIsNotPresentAndUnsubscribeResponsesDoNotRevealMembership(): void
+    {
+        $repository = new PushSubscriptionRepository($this->database);
+        $endpoint = $this->endpoint('idempotent');
+        self::assertNull($this->database->getDibi()->select('id')->from('push_subscriptions')->where('endpoint_hash = %s', hash('sha256', $endpoint))->fetchSingle());
+        self::assertFalse($repository->containsEndpoint($endpoint));
+        foreach ([false, true] as $authEnabled) {
+            $this->database->ensureAuthSchema();
+            $owner = $authEnabled ? $this->database->addAuthUser('idempotent-owner', 'password-123', 'Owner', Authorization::ROLE_USER) : null;
+            $other = $authEnabled ? $this->database->addAuthUser('idempotent-other', 'password-123', 'Other', Authorization::ROLE_USER) : null;
+            $capability = hash('sha256', 'idempotent-capability');
+            $key = $this->encodedBytes(65, 'a');
+            $secret = $this->encodedBytes(16, 'b');
+            $repository->save($endpoint, $key, $secret, null, $capability, $owner, $authEnabled);
+            self::assertTrue($repository->containsEndpoint($endpoint));
+            $absent = $this->unsubscribeResponse($this->endpoint('absent'), $owner, $authEnabled, null, []);
+            self::assertSame([200, ['ok' => true]], $absent);
+            self::assertSame($absent, $this->unsubscribeResponse($endpoint, $owner, $authEnabled, hash('sha256', 'wrong'), []));
+            self::assertSame(1, $repository->count());
+            if ($authEnabled) {
+                self::assertSame($absent, $this->unsubscribeResponse($endpoint, $other, true, $capability, ['p256dh' => $key, 'auth' => $secret]));
+                self::assertSame(1, $repository->count());
+            }
+            self::assertSame($absent, $this->unsubscribeResponse($endpoint, $owner, $authEnabled, $capability, []));
+            self::assertSame(0, $repository->count());
+            self::assertSame($absent, $this->unsubscribeResponse($endpoint, $owner, $authEnabled, $capability, []));
+            $repository->save($endpoint, $key, $secret, null, $capability, $owner, $authEnabled);
+            self::assertSame($absent, $this->unsubscribeResponse($endpoint, $owner, $authEnabled, null, ['p256dh' => $key, 'auth' => $secret]));
+            self::assertSame(0, $repository->count());
+            self::assertSame(422, $this->unsubscribeResponse('invalid', $owner, $authEnabled, $capability, [])[0]);
+        }
+    }
+
+    /** @param array<string, string> $keys @return array{int, array<string, mixed>} */
+    private function unsubscribeResponse(string $endpoint, ?int $userId, bool $authEnabled, ?string $capabilityHash, array $keys): array
+    {
+        \Mk\Framework\Container::set('db', $this->database);
+        $source = (string) file_get_contents(ROOT_DIR . '/public/api/push/unsubscribe.php');
+        $handler = substr($source, strpos($source, 'try {'));
+        $handler = str_replace('PushJsonRequest::decode()', 'json_decode($request, true, 512, JSON_THROW_ON_ERROR)', $handler);
+        preg_match_all('/^use [^;]+;/m', $source, $imports);
+        $request = json_encode(['endpoint' => $endpoint, 'keys' => $keys], JSON_THROW_ON_ERROR);
+        http_response_code(200);
+        ob_start();
+        try {
+            eval(implode("\n", $imports[0]) . "\n" . $handler);
+            $body = (string) ob_get_contents();
+        } finally {
+            ob_end_clean();
+            \Mk\Framework\Container::reset();
+        }
+        return [http_response_code(), json_decode($body, true, 512, JSON_THROW_ON_ERROR)];
+    }
+
     private function endpoint(string $token): string
     {
         return 'https://updates.push.services.mozilla.com/wpush/v2/' . $token;

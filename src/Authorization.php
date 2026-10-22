@@ -58,6 +58,7 @@ class Authorization
         ?PushSubscriptionRepository $pushSubscriptions = null,
         ?PushDeviceCapability $pushDeviceCapability = null,
     ) {
+        Config::bool('AUTH_ENABLED', false);
         $this->db = $db ?? Container::db();
         $this->dibi = $this->db->getDibi();
         $this->rememberTokens = $rememberTokens;
@@ -80,7 +81,7 @@ class Authorization
     /** @return array<string, mixed>|null */
     public function user(): ?array
     {
-        return $_SESSION[self::SESSION_USER] ?? null;
+        return $this->verifiedUser();
     }
 
     public function isUserLoggedIn(): bool
@@ -143,18 +144,23 @@ class Authorization
         return Config::bool('AUTH_ENABLED', false) && $this->can(self::CAPABILITY_MANAGE_GLOBAL);
     }
 
-    /** @return array{id: int, username: string, name: string, role: int}|null */
+    /** @return array{id: int, username: string, name: string, role: int, auth_generation: int}|null */
     public function verifiedUser(): ?array
     {
-        $sessionUser = $this->user();
-        $id = isset($sessionUser['id']) ? (int) $sessionUser['id'] : 0;
-        if ($id < 1) {
+        $sessionUser = $_SESSION[self::SESSION_USER] ?? null;
+        if (!is_array($sessionUser) || !is_int($sessionUser['id'] ?? null)
+            || $sessionUser['id'] < 1 || !is_int($sessionUser['auth_generation'] ?? null)
+            || $sessionUser['auth_generation'] < 0) {
+            $this->clearLoginSession();
             return null;
         }
+        $id = $sessionUser['id'];
 
-        $row = $this->dibi->select('id, username, name, role')->from('users')
+        $row = $this->dibi->select('id, username, name, role, auth_generation')->from('users')
             ->where('id = %i', $id)->limit(1)->fetch();
-        if (!$row || !self::isValidRole((int) $row['role'])) {
+        if (!$row || !self::isValidRole((int) $row['role'])
+            || (int) $row['auth_generation'] !== $sessionUser['auth_generation']) {
+            $this->clearLoginSession();
             return null;
         }
 
@@ -163,6 +169,7 @@ class Authorization
             'username' => (string) $row['username'],
             'name' => (string) $row['name'],
             'role' => (int) $row['role'],
+            'auth_generation' => (int) $row['auth_generation'],
         ];
     }
 
@@ -213,7 +220,8 @@ class Authorization
         // Transparently upgrade legacy hashes to the current algorithm.
         if (password_needs_rehash((string) $row['password'], PASSWORD_DEFAULT)) {
             $this->dibi->update('users', ['password' => password_hash((string) $password, PASSWORD_DEFAULT)])
-                ->where('id = %i', $row['id'])->execute();
+                ->where('id = %i', $row['id'])->where('password = %s', (string) $row['password'])
+                ->where('auth_generation = %i', (int) $row['auth_generation'])->execute();
         }
 
         $this->regenerateId(); // session fixation defense
@@ -222,6 +230,7 @@ class Authorization
             'username' => $row['username'],
             'name' => $row['name'],
             'role' => (int) $row['role'],
+            'auth_generation' => (int) $row['auth_generation'],
         ];
         $now = $this->now();
         $_SESSION[self::SESSION_LOGIN_TIME] = $now;
@@ -233,13 +242,18 @@ class Authorization
         }
 
         if ($remember) {
-            $token = $this->tokens()->issue((int) $row['id'], $now, self::REMEMBER_LIFETIME);
+            $token = $this->tokens()->issueForGeneration((int) $row['id'], (int) $row['auth_generation'], $now, self::REMEMBER_LIFETIME);
+            if ($token === null) {
+                $this->clearLoginSession();
+                $this->clearRememberCookie();
+                return false;
+            }
             $this->setRememberCookie($token, $now + self::REMEMBER_LIFETIME);
         } else {
             $this->clearRememberCookie();
         }
 
-        return true;
+        return $this->isUserLoggedIn();
     }
 
     public function userLogout(): bool
@@ -321,6 +335,7 @@ class Authorization
                 'username' => (string) $user['username'],
                 'name' => (string) $user['name'],
                 'role' => (int) $user['role'],
+                'auth_generation' => (int) $user['auth_generation'],
             ];
             $_SESSION[self::SESSION_LOGIN_TIME] = $now;
             $_SESSION[self::SESSION_LAST_ACTIVITY] = $now;

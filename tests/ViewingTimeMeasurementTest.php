@@ -60,6 +60,87 @@ final class ViewingTimeMeasurementTest extends TestCase
         $this->assertSame(30, $this->duration($this->database));
     }
 
+    public function testLongSamplingGapPreservesThePlayAcrossMidnight(): void
+    {
+        $start = new DateTimeImmutable('2026-09-08 23:58:00');
+        $this->repository->logActiveStreams([$this->stream(1800)], $start);
+        $connection = $this->database->getDibi();
+        $connection->update('play_history', [
+            'watch_duration_sec' => 3600,
+            'notified' => 1,
+            'notification_attempts' => 2,
+        ])->where('session_key = %s', 'phpunit-viewing-session')->execute();
+
+        $afterGap = $start->modify('+1801 seconds');
+        $this->repository->logActiveStreams([$this->stream(1830)], $afterGap);
+        $row = $connection->select('id, started_at_epoch, watch_duration_sec, notified, notification_attempts, last_sample_epoch, last_sample_position_sec')
+            ->from('play_history')->where('session_key = %s', 'phpunit-viewing-session')->fetch();
+        $this->assertNotNull($row);
+        $this->assertSame($start->getTimestamp(), (int) $row['started_at_epoch']);
+        $this->assertSame(3600, (int) $row['watch_duration_sec']);
+        $this->assertSame(1, (int) $row['notified']);
+        $this->assertSame(2, (int) $row['notification_attempts']);
+        $this->assertSame($afterGap->getTimestamp(), (int) $row['last_sample_epoch']);
+        $this->assertSame(1830, (int) $row['last_sample_position_sec']);
+
+        $this->repository->logActiveStreams([$this->stream(1860)], $afterGap->modify('+30 seconds'));
+        $afterContinuation = $connection->select('id, started_at_epoch, watch_duration_sec, notified')
+            ->from('play_history')->where('session_key = %s', 'phpunit-viewing-session')->fetch();
+        $this->assertNotNull($afterContinuation);
+        $this->assertSame((int) $row['id'], (int) $afterContinuation['id']);
+        $this->assertSame($start->getTimestamp(), (int) $afterContinuation['started_at_epoch']);
+        $this->assertSame(3630, (int) $afterContinuation['watch_duration_sec']);
+        $this->assertSame(1, (int) $afterContinuation['notified']);
+
+        $startDay = $this->repository->statisticsRowsForPeriod(
+            new DateTimeImmutable('2026-09-08 00:00:00'),
+            new DateTimeImmutable('2026-09-09 00:00:00'),
+        );
+        $nextDay = $this->repository->statisticsRowsForPeriod(
+            new DateTimeImmutable('2026-09-09 00:00:00'),
+            new DateTimeImmutable('2026-09-10 00:00:00'),
+        );
+        $this->assertCount(1, $startDay);
+        $this->assertSame(3630, (int) $startDay[0]['watch_duration_sec']);
+        $this->assertCount(0, $nextDay);
+    }
+
+    public function testSamplingCapCreditsOneHundredTwentySecondsButNoPartOfLongerGap(): void
+    {
+        $start = new DateTimeImmutable('2026-09-08 12:00:00');
+        $this->repository->logActiveStreams([$this->stream(100)], $start);
+        $this->repository->logActiveStreams([$this->stream(220)], $start->modify('+120 seconds'));
+        $this->assertSame(120, $this->duration($this->database));
+
+        $this->repository->logActiveStreams([$this->stream(341)], $start->modify('+241 seconds'));
+        $this->assertSame(120, $this->duration($this->database));
+        $this->repository->logActiveStreams([$this->stream(371)], $start->modify('+271 seconds'));
+        $this->assertSame(150, $this->duration($this->database));
+    }
+
+    public function testLongGapDoesNotResetPendingNotificationClaim(): void
+    {
+        $start = new DateTimeImmutable('2026-09-08 12:00:00');
+        $this->repository->logActiveStreams([$this->stream(100)], $start);
+        $connection = $this->database->getDibi();
+        $connection->update('play_history', [
+            'notification_attempts' => 2,
+            'notification_claim_token' => 'phpunit-viewing-claim',
+            'notification_claimed_at_epoch' => $start->getTimestamp(),
+            'notification_next_attempt_at_epoch' => $start->getTimestamp() + 300,
+        ])->where('session_key = %s', 'phpunit-viewing-session')->execute();
+
+        $this->repository->logActiveStreams([$this->stream(130)], $start->modify('+1801 seconds'));
+        $row = $connection->select('started_at_epoch, notification_attempts, notification_claim_token, notification_claimed_at_epoch, notification_next_attempt_at_epoch')
+            ->from('play_history')->where('session_key = %s', 'phpunit-viewing-session')->fetch();
+        $this->assertNotNull($row);
+        $this->assertSame($start->getTimestamp(), (int) $row['started_at_epoch']);
+        $this->assertSame(2, (int) $row['notification_attempts']);
+        $this->assertSame('phpunit-viewing-claim', (string) $row['notification_claim_token']);
+        $this->assertSame($start->getTimestamp(), (int) $row['notification_claimed_at_epoch']);
+        $this->assertSame($start->getTimestamp() + 300, (int) $row['notification_next_attempt_at_epoch']);
+    }
+
     public function testConflictingNewerWriterIsRereadWithoutLosingEitherInterval(): void
     {
         $start = new DateTimeImmutable('2026-09-08 12:00:00');
@@ -184,6 +265,8 @@ final class ViewingTimeMeasurementTest extends TestCase
         $repository->logActiveStreams([$this->stream(660)], $start->modify('+60 seconds'));
         $this->assertNull($connection->select('watch_duration_sec')->from('play_history')->fetchSingle());
 
+        $connection->update('play_history', ['is_finished' => 1])
+            ->where('session_key = %s', 'phpunit-viewing-session')->execute();
         $repository->logActiveStreams([$this->stream(120)], $start->modify('+3 hours'));
         $this->assertSame(0, $this->duration($database));
         $this->assertSame(120, $this->position($database));

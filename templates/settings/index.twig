@@ -242,6 +242,9 @@
         </section>
     {% endif %}
 
+            {% if can_manage_global and movie_recovery_allowed|default(false) %}
+                {% include "settings/_movie_recovery.twig" %}
+            {% endif %}
 
             <section class="settings-card system-status-card" id="system-status" data-system-status aria-labelledby="system-status-title">
                 <header class="settings-card-head system-status-head">
@@ -314,8 +317,8 @@
         </header>
         {% if import.error %}
             <div class="settings-error" role="alert">{{ import.error }}</div>
-        {% elseif import.inserted or import.skipped %}
-            <div class="settings-saved" role="status">Imported {{ import.inserted }} play{{ import.inserted == 1 ? '' : 's' }}{% if import.skipped %}, skipped {{ import.skipped }} already present{% endif %}{% if import.unresolved %}, {{ import.unresolved }} without Jellyfin runtime{% endif %}.</div>
+        {% elseif import.inserted or import.skipped or import.conflicts %}
+            <div class="settings-saved" role="status">Imported {{ import.inserted }} play{{ import.inserted == 1 ? '' : 's' }}{% if import.skipped %}, skipped {{ import.skipped }}{% endif %}{% if import.conflicts %}, {{ import.conflicts }} need review and were not imported{% endif %}{% if import.unresolved %}, {{ import.unresolved }} without Jellyfin runtime{% endif %}.</div>
         {% endif %}
         <div class="settings-import-sources">
             <article class="settings-import-source is-jellydash">

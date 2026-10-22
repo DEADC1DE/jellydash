@@ -275,7 +275,7 @@ final class PushSubscriptionRepository
     public function containsEndpoint(string $endpoint): bool
     {
         return $this->db->select('id')->from('push_subscriptions')
-            ->where('endpoint_hash = %s', hash('sha256', $endpoint))->fetchSingle() !== false;
+            ->where('endpoint_hash = %s', hash('sha256', $endpoint))->fetchSingle() !== null;
     }
 
     public function revokeById(int $id, ?int $userId, bool $canManageAll, bool $authEnabled): bool

@@ -36,6 +36,7 @@ date_default_timezone_set(Config::timezone());
 $command = $argv[1] ?? '';
 
 try {
+    Config::bool('AUTH_ENABLED', false);
     $db = Container::db();
 
     switch ($command) {
@@ -183,6 +184,13 @@ try {
                     echo date('c') . $message . "\n";
                 },
             ))->run();
+            try {
+                if (trim((string) Config::get('JELLYFIN_URL', '')) !== '') {
+                    (new Jellyfin\MovieRecoveryService())->runBatch();
+                }
+            } catch (\Throwable $error) {
+                Log::logException($error);
+            }
             break;
 
         case 'stream-control:enforce':
@@ -322,6 +330,36 @@ try {
             }
             break;
 
+        case 'history:replace-movie':
+            $oldId = $argv[2] ?? '';
+            $currentId = $argv[3] ?? '';
+            $flags = array_slice($argv, 4);
+            if ($oldId === '' || $currentId === ''
+                || array_diff($flags, ['--apply', '--confirm-same-movie']) !== []) {
+                throw new \InvalidArgumentException('Usage: php bin/console.php history:replace-movie <old-id> <current-id> [--apply --confirm-same-movie]');
+            }
+            $service = new Jellyfin\MovieReplacementService($db);
+            $apply = in_array('--apply', $flags, true);
+            $preview = $apply
+                ? $service->apply($oldId, $currentId, in_array('--confirm-same-movie', $flags, true))
+                : $service->preview($oldId, $currentId);
+            echo json_encode($preview, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            echo $apply
+                ? "Movie replacement saved. Original history rows were preserved.\n"
+                : "Preview only. Check both movies, then repeat with --apply --confirm-same-movie to save.\n";
+            break;
+
+        case 'history:unlink-movie':
+            $oldId = $argv[2] ?? '';
+            $flags = array_slice($argv, 3);
+            if ($oldId === '' || array_diff($flags, ['--apply']) !== []) {
+                throw new \InvalidArgumentException('Usage: php bin/console.php history:unlink-movie <old-id> [--apply]');
+            }
+            $result = (new Jellyfin\MovieReplacementService($db))->unlink($oldId, in_array('--apply', $flags, true));
+            echo json_encode($result, JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+            echo $result['applied'] ? "Replacement mapping removed if present.\n" : "Preview only. Repeat with --apply to remove this mapping.\n";
+            break;
+
         case 'database:migrate-to-sqlite':
             $requestedPath = $argv[2] ?? '';
             $confirmedStopped = in_array('--confirm-stopped', array_slice($argv, 3), true);
@@ -396,6 +434,8 @@ try {
             echo "  php bin/console.php user:role <username> <role 1-4>\n";
             echo "  php bin/console.php user:list\n";
             echo "  php bin/console.php history:poll   (record currently-playing sessions)\n";
+            echo "  php bin/console.php history:replace-movie <old-id> <current-id> [--apply --confirm-same-movie]\n";
+            echo "  php bin/console.php history:unlink-movie <old-id> [--apply]\n";
             echo "  php bin/console.php downloads:poll (refresh configured download clients)\n";
             echo "  php bin/console.php libraries:warm (refresh the cached library overview)\n";
             echo "  php bin/console.php database:migrate-to-sqlite <file> --confirm-stopped\n";

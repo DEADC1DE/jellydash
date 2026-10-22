@@ -11,6 +11,7 @@ use Mk\Framework\SessionStorage;
 // Enforce the external request policy for pages and direct API requests before
 // opening a session or restoring a remembered login.
 try {
+    Config::bool('AUTH_ENABLED', false);
     $requestContext = RequestContext::fromConfig();
 } catch (\InvalidArgumentException $e) {
     \Mk\Framework\Log::logException($e);

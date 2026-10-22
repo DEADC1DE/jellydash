@@ -128,7 +128,7 @@ try {
 }
 
 /**
- * @return array{parsed: int, kind: 'tsv'|'sqlite'|'plugin'}
+ * @return array{parsed: int, kind: 'tsv'|'sqlite'|'plugin', importable: int, skipped: int, conflicts: int}
  */
 function previewImport(): array
 {
@@ -143,7 +143,7 @@ function previewImport(): array
 }
 
 /**
- * @return array{parsed: int, inserted: int, skipped: int, unresolved: int}
+ * @return array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved: int}
  */
 function runImport(): array
 {
@@ -192,6 +192,7 @@ function streamImport(): void
             'total' => 0,
             'inserted' => 0,
             'skipped' => 0,
+            'conflicts' => 0,
         ]);
 
         return;
@@ -205,6 +206,7 @@ function streamImport(): void
             'total' => 0,
             'inserted' => 0,
             'skipped' => 0,
+            'conflicts' => 0,
         ]);
 
         return;
@@ -216,12 +218,13 @@ function streamImport(): void
         'total' => $result['parsed'],
         'inserted' => $result['inserted'],
         'skipped' => $result['skipped'],
+        'conflicts' => $result['conflicts'],
         'unresolved' => $result['unresolved'],
     ]);
 }
 
 /**
- * @param array{parsed: int, inserted: int, skipped: int, unresolved?: int} $result
+ * @param array{parsed: int, inserted: int, skipped: int, conflicts: int, unresolved?: int} $result
  */
 function redirectImport(array $result): never
 {
@@ -232,6 +235,7 @@ function redirectImport(array $result): never
     $query = [
         'imported' => $result['inserted'],
         'skipped' => $result['skipped'],
+        'conflicts' => $result['conflicts'],
     ];
     if (($result['unresolved'] ?? 0) > 0) {
         $query['unresolved'] = $result['unresolved'];

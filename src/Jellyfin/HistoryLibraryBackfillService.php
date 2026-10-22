@@ -151,38 +151,42 @@ final class HistoryLibraryBackfillService
             $nowInstant = new \DateTimeImmutable('now');
             $now = $nowInstant->format('Y-m-d H:i:s');
 
-            $this->db->begin();
-            try {
-                foreach ($rows as $row) {
-                    if (trim((string) ($row['library_resolved_at'] ?? '')) !== '') {
-                        continue;
+            (new HistoryWriteGuard($this->database))->run(function () use ($rows, $libraries, $now, $nowInstant, $last, $limit, &$state): void {
+                $this->db->begin();
+                try {
+                    foreach ($rows as $row) {
+                        if (trim((string) ($row['library_resolved_at'] ?? '')) !== '') {
+                            continue;
+                        }
+                        $itemId = $this->normalizedItemId((string) ($row['item_id'] ?? ''));
+                        if (!isset($libraries[$itemId])) {
+                            continue;
+                        }
+                        $this->db->update('play_history', [
+                            'library' => $libraries[$itemId],
+                            'library_resolved_at' => $now,
+                            'library_resolved_at_epoch' => $nowInstant->getTimestamp(),
+                        ])->where('id = %i', (int) $row['id'])
+                            ->where($this->database->getPlatform()->isSqlite()
+                                ? "(library_resolved_at IS NULL OR library_resolved_at = '')"
+                                : 'library_resolved_at IS NULL')
+                            ->execute();
                     }
-                    $itemId = $this->normalizedItemId((string) ($row['item_id'] ?? ''));
-                    if (!isset($libraries[$itemId])) {
-                        continue;
-                    }
-                    $this->db->update('play_history', [
-                        'library' => $libraries[$itemId],
-                        'library_resolved_at' => $now,
-                        'library_resolved_at_epoch' => $nowInstant->getTimestamp(),
-                    ])->where('id = %i', (int) $row['id'])
-                        ->where('(library_resolved_at IS NULL OR library_resolved_at = %s)', '')
-                        ->execute();
-                }
 
-                $state['cursor_id'] = (int) $last['id'];
-                $state['processed'] = min($state['total'], $state['processed'] + count($rows));
-                $state['retry_after'] = 0;
-                if ($state['cursor_id'] >= $state['high_watermark'] || count($rows) < $limit) {
-                    $state['state'] = 'complete';
-                    $state['processed'] = $state['total'];
+                    $state['cursor_id'] = (int) $last['id'];
+                    $state['processed'] = min($state['total'], $state['processed'] + count($rows));
+                    $state['retry_after'] = 0;
+                    if ($state['cursor_id'] >= $state['high_watermark'] || count($rows) < $limit) {
+                        $state['state'] = 'complete';
+                        $state['processed'] = $state['total'];
+                    }
+                    $this->saveState($state);
+                    $this->db->commit();
+                } catch (\Throwable $e) {
+                    $this->db->rollback();
+                    throw $e;
                 }
-                $this->saveState($state);
-                $this->db->commit();
-            } catch (\Throwable $e) {
-                $this->db->rollback();
-                throw $e;
-            }
+            });
 
             return $this->publicStatus($state);
         } finally {

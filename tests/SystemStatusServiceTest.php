@@ -72,9 +72,22 @@ final class SystemStatusServiceTest extends TestCase
         $row = $this->success(800);
         self::assertSame('delayed', $this->history($row)['state']);
         putenv('POLL_INTERVAL=120');
-        self::assertSame('healthy', $this->history($row)['state']);
+        self::assertSame(120, $this->history($row)['interval_seconds']);
+        self::assertStringContainsString('POLL_INTERVAL', $this->history($row)['message']);
         putenv('POLL_INTERVAL=0');
         self::assertSame('delayed', $this->history($row)['state']);
+    }
+
+    public function testAHealthyWorkerCannotClaimReliableMeasurementAtTheSampleGapLimit(): void
+    {
+        $healthy = $this->history($this->success());
+        self::assertSame('healthy', $healthy['state']);
+        putenv('POLL_INTERVAL=120');
+        $warning = $this->history($this->success());
+        self::assertSame('delayed', $warning['state']);
+        self::assertSame(990, $warning['last_success_at']);
+        self::assertStringContainsString('measured watch time', $warning['message']);
+        self::assertStringNotContainsString('private-token', $warning['message']);
     }
 
     public function testRunningStalledFailedRecoveredAndFutureClockStates(): void

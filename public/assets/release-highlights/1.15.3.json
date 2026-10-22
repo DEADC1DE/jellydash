@@ -1,0 +1,16 @@
+{
+  "version": "1.15.3",
+  "auto_show": true,
+  "title": "PHP security update",
+  "summary": "Updates the Docker image to PHP 8.3.36 to fix two critical PHP vulnerabilities.",
+  "highlights": [
+    "PHP 8.3.36 fixes CVE-2026-109618 and CVE-2026-109619, which can allow unauthenticated remote code execution.",
+    "Update and recreate your Docker container to use the patched runtime. Installations running PHP directly need to update PHP separately."
+  ],
+  "links": [
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.15.3"
+    }
+  ]
+}

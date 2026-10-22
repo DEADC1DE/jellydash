@@ -10,6 +10,8 @@ use Mk\Framework\DatabasePlatform;
 use Mk\Framework\Downloads\DownloadRepository;
 use Mk\Framework\Health\WorkerStatusRepository;
 use Mk\Framework\Integrations\ConnectionRepository;
+use Mk\Framework\Jellyfin\MovieIdentityRepository;
+use Mk\Framework\Jellyfin\MovieReplacements;
 use Mk\Framework\Jellyfin\PlayHistoryRepository;
 use Mk\Framework\Jellyfin\ThemePlaybackExclusions;
 use Mk\Framework\Jellyseerr\SeerrRequestRepository;
@@ -86,6 +88,9 @@ final class SchemaCompatibilityTest extends TestCase
             'download_connection_state',
             'integration_connections',
             'login_attempts',
+            'movie_identity_items',
+            'movie_identity_state',
+            'movie_replacements',
             'play_history',
             'push_subscriptions',
             'seerr_requests',
@@ -115,6 +120,20 @@ final class SchemaCompatibilityTest extends TestCase
     {
         $this->initializeAllSchemas();
 
+        $this->dibi->insert('movie_identity_items', [
+            'server_key' => str_repeat('1', 64), 'item_id' => 'Identity-Movie ',
+            'data_json' => '{"title":"Original movie","providers":{"Tmdb":"123"}}',
+        ])->execute();
+        $this->dibi->insert('movie_identity_state', [
+            'server_key' => str_repeat('1', 64), 'data_json' => '{"scan":"running","offset":100}',
+            'lease_token' => str_repeat('f', 64), 'lease_until_epoch' => 2000,
+        ])->execute();
+
+        $this->dibi->insert('movie_replacements', [
+            'server_key' => str_repeat('1', 64),
+            'item_id' => 'Old-Movie ',
+            'replacement_id' => 'Current-Movie',
+        ])->execute();
         $this->dibi->insert('users', [
             'username' => 'schema-user',
             'password' => 'not-used',
@@ -175,9 +194,10 @@ final class SchemaCompatibilityTest extends TestCase
             $this->dibi->query('ALTER TABLE `play_history` DROP COLUMN %n', $column);
             $this->dibi->query('ALTER TABLE `seerr_requests` DROP COLUMN %n', $column);
         }
-        foreach (['previous_validator_hash', 'rotation_nonce', 'rotation_valid_until'] as $column) {
+        foreach (['auth_generation', 'previous_validator_hash', 'rotation_nonce', 'rotation_valid_until'] as $column) {
             $this->dibi->query('ALTER TABLE `auth_remember_tokens` DROP COLUMN %n', $column);
         }
+        $this->dibi->query('ALTER TABLE `users` DROP COLUMN `auth_generation`');
         $this->dibi->query('ALTER TABLE `login_attempts` DROP COLUMN `window_started_at`');
         $this->dibi->query('DROP INDEX `idx_login_attempts_updated` ON `login_attempts`');
         $this->dibi->query('DROP INDEX `idx_push_subscription_user` ON `push_subscriptions`');
@@ -185,6 +205,19 @@ final class SchemaCompatibilityTest extends TestCase
         $this->resetSchemaState();
         $this->initializeAllSchemas();
 
+        $replacement = $this->dibi->select('server_key, item_id, replacement_id')->from('movie_replacements')->fetch();
+        $this->assertNotFalse($replacement);
+        $this->assertSame('Old-Movie ', (string) $replacement['item_id']);
+        $this->assertSame('Current-Movie', (string) $replacement['replacement_id']);
+        $identity = $this->dibi->select('item_id, data_json')->from('movie_identity_items')->fetch();
+        $this->assertNotFalse($identity);
+        $this->assertSame('Identity-Movie ', (string) $identity['item_id']);
+        $this->assertSame('{"title":"Original movie","providers":{"Tmdb":"123"}}', (string) $identity['data_json']);
+        $identityState = $this->dibi->select('data_json, lease_token, lease_until_epoch')->from('movie_identity_state')->fetch();
+        $this->assertNotFalse($identityState);
+        $this->assertSame('{"scan":"running","offset":100}', (string) $identityState['data_json']);
+        $this->assertSame(str_repeat('f', 64), (string) $identityState['lease_token']);
+        $this->assertSame(2000, (int) $identityState['lease_until_epoch']);
         $this->assertSame('schema-user', (string) $this->dibi->select('username')->from('users')->fetchSingle());
         $this->assertSame(2, (int) $this->dibi->select('attempts')->from('login_attempts')->fetchSingle());
         $this->assertNull($this->dibi->select('window_started_at')->from('login_attempts')->fetchSingle());
@@ -197,9 +230,11 @@ final class SchemaCompatibilityTest extends TestCase
             $this->dibi->getDatabaseInfo()->getTable('push_subscriptions')->getIndexes(),
         );
         $this->assertSame(1, (int) $this->dibi->select('COUNT(*)')->from('auth_remember_tokens')->fetchSingle());
-        $remember = $this->dibi->select('previous_validator_hash, rotation_nonce, rotation_valid_until')
+        $this->assertSame(0, (int) $this->dibi->select('auth_generation')->from('users')->fetchSingle());
+        $remember = $this->dibi->select('auth_generation, previous_validator_hash, rotation_nonce, rotation_valid_until')
             ->from('auth_remember_tokens')->fetch();
         $this->assertNotFalse($remember);
+        $this->assertSame(0, (int) $remember['auth_generation']);
         $this->assertNull($remember['previous_validator_hash']);
         $this->assertNull($remember['rotation_nonce']);
         $this->assertSame(0, (int) $remember['rotation_valid_until']);
@@ -302,6 +337,8 @@ final class SchemaCompatibilityTest extends TestCase
         AppSettings::set('schema_test', 'ok');
         new PlayHistoryRepository($this->database);
         new ThemePlaybackExclusions($this->database);
+        new MovieReplacements($this->database);
+        new MovieIdentityRepository($this->database);
         new PushSubscriptionRepository($this->database);
         new SeerrRequestRepository($this->database);
         WorkerStatusRepository::ensureSchema($this->database);
@@ -414,6 +451,8 @@ final class SchemaCompatibilityTest extends TestCase
             [AppSettings::class, 'cache', null],
             [AppSettings::class, 'schemaConnections', null],
             [PlayHistoryRepository::class, 'schemaConnections', null],
+            [MovieReplacements::class, 'schemaConnections', null],
+            [MovieIdentityRepository::class, 'schemaConnections', null],
             [PushSubscriptionRepository::class, 'schemaConnections', null],
             [SeerrRequestRepository::class, 'schemaConnections', null],
         ];

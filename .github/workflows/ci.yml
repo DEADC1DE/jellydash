@@ -107,7 +107,7 @@ jobs:
 
       - name: Check PHP runtime
         run: |
-          docker run --rm --entrypoint php jellydash:ci -r "exit(PHP_VERSION_ID === 80333 && extension_loaded('curl') && extension_loaded('mbstring') && extension_loaded('mysqli') && extension_loaded('gmp') && extension_loaded('sqlite3') && extension_loaded('openssl') ? 0 : 1);"
+          docker run --rm --entrypoint php jellydash:ci -r "exit(PHP_VERSION_ID === 80336 && extension_loaded('curl') && extension_loaded('mbstring') && extension_loaded('mysqli') && extension_loaded('gmp') && extension_loaded('sqlite3') && extension_loaded('openssl') ? 0 : 1);"
 
       - name: Check worker startup settings
         run: |

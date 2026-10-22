@@ -19,14 +19,21 @@ final class NowPlayingFrontendTest extends TestCase
         $this->assertStringContainsString("navCount.textContent = '-'", $navCount);
     }
 
-    public function testNowPlayingSkipsOverlappingRefreshesAndReleasesTheGuardAfterFailure(): void
+    public function testNowPlayingStopsExpiredSessionsAndSkipsOverlappingRefreshes(): void
     {
         $nowPlaying = file_get_contents(ROOT_DIR . '/public/assets/js/now-playing.js');
 
         $this->assertIsString($nowPlaying);
-        $this->assertStringContainsString('if (refreshInFlight || document.hidden)', $nowPlaying);
+        $this->assertMatchesRegularExpression(
+            '/async function refreshNowPlaying\(\)\s*\{\s*if\s*\((?=[^)]*\bauthExpired\b)(?=[^)]*\bpageSuspended\b)(?=[^)]*\brefreshInFlight\b)(?=[^)]*document\.hidden)(?:authExpired|pageSuspended|refreshInFlight|document\.hidden)(?:\s*\|\|\s*(?:authExpired|pageSuspended|refreshInFlight|document\.hidden)){3}\)\s*\{\s*return;/s',
+            $nowPlaying,
+        );
+        $this->assertMatchesRegularExpression(
+            '/if\s*\(error\.status\s*===\s*401\s*\|\|\s*error\.status\s*===\s*403\)\s*authExpired\s*=\s*true;/',
+            $nowPlaying,
+        );
         $this->assertStringContainsString('refreshInFlight = true', $nowPlaying);
-        $this->assertStringContainsString('refreshInFlight = false', $nowPlaying);
+        $this->assertMatchesRegularExpression('/finally\s*\{.*?refreshInFlight\s*=\s*false;/s', $nowPlaying);
         $this->assertStringContainsString("new CustomEvent('jellydash:now-playing'", $nowPlaying);
     }
 

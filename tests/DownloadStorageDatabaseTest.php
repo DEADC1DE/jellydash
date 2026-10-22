@@ -8,9 +8,15 @@ use Mk\Framework\DatabasePlatform;
 use Mk\Framework\DatabaseSchemaInitializer;
 use Mk\Framework\Downloads\CollectionBatch;
 use Mk\Framework\Downloads\DownloadRepository;
+use Mk\Framework\Downloads\DownloaderTransport;
+use Mk\Framework\Downloads\HttpRequest;
+use Mk\Framework\Downloads\HttpResponse;
+use Mk\Framework\Downloads\OverviewService;
+use Mk\Framework\Downloads\Providers\SabnzbdProvider;
 use Mk\Framework\Integrations\Connection;
 use Mk\Framework\Integrations\ConnectionRepository;
 use Mk\Framework\Integrations\CredentialStore;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class DownloadStorageDatabaseTest extends TestCase
@@ -75,7 +81,16 @@ final class DownloadStorageDatabaseTest extends TestCase
         $this->environment('SAB_API_KEY', null);
     }
 
-    public function testCredentialsAndSessionsSurviveContainerReplacementWithOnlyTheDatabase(): void
+    /** @return iterable<string,array{string}> */
+    public static function reusableSessions(): iterable
+    {
+        yield 'short token' => ['replacement-session'];
+        yield 'framework ticket' => [str_repeat('a', 624)];
+        yield 'maximum cookie' => [str_repeat('b', 4096)];
+    }
+
+    #[DataProvider('reusableSessions')]
+    public function testCredentialsAndSessionsSurviveContainerReplacementWithOnlyTheDatabase(string $sid): void
     {
         $connections = new ConnectionRepository($this->database, new CredentialStore($this->keyPath));
         $downloads = new DownloadRepository($this->database, new CredentialStore($this->keyPath));
@@ -85,7 +100,7 @@ final class DownloadStorageDatabaseTest extends TestCase
         $token = $downloads->claim($connection, 1_800_100_000);
         self::assertNotNull($token);
         self::assertTrue($downloads->succeed($connection, $token, new CollectionBatch(
-            session: ['sid' => 'replacement-session'],
+            session: ['sid' => $sid],
         ), 1_800_100_001));
         self::assertFileDoesNotExist($this->keyPath);
         self::assertFileDoesNotExist($this->keyPath . '.lock');
@@ -104,10 +119,66 @@ final class DownloadStorageDatabaseTest extends TestCase
         $loaded = $replacementConnections->find($connection->id);
         self::assertNotNull($loaded);
         self::assertSame('replacement-secret', $replacementConnections->credentials($loaded)['secret']);
-        self::assertSame(['sid' => 'replacement-session'], $replacementDownloads->session($loaded));
+        self::assertSame(['sid' => $sid], $replacementDownloads->session($loaded));
         self::assertStringNotContainsString('replacement-secret', json_encode($loaded->managementData(), JSON_THROW_ON_ERROR));
-        self::assertStringNotContainsString('replacement-session', json_encode($replacementDownloads->state($loaded->id), JSON_THROW_ON_ERROR));
+        self::assertStringNotContainsString($sid, json_encode($replacementDownloads->state($loaded->id), JSON_THROW_ON_ERROR));
         self::assertFileDoesNotExist($this->keyPath . '-different');
+    }
+
+    public function testSabActivitySamplesSurviveACollectorRestartWithoutInflatingCounts(): void
+    {
+        $store = new CredentialStore($this->keyPath);
+        $connections = new ConnectionRepository($this->database, $store);
+        $downloads = new DownloadRepository($this->database, $store);
+        $connection = $connections->save(new Connection(
+            'sab-activity', 'sabnzbd', 'SABnzbd', 'https://sab.example.test',
+        ), 'fixture-key');
+        $transport = new class() implements DownloaderTransport {
+            public string $remaining = '16';
+
+            public function request(HttpRequest $request): HttpResponse
+            {
+                parse_str((string) parse_url($request->url, PHP_URL_QUERY), $query);
+                $payload = ($query['mode'] ?? '') === 'queue' ? ['queue' => [
+                    'kbpersec' => '55296', 'noofslots' => 2, 'slots' => [
+                        ['nzo_id' => 'first', 'filename' => 'First job', 'status' => 'Downloading', 'mb' => '100', 'mbleft' => $this->remaining],
+                        ['nzo_id' => 'second', 'filename' => 'Waiting job', 'status' => 'Downloading', 'mb' => '100', 'mbleft' => '87'],
+                    ],
+                ]] : ['history' => ['slots' => [], 'noofslots' => 0]];
+                return new HttpResponse(200, json_encode($payload, JSON_THROW_ON_ERROR));
+            }
+
+            public function requestMany(array $requests): array
+            {
+                return array_map($this->request(...), $requests);
+            }
+        };
+        $now = time();
+        $first = (new SabnzbdProvider($transport))->collect($connection, ['secret' => 'fixture-key']);
+        $cursor = $first->cursor;
+        $cursor['sab_activity']['at'] = $now - 16;
+        $token = $downloads->claim($connection, $now - 16);
+        self::assertNotNull($token);
+        self::assertTrue($downloads->succeed($connection, $token, new CollectionBatch(
+            $first->items, $first->completions, $first->speed, $cursor, history: $first->history,
+        ), $now - 16));
+        $overview = new OverviewService($connections, $downloads);
+        self::assertSame(0, $overview->snapshot($now)['active_count']);
+        self::assertSame(['unknown', 'unknown'], array_column($overview->snapshot($now)['items'], 'state'));
+
+        $transport->remaining = '10';
+        $restartedDownloads = new DownloadRepository($this->database, $store);
+        $next = (new SabnzbdProvider($transport))->collect(
+            $connection, ['secret' => 'fixture-key'], $restartedDownloads->state($connection->id)['cursor'],
+        );
+        $token = $restartedDownloads->claim($connection, $now);
+        self::assertNotNull($token);
+        self::assertTrue($restartedDownloads->succeed($connection, $token, $next, $now));
+        $snapshot = (new OverviewService($connections, $restartedDownloads))->snapshot($now);
+        self::assertSame(['downloading', 'queued'], array_column($snapshot['items'], 'state'));
+        self::assertSame(1, $snapshot['active_count']);
+        self::assertSame(56623104.0, $snapshot['speed']);
+        self::assertSame([null, null], array_column($snapshot['items'], 'speed'));
     }
 
     public function testExistingEncryptedRowsMigrateWhenTheOldKeyIsAvailable(): void

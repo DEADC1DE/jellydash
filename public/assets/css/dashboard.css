@@ -1,3 +1,36 @@
+/* Barlow, Copyright 2017 The Barlow Project Authors. SIL OFL 1.1. */
+@font-face {
+    font-family: Barlow;
+    src: url('../fonts/barlow/Barlow-Regular.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: Barlow;
+    src: url('../fonts/barlow/Barlow-Medium.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: Barlow;
+    src: url('../fonts/barlow/Barlow-SemiBold.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: Barlow;
+    src: url('../fonts/barlow/Barlow-Bold.woff2') format('woff2');
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+}
+
 :root {
     /* Tell the browser this is a dark UI so native controls (select dropdown
        option lists, scrollbars, etc.) render dark instead of default white. */
@@ -16,7 +49,7 @@
     --color-green: #34d8a6;
     --color-green-text: #46e0b0;
     --color-amber: #f7b955;
-    --font-ui: "Plus Jakarta Sans", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-ui: Barlow, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
 }
 
@@ -1681,7 +1714,8 @@ svg.icon-filled {
 .header-copy h1 {
     margin: 0;
     font-size: 22px;
-    font-weight: 800;
+    font-weight: 700;
+    letter-spacing: -.3px;
     line-height: 1.15;
     white-space: nowrap;
 }
@@ -1713,6 +1747,17 @@ svg.icon-filled {
     border: 1px solid rgba(124, 92, 255, .3);
     border-radius: 8px;
     background: rgba(124, 92, 255, .09);
+    overflow-wrap: anywhere;
+}
+
+.history-metadata-scopes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.history-export-scope[hidden] {
+    display: none;
 }
 
 .history-media-scope span,
@@ -3683,17 +3728,17 @@ svg.icon-filled {
     display: inline;
     margin: 0;
     font-size: 16px;
-    font-weight: 800;
+    font-weight: 700;
 }
 
 .history-day-header span {
     margin-left: 9px;
-    color: rgba(255, 255, 255, .4);
+    color: #ada4ba;
     font-size: 12.5px;
 }
 
 .history-day-header strong {
-    color: rgba(255, 255, 255, .42);
+    color: #ada4ba;
     font-family: var(--font-mono);
     font-size: 11.5px;
     font-weight: 600;
@@ -3742,7 +3787,7 @@ svg.icon-filled {
 
 .history-time,
 .history-mono {
-    color: rgba(255, 255, 255, .5);
+    color: #ada4ba;
     font-family: var(--font-mono);
     font-size: 11.5px;
 }
@@ -3756,11 +3801,11 @@ svg.icon-filled {
 }
 
 .history-mono {
-    color: rgba(255, 255, 255, .58);
+    color: #ada4ba;
 }
 
 .history-mono.is-muted {
-    color: rgba(255, 255, 255, .44);
+    color: #ada4ba;
 }
 
 .history-user,
@@ -3852,12 +3897,31 @@ svg.icon-filled {
     gap: 5px;
     color: #f4f2fb;
     font-size: 13px;
-    font-weight: 800;
+    font-weight: 700;
 }
 
 .history-watched strong span {
     color: var(--color-green);
     font-size: 12px;
+}
+
+.history-playback-details {
+    display: none;
+}
+
+.history-clear-filters {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 6px;
+    color: #c7b4ee;
+    font-size: 12px;
+}
+
+.history-clear-filters:focus-visible,
+.history-playback-details summary:focus-visible {
+    outline: 2px solid var(--color-purple-soft);
+    outline-offset: 3px;
 }
 
 .mini-track {
@@ -4572,8 +4636,19 @@ a.trending-card:hover .trending-poster {
 }
 
 .stats-kpi {
+    position: relative;
     padding: 17px 18px;
     border-radius: 14px;
+}
+
+.stats-kpi.has-link::after {
+    position: absolute;
+    top: 17px;
+    right: 18px;
+    color: #ab9acf;
+    font-size: 14px;
+    content: '\2197';
+    pointer-events: none;
 }
 
 .stats-kpi.has-link {
@@ -4589,6 +4664,7 @@ a.trending-card:hover .trending-poster {
 .stats-kpi-link {
     display: block;
     min-height: 44px;
+    height: 100%;
     padding: 17px 18px;
     color: inherit;
     text-decoration: none;
@@ -4610,11 +4686,15 @@ a.trending-card:hover .trending-poster {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    color: rgba(255, 255, 255, .45);
-    font-size: 10.5px;
-    font-weight: 700;
-    letter-spacing: .6px;
+    color: #b4abc2;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .45px;
     text-transform: uppercase;
+}
+
+.stats-kpi-label {
+    padding-right: 16px;
 }
 
 .stats-kpi-label i {
@@ -4628,15 +4708,17 @@ a.trending-card:hover .trending-poster {
     margin-top: 11px;
     color: #f4f2fb;
     font-size: 28px;
-    font-weight: 800;
-    letter-spacing: -.7px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.2px;
+    overflow-wrap: anywhere;
 }
 
 .stats-kpi small {
     display: block;
     margin-top: 7px;
     font-size: 11.5px;
-    font-weight: 700;
+    font-weight: 500;
 }
 
 .stats-section-header {
@@ -4648,15 +4730,15 @@ a.trending-card:hover .trending-poster {
 
 .stats-section-header h2 {
     margin: 0;
-    color: rgba(255, 255, 255, .46);
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 1.4px;
+    color: #b9b0ca;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .8px;
     text-transform: uppercase;
 }
 
 .stats-section-header > span {
-    color: rgba(255, 255, 255, .32);
+    color: #a9a1b6;
     font-size: 12px;
 }
 
@@ -4795,9 +4877,10 @@ a.trending-card:hover .trending-poster {
     display: block;
     margin-top: 7px;
     color: #f4f2fb;
-    font-size: 46px;
-    font-weight: 800;
-    letter-spacing: -1.4px;
+    font-size: 40px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -.4px;
     line-height: 1;
 }
 
@@ -4805,7 +4888,26 @@ a.trending-card:hover .trending-poster {
     display: block;
     margin-top: 8px;
     font-size: 12.5px;
+    font-weight: 500;
+}
+
+.stats-chart-heading h3 {
+    margin: 0 0 8px;
+    color: #eae5f3;
+    font-size: 15px;
     font-weight: 700;
+}
+
+.stats-chart-heading .stats-watch-total-link {
+    display: inline-block;
+    color: #b6abc9;
+    font-size: 12px;
+    line-height: 1.7;
+}
+
+.stats-chart-heading .stats-watch-total-link:hover {
+    color: #dfd4f9;
+    text-decoration: underline;
 }
 
 .stats-mono-chip {
@@ -4827,7 +4929,7 @@ a.trending-card:hover .trending-poster {
     margin-bottom: 28px;
 }
 
-.stats-trend-bars > span {
+.stats-trend-bars > a {
     position: relative;
     display: flex;
     flex: 1;
@@ -4838,6 +4940,7 @@ a.trending-card:hover .trending-poster {
     min-width: 0;
     height: 100%;
     cursor: pointer;
+    text-decoration: none;
 }
 
 .stats-trend-bars i {
@@ -4859,11 +4962,11 @@ a.trending-card:hover .trending-poster {
     font-weight: 600;
 }
 
-.stats-trend-bars > span:first-child b { left: 0; transform: none; }
-.stats-trend-bars > span:last-child b { left: auto; right: 0; transform: none; }
+.stats-trend-bars > a:first-child b { left: 0; transform: none; }
+.stats-trend-bars > a:last-child b { left: auto; right: 0; transform: none; }
 .stats-trend-bars b[hidden] { display: none; }
-.stats-trend-bars > span:focus-visible { outline: 2px solid var(--color-purple-soft); outline-offset: 2px; }
-.stats-trend-bars > span:is(:hover, :focus) i { background: var(--color-purple-soft); }
+.stats-trend-bars > a:focus-visible { outline: 2px solid var(--color-purple-soft); outline-offset: 2px; }
+.stats-trend-bars > a:is(:hover, :focus) i { background: var(--color-purple-soft); }
 .stats-trend-detail { min-height: 16px; margin: 0; font-size: 11px; color: var(--color-muted); }
 
 .stats-list-head,
@@ -4875,12 +4978,12 @@ a.trending-card:hover .trending-poster {
 .stats-donut-card > div:first-child strong {
     color: #f1eff8;
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .stats-list-head span,
 .stats-donut-card > div:first-child span {
-    color: rgba(255, 255, 255, .4);
+    color: #a9a1b6;
     font-size: 11.5px;
 }
 
@@ -4996,7 +5099,7 @@ a.trending-card:hover .trending-poster {
 .stats-donut strong {
     color: #f4f2fb;
     font-size: 22px;
-    font-weight: 800;
+    font-weight: 600;
 }
 
 .stats-donut small {
@@ -5270,7 +5373,8 @@ a.trending-card:hover .trending-poster {
 .stats-devices-summary p strong {
     color: #f4f2fb;
     font-size: 20px;
-    font-weight: 800;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
     letter-spacing: -.4px;
 }
 
@@ -5976,12 +6080,60 @@ a.trending-card:hover .trending-poster {
         width: min(284px, 84vw);
         height: 100vh;
         height: 100dvh;
+        gap: 12px;
+        padding: 16px;
         overflow-y: auto;
         transform: translateX(-100%);
         transition: transform .26s ease;
         will-change: transform;
         border-right: 1px solid rgba(255, 255, 255, .06);
         box-shadow: 0 0 60px rgba(0, 0, 0, .6);
+    }
+
+    .dashboard-sidebar > :not(.sidebar-spacer) {
+        flex-shrink: 0;
+    }
+
+    .dashboard-sidebar .dashboard-nav {
+        gap: 2px;
+    }
+
+    .dashboard-sidebar .nav-section {
+        margin: 4px 0;
+    }
+
+    .dashboard-sidebar .nav-item {
+        min-height: 44px;
+        padding: 10px 12px;
+    }
+
+    .dashboard-sidebar .server-card {
+        padding: 10px 12px;
+    }
+
+    .dashboard-sidebar .server-card-header {
+        margin-bottom: 8px;
+    }
+
+    .dashboard-sidebar .server-meter {
+        display: grid;
+        grid-template-columns: auto minmax(20px, 1fr) minmax(0, 88px);
+        gap: 8px;
+        margin-top: 6px;
+    }
+
+    .dashboard-sidebar .server-meter > span,
+    .dashboard-sidebar .server-meter b {
+        width: auto;
+    }
+
+    .dashboard-sidebar .settings-row {
+        min-height: 46px;
+        padding: 7px 10px;
+    }
+
+    .dashboard-sidebar .logout-form {
+        margin-top: 0;
     }
 
     .app-shell.nav-open .dashboard-sidebar {
@@ -6063,6 +6215,7 @@ a.trending-card:hover .trending-poster {
     .filter-bar select,
     .search-control {
         flex: 1 1 160px;
+        min-width: 0;
     }
 
     .search-control input {
@@ -6170,12 +6323,45 @@ a.trending-card:hover .trending-poster {
         min-width: 980px;
     }
 
-    .stats-kpi-grid,
     .library-summary-grid,
     .stats-general-grid,
     .stats-transcoding-grid,
     .stats-client-grid {
         grid-template-columns: 1fr;
+    }
+
+    .stats-kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .stats-kpi,
+    .stats-kpi-link {
+        padding: 15px;
+    }
+
+    .stats-kpi.has-link {
+        padding: 0;
+    }
+
+    .stats-kpi strong {
+        font-size: 25px;
+    }
+
+    .stats-kpi-label {
+        min-height: 32px;
+        font-size: 10px;
+        line-height: 1.6;
+    }
+
+    .stats-kpi.has-link::after {
+        top: 14px;
+        right: 12px;
+    }
+
+    .stats-section-header {
+        flex-wrap: wrap;
+        gap: 6px 12px;
     }
 
     .library-grid {
@@ -6186,11 +6372,15 @@ a.trending-card:hover .trending-poster {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .stats-card-head,
     .stats-donut-layout,
     .stats-list-head.has-inline-legend {
         align-items: flex-start;
         flex-direction: column;
+    }
+
+    .stats-card-head {
+        flex-direction: row;
+        flex-wrap: wrap;
     }
 
     .stats-user-table {
@@ -6579,4 +6769,153 @@ a.trending-card:hover .trending-poster {
         padding: 6px 8px;
     }
 
+}
+
+@media (max-width: 600px) {
+    .history-table {
+        overflow: visible;
+    }
+
+    .history-head {
+        display: none;
+    }
+
+    .history-row {
+        min-width: 0;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 10px 12px;
+        padding: 16px;
+    }
+
+    .history-item {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .history-item strong {
+        overflow: visible;
+        font-weight: 600;
+        line-height: 1.45;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .history-item small {
+        color: #b8aec6;
+    }
+
+    .history-user {
+        grid-column: 1;
+        grid-row: 2;
+        gap: 7px;
+    }
+
+    .history-user .avatar {
+        width: 23px;
+        height: 23px;
+        font-size: 10px;
+    }
+
+    .history-time {
+        grid-column: 2;
+        grid-row: 2;
+        text-align: right;
+    }
+
+    .history-watched {
+        display: flex;
+        grid-column: 1 / -1;
+        grid-row: 3;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .history-watched strong {
+        flex-wrap: wrap;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+
+    .history-watched .mini-track {
+        flex: 1;
+        min-width: 35px;
+        margin: 0;
+    }
+
+    .history-row > .history-method,
+    .history-row > .history-mono {
+        display: none;
+    }
+
+    .history-playback-details {
+        display: block;
+        min-width: 0;
+        grid-column: 1 / -1;
+        padding-top: 9px;
+        border-top: 1px solid #29232f;
+    }
+
+    .history-playback-details summary {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 32px;
+        color: #b7a8d1;
+        font-size: 11px;
+        list-style: none;
+        cursor: pointer;
+    }
+
+    .history-playback-details summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .history-playback-details[open] summary > [aria-hidden] {
+        transform: rotate(45deg);
+    }
+
+    .history-playback-details dl {
+        margin: 6px 0 0;
+        font-size: 11px;
+    }
+
+    .history-playback-details dl > div {
+        display: grid;
+        grid-template-columns: 70px minmax(0, 1fr);
+        gap: 12px;
+        margin: 8px 0;
+    }
+
+    .history-playback-details dt {
+        color: #a89bb8;
+    }
+
+    .history-playback-details dd {
+        margin: 0;
+        color: #e0d8eb;
+        overflow-wrap: anywhere;
+    }
+
+    .history-day-header {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 360px) {
+    .stats-kpi strong {
+        font-size: 20px;
+        letter-spacing: -.4px;
+    }
+
+    .stats-kpi small {
+        font-size: 10.5px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-sidebar,
+    .nav-backdrop {
+        transition: none;
+    }
 }

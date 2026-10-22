@@ -1,5 +1,14 @@
 # Third-party notices
 
+## Barlow
+
+Jellydash bundles Barlow Regular, Medium, SemiBold and Bold as local WOFF2 fonts.
+
+Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow).
+
+Barlow is licensed under the [SIL Open Font License 1.1](public/assets/fonts/barlow/OFL.txt).
+The [font notice](public/assets/fonts/barlow/NOTICE.txt) records the source version and format conversion.
+
 ## Tabler Icons
 
 Jellydash includes selected icons from Tabler Icons v3.46.0.

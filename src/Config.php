@@ -36,7 +36,15 @@ class Config
     {
         $value = self::get($key);
 
-        return $value === null ? $default : filter_var($value, FILTER_VALIDATE_BOOL);
+        if ($value === null) {
+            return $default;
+        }
+        $parsed = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+        if ($key === 'AUTH_ENABLED' && $parsed === null) {
+            throw new \InvalidArgumentException('AUTH_ENABLED must be a valid boolean.');
+        }
+
+        return $parsed ?? false;
     }
 
     public static function interval(string $key, int $default): int

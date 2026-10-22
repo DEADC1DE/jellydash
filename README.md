@@ -24,6 +24,7 @@ Jellydash is a monitoring dashboard for [Jellyfin](https://jellyfin.org). If you
 - Which shows and movies are the most popular on my server?
 - Did someone just request something new in Jellyseerr?
 - What is downloading, and did the latest downloads finish?
+- What maintenance tasks are running on Jellyfin?
 
 It's supposed to be lightweight, without too much bloat and (hopefully) nice looking!
 
@@ -72,11 +73,13 @@ The project is still young and under active development.
 
 - **History.** Jellydash records play history in the background, even when nobody has the dashboard open. Search it, filter by user or library, export the matching plays to CSV, and enjoy the poster art. Existing Jellyfin or Emby Playback Reporting backups can be imported from Settings.
 
-- **Statistics.** Watch time trends, top users, device activity, clients, codecs and transcode reasons. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
+- **Statistics.** Watch time trends, top users, device activity, clients, codecs and transcode reasons. Open linked watch-time totals, chart bars, source video codecs and transcoding reasons in History to see matching plays. There is a Trending strip for what is hot right now, and all-time Most Watched charts for both shows and movies.
 
 - **Monthly recap.** Open Monthly recap from Statistics to look back at a completed month, with watch time, movie and series rankings, daily activity and a viewer filter. Viewing time inferred from older history is labelled as an estimate.
 
 - **Libraries.** An overview of all your libraries with item counts and type breakdowns. New libraries are picked up automatically.
+
+- **Server Activity.** A dedicated page for Jellyfin maintenance tasks, recent task results and activity events, with date, type, severity and user/system filters. With Jellydash login enabled, it is available to owners and admins. See [Server Activity](docs/SERVER_ACTIVITY.md) for access and activity log limits.
 
 - **System status.** Check background collection, library refreshes, optional request sync, and notification retries from Settings. Copy a diagnostic summary without service URLs, credentials, or viewing details. See [System status](docs/SYSTEM_STATUS.md) for what the checks mean.
 
@@ -121,6 +124,8 @@ docker compose up -d
 ```
 
 Open `http://your-host:8080`. Both setups create the database tables automatically; you don't need to import an SQL file.
+
+If `JELLYFIN_URL` uses a Docker hostname or another address your browser cannot reach, set `JELLYFIN_LINK_URL` in `.env` to the browser-facing Jellyfin address. It can include a reverse-proxy base path, for example `https://media.example.com/jellyfin`, but should not end in `/web`. Leave it empty to use `JELLYFIN_URL`. An invalid nonempty URL disables Jellyfin links. This only changes links opened in your browser; Jellydash continues to use `JELLYFIN_URL` for its Jellyfin connection and images.
 
 Set `APP_TIMEZONE` in `.env` to your local IANA timezone so History and Statistics use the right date boundaries. Custom `docker run` setups may pass the standard `TZ` variable instead. `APP_TIMEZONE` takes priority when both are present.
 
@@ -333,6 +338,8 @@ On the login page, **Keep me signed in** lets that browser restore your login fo
 
 Both supplied Compose setups keep ordinary sessions in a named volume, so later container recreations do not sign you out early. When you first adopt an updated Compose file, the new volume starts empty and you may need to sign in once. Sessions still expire after one hour idle or eight hours since login.
 
+Resetting an account's password signs out its existing sessions and remembered browsers. After upgrading to session revocation support, existing sessions need to sign in once.
+
 ## Exclusions in Settings or the environment
 
 Open **Settings > Exclusions** to manage these options:
@@ -398,6 +405,8 @@ Jellydash is free and always will be. If you enjoy it and want to support its de
 The Jellydash mascot is based on a [jellyfish icon](https://www.flaticon.com/free-icon/jellyfish_2977310) by Magnific from [Flaticon](https://www.flaticon.com), modified for this project.
 
 Interface icons come from [Tabler Icons](https://tabler.io/icons), used under its [MIT license](THIRD_PARTY_NOTICES.md).
+
+The interface uses [Barlow](https://github.com/jpt/barlow), bundled locally under the [SIL Open Font License 1.1](public/assets/fonts/barlow/OFL.txt).
 
 ## License
 

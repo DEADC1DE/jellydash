@@ -141,6 +141,68 @@ final class RememberTokenRepositoryTest extends TestCase
         $this->assertSame(0, $this->rememberTokenCount());
     }
 
+    public function testResetBetweenTokenReadAndUserReadCannotRestoreNewGeneration(): void
+    {
+        $database = new class ($this->dibi) extends Database {
+            public ?\Closure $beforeUserRead = null;
+
+            public function getUser($id): ?array
+            {
+                if ($this->beforeUserRead !== null) {
+                    $callback = $this->beforeUserRead;
+                    $this->beforeUserRead = null;
+                    $callback();
+                }
+                return parent::getUser($id);
+            }
+        };
+        $tokens = new RememberTokenRepository($database);
+        $token = $tokens->issue($this->userId, self::NOW, Authorization::REMEMBER_LIFETIME);
+        // Warm the rotation grace path, which used to return without a CAS write.
+        $remembered = $tokens->consume($token, self::NOW + 1, Authorization::REMEMBER_LIFETIME);
+        $this->assertNotNull($remembered);
+        $database->beforeUserRead = function (): void {
+            $this->database->setUserPassword(self::USERNAME, 'replacement-password-123');
+        };
+        $this->assertNull($tokens->consume($token, self::NOW + 2, Authorization::REMEMBER_LIFETIME));
+        $this->assertNull($database->beforeUserRead);
+    }
+
+    public function testResetAfterBufferedUserReadCannotAuthenticateReturnedSnapshot(): void
+    {
+        $token = $this->tokens->issue($this->userId, self::NOW, Authorization::REMEMBER_LIFETIME);
+        $this->assertNotNull($this->tokens->consume($token, self::NOW + 1, Authorization::REMEMBER_LIFETIME));
+        $interleaved = false;
+        $listener = function (\Dibi\Event $event) use (&$interleaved): void {
+            if (!$interleaved && str_contains((string) $event->sql, 'SELECT id, username, name, role')) {
+                $interleaved = true;
+                $this->database->setUserPassword(self::USERNAME, 'replacement-password-123');
+            }
+        };
+        $this->dibi->onEvent[] = $listener;
+        try {
+            $remembered = $this->tokens->consume($token, self::NOW + 2, Authorization::REMEMBER_LIFETIME);
+            $this->assertTrue($interleaved);
+            if ($remembered !== null) {
+                // Buffered MariaDB returns the authenticated old snapshot;
+                // unbuffered SQLite can see the reset and reject immediately.
+                $this->assertSame(0, (int) $remembered['user']['auth_generation']);
+                $_SESSION = [
+                    'auth_user' => $remembered['user'],
+                    'auth_login_time' => self::NOW,
+                    'auth_last_activity' => self::NOW,
+                ];
+                $auth = new Authorization($this->database, clock: static fn (): int => self::NOW + 2);
+                $this->assertFalse($auth->isUserLoggedIn());
+            }
+            $this->assertSame(0, $this->rememberTokenCount());
+        } finally {
+            array_pop($this->dibi->onEvent);
+            $_SESSION = [];
+            $this->dibi->disconnect();
+        }
+    }
+
     public function testChangingThePasswordRevokesEveryRememberedDevice(): void
     {
         $this->tokens->issue($this->userId, self::NOW, Authorization::REMEMBER_LIFETIME);
@@ -151,6 +213,15 @@ final class RememberTokenRepositoryTest extends TestCase
         $passwordHash = (string) $this->dibi->select('password')->from('users')
             ->where('id = %i', $this->userId)->fetchSingle();
         $this->assertTrue(password_verify('replacement-password-123', $passwordHash));
+    }
+
+    public function testTokenIssueCannotBindOldCredentialsToTheResetGeneration(): void
+    {
+        $generation = (int) $this->database->getUser($this->userId)['auth_generation'];
+        $this->assertTrue($this->database->setUserPassword(self::USERNAME, 'replacement-password-123'));
+        $this->assertSame($generation + 1, (int) $this->database->getUser($this->userId)['auth_generation']);
+        $this->assertNull($this->tokens->issueForGeneration($this->userId, $generation, self::NOW, Authorization::REMEMBER_LIFETIME));
+        $this->assertSame(0, $this->rememberTokenCount());
     }
 
     private function cleanup(): void

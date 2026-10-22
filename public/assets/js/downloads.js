@@ -131,15 +131,9 @@
         };
     }
 
-    function cardSpeed(item, connections) {
-        if (item.stale || item.state !== 'downloading') return { value: null, clientWide: false };
-        if (isFiniteNumber(item.speed)) return { value: item.speed, clientWide: false };
-        if (!['sabnzbd', 'nzbget'].includes(item.provider)) return { value: null, clientWide: false };
-        const connection = connections.find((client) => client.id === item.connection_id);
-        return {
-            value: connection?.status === 'connected' && isFiniteNumber(connection.speed) ? connection.speed : null,
-            clientWide: true,
-        };
+    function cardSpeed(item) {
+        const known = !item.stale && item.state === 'downloading' && isFiniteNumber(item.speed) && item.speed >= 0;
+        return { value: known ? item.speed : null, clientWide: false };
     }
 
     function formatBytes(value) {
@@ -157,7 +151,15 @@
 
     function formatSpeed(value) {
         if (!isFiniteNumber(value) || value < 0) return '';
-        return `${formatBytes(value)}/s`;
+        const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'];
+        let amount = value;
+        let unit = 0;
+        while (amount >= 1024 && unit < units.length - 1) {
+            amount /= 1024;
+            unit += 1;
+        }
+        const digits = unit === 0 ? 0 : amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
+        return `${amount.toFixed(digits)} ${units[unit]}/s`;
     }
 
     function formatEta(value) {
@@ -184,7 +186,7 @@
     function stateLabel(state) {
         return ({
             downloading: 'Downloading', processing: 'Processing', queued: 'Queued', paused: 'Paused',
-            stalled: 'Stalled', checking: 'Checking', metadata: 'Fetching metadata', error: 'Error',
+            stalled: 'Stalled', checking: 'Checking', metadata: 'Fetching metadata', error: 'Error', unknown: 'Checking activity',
         })[state] || 'Waiting';
     }
 
@@ -247,11 +249,27 @@
     function restoreFocus(key) {
         if (!key || !root) return;
         const candidates = root.querySelectorAll('[data-downloads-focus-key]');
-        for (const candidate of candidates) {
-            if (candidate.getAttribute('data-downloads-focus-key') === key) {
-                candidate.focus({ preventScroll: true });
-                break;
+        const successors = {
+            'queue-more': ['queue-next', 'queue-fewer'],
+            'queue-fewer': ['queue-more', 'queue-next'],
+            'queue-next': ['queue-previous', 'queue-fewer', 'queue-more'],
+            'queue-previous': ['queue-next', 'queue-fewer', 'queue-more'],
+        };
+        const keys = [key, ...(successors[key] || [])];
+        if (key.startsWith('queue-')) keys.push('queue-heading');
+        keys.push('filter-all');
+        for (const nextKey of keys) {
+            for (const candidate of candidates) {
+                if (candidate.getAttribute('data-downloads-focus-key') === nextKey) {
+                    candidate.focus({ preventScroll: true });
+                    return;
+                }
             }
+        }
+        const heading = root.querySelector('h2');
+        if (heading) {
+            heading.setAttribute('tabindex', '-1');
+            heading.focus({ preventScroll: true });
         }
     }
 
@@ -453,17 +471,18 @@
         if (state === 'processing') {
             transfer.append(node('span', 'downloads-transfer-note', item.stale ? 'Last known processing state' : 'Processing files.'));
         } else {
-            const speed = cardSpeed(item, connections);
-            const reading = node('div');
-            reading.append(speedReading(speed.value, 'downloads-item-speed'));
-            reading.append(node('span', 'downloads-transfer-speed-label', item.stale ? 'Current speed unavailable'
-                : speed.value === null ? stateLabel(state)
-                    : speed.clientWide ? (connections.find((client) => client.id === item.connection_id)?.filter_mode === 'selected'
-                        ? 'Selected download speed' : `${item.connection_name || providerInfo(item.provider).name} client speed`) : 'Download speed'));
-            transfer.append(reading);
+            const speed = cardSpeed(item);
+            if (speed.value === null) {
+                transfer.append(node('span', 'downloads-transfer-note', item.stale ? 'Current speed unavailable' : stateLabel(state)));
+            } else {
+                const reading = node('div');
+                reading.append(speedReading(speed.value, 'downloads-item-speed'));
+                reading.append(node('span', 'downloads-transfer-speed-label', 'Download speed'));
+                transfer.append(reading);
+            }
             if (!item.stale && isFiniteNumber(item.eta)) {
                 const eta = node('span', 'downloads-eta', formatEta(item.eta));
-                eta.append(node('small', '', 'remaining'));
+                eta.append(node('small', '', item.provider === 'sabnzbd' ? 'including queue' : 'remaining'));
                 transfer.append(eta);
             }
         }
@@ -632,7 +651,11 @@
             activeSection.append(activeHeading);
             const activeList = node('div', 'downloads-active-list');
             active.slice(0, pageState.activeLimit).forEach((item, index) => activeList.append(renderCard(item, index, connections)));
-            if (!active.length) activeList.append(node('p', 'downloads-idle-note', 'Nothing downloading right now.'));
+            if (!active.length) {
+                const checkingActivity = monitoringEnabled(data) && (items.some((item) => !item.stale && item.state === 'unknown')
+                    || (isFiniteNumber(data.speed) && data.speed > 0));
+                activeList.append(node('p', 'downloads-idle-note', checkingActivity ? 'Checking download activity.' : 'Nothing downloading right now.'));
+            }
             activeSection.append(activeList);
             if (active.length > 6) {
                 const more = node('button', 'downloads-text-button', pageState.activeLimit >= Math.min(active.length, 30) ? 'Show fewer' : `Show ${Math.min(6, active.length - pageState.activeLimit)} more`);
@@ -647,6 +670,8 @@
             const queue = node('section', 'downloads-queue-panel');
             const queueHeading = node('div', 'downloads-section-heading');
             const queueTitle = node('h2', '', 'Waiting');
+            queueTitle.setAttribute('data-downloads-focus-key', 'queue-heading');
+            queueTitle.setAttribute('tabindex', '-1');
             queueTitle.append(node('span', '', String(waiting.length)));
             const queueTitleGroup = node('div', 'downloads-waiting-title');
             queueTitleGroup.append(icon('clock'), queueTitle);
@@ -776,16 +801,17 @@
         });
     }
 
-    const polling = { timer: null, controller: null, failures: 0, sequence: 0, stopped: false };
+    const polling = { timer: null, controller: null, failures: 0, sequence: 0, stopped: false, authExpired: false, refreshPending: false };
 
     function scheduleOverview(delay) {
-        if (!root || polling.stopped || document.hidden) return;
+        if (!root || polling.authExpired || polling.stopped || document.hidden) return;
         window.clearTimeout(polling.timer);
         polling.timer = window.setTimeout(refreshOverview, delay);
     }
 
     async function refreshOverview() {
-        if (!root || polling.stopped || document.hidden || polling.controller) return;
+        if (!root || polling.authExpired || polling.stopped || document.hidden || polling.controller) return;
+        polling.refreshPending = false;
         const sequence = ++polling.sequence;
         const controller = new AbortController();
         polling.controller = controller;
@@ -793,7 +819,11 @@
         const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 8000);
         try {
             const response = await fetch(OVERVIEW_URL, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
-            if (!response.ok) throw new Error(response.status === 401 ? 'Your session expired. Sign in again to refresh downloads.' : 'The latest download update could not be loaded.');
+            if (!response.ok) {
+                const error = new Error('The latest download update could not be loaded.');
+                error.status = response.status;
+                throw error;
+            }
             const data = await response.json();
             if (sequence !== polling.sequence || !data || typeof data !== 'object') return;
             pageState.overview = data;
@@ -802,6 +832,17 @@
             scheduleOverview(5000);
         } catch (error) {
             if (sequence !== polling.sequence || (error?.name === 'AbortError' && !timedOut)) return;
+            if (error.status === 401 || error.status === 403) {
+                polling.authExpired = true;
+                window.clearTimeout(polling.timer);
+                polling.timer = null;
+                const notice = renderNotice('Session expired.', null, true);
+                const link = node('a', '', 'Sign in again');
+                link.href = '/login';
+                notice.append(link);
+                root.replaceChildren(notice);
+                return;
+            }
             polling.failures += 1;
             const message = timedOut ? 'The latest download update timed out.' : error instanceof Error ? error.message : 'The latest download update could not be loaded.';
             if (pageState.overview) {
@@ -813,23 +854,34 @@
         } finally {
             window.clearTimeout(timeout);
             if (polling.controller === controller) polling.controller = null;
+            if (polling.refreshPending) refreshOverview();
         }
+    }
+
+    function requestFreshOverview() {
+        if (polling.authExpired) return;
+        window.clearTimeout(polling.timer);
+        polling.timer = null;
+        polling.refreshPending = true;
+        ++polling.sequence;
+        if (polling.controller) polling.controller.abort();
+        else refreshOverview();
     }
 
     function stopOverview() {
         window.clearTimeout(polling.timer);
         polling.timer = null;
+        ++polling.sequence;
         if (polling.controller) polling.controller.abort();
-        polling.controller = null;
     }
 
     if (root) {
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) stopOverview();
-            else refreshOverview();
+            else { polling.refreshPending = true; refreshOverview(); }
         });
         window.addEventListener('pagehide', () => { polling.stopped = true; stopOverview(); });
-        window.addEventListener('pageshow', () => { polling.stopped = false; refreshOverview(); });
+        window.addEventListener('pageshow', () => { polling.stopped = false; polling.refreshPending = true; refreshOverview(); });
         refreshOverview();
     }
 
@@ -1229,7 +1281,7 @@
             pageState.activeLimit = 6;
             pageState.queueLimit = 3;
             pageState.queueOffset = 0;
-            if (root) refreshOverview();
+            if (root) requestFreshOverview();
             closeEditor();
         } catch (error) {
             setMessage(editorError(), error.message, true);
@@ -1248,7 +1300,7 @@
             if (index >= 0) management.clients[index] = result.client;
             renderManager();
             showToast(result.client.enabled ? 'Client monitoring enabled.' : 'Client monitoring disabled.');
-            if (root) refreshOverview();
+            if (root) requestFreshOverview();
         } catch (error) {
             setMessage(managerError(), error.message, true);
             button.disabled = false;
@@ -1279,7 +1331,7 @@
             management.clients = management.clients.filter((item) => item.id !== client.id);
             removeDialog.close();
             showToast(client.id === 'legacy-sabnzbd-env' ? 'Environment settings restored.' : 'Download client removed.');
-            if (root) refreshOverview();
+            if (root) requestFreshOverview();
         } catch (error) {
             setMessage(removeDialog.querySelector('[data-downloads-remove-error]'), error.message, true);
         } finally {
@@ -1346,4 +1398,5 @@
     hooks.parseValues = parseValues;
     hooks.renderOverview = renderOverview;
     hooks.refreshOverview = refreshOverview;
+    hooks.requestFreshOverview = requestFreshOverview;
 })();

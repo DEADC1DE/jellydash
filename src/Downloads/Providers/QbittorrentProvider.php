@@ -21,6 +21,7 @@ final class QbittorrentProvider implements Provider
     private const HISTORY_MAX_ROWS = 100;
     private const HISTORY_TARGET = 20;
     private const MAX_BATCH_ROWS = 1000;
+    private const MAX_SID_BYTES = 4096;
     private Closure $clock;
 
     public function __construct(
@@ -42,10 +43,18 @@ final class QbittorrentProvider implements Provider
         foreach ($responses as $response) {
             $this->assertReadResponse($response);
         }
-        $version = $this->plainText($responses[0], 64);
-        $apiVersion = $this->plainText($responses[1], 64);
-        if (version_compare($version, '4.6.0', '<') || version_compare($version, '6.0.0', '>=')) {
+        $version = $this->versionText($responses[0], true);
+        if (version_compare($version, '4.3.2', '<') || version_compare($version, '6.0.0', '>=')) {
             throw new ProviderException('unsupported_version');
+        }
+        $apiVersion = $this->versionText($responses[1]);
+        $olderVersion = version_compare($version, '4.6.0', '<');
+        if (version_compare($apiVersion, '2.0', '<') || version_compare($apiVersion, '3.0', '>=')
+            || ($olderVersion && version_compare($apiVersion, '2.7', '<'))) {
+            throw new ProviderException('unsupported_version');
+        }
+        if ($olderVersion) {
+            $this->checkCompatibilityReads($connection, $auth);
         }
         $categoryData = $this->json($responses[2]);
         $tagData = $this->json($responses[3]);
@@ -125,7 +134,7 @@ final class QbittorrentProvider implements Provider
             $sessionExpiresAt = $now + 1800;
             $versionResponse = $this->transport->request($this->readRequest($connection, '/api/v2/app/version', $auth));
         }
-        $version = $versionResponse === null ? null : $this->plainText($versionResponse, 64);
+        $version = $versionResponse === null ? null : $this->versionText($versionResponse, true);
         $items = [];
         $seenItems = [];
         $observedCompletions = [];
@@ -240,6 +249,7 @@ final class QbittorrentProvider implements Provider
     {
         $completions = [];
         $seen = [];
+        $seenPages = [];
         $deadline = microtime(true) + 5.0;
         for ($offset = 0; $offset < self::HISTORY_MAX_ROWS && count($completions) < self::HISTORY_TARGET; $offset += self::HISTORY_PAGE_SIZE) {
             $request = fn (array $activeAuth): HttpRequest => $this->readRequest($connection, '/api/v2/torrents/info', $activeAuth, [
@@ -259,8 +269,21 @@ final class QbittorrentProvider implements Provider
             if (microtime(true) >= $deadline) {
                 throw new ProviderException('timeout');
             }
-            $rows = array_slice($this->listJson($response), 0, self::HISTORY_PAGE_SIZE);
+            $rows = $this->listJson($response);
+            $pageHash = hash('sha256', $response->body);
+            if (isset($seenPages[$pageHash])) {
+                break;
+            }
+            $seenPages[$pageHash] = true;
+            $unpaged = count($rows) > self::HISTORY_PAGE_SIZE;
+            usort($rows, function (array $left, array $right) use ($deadline): int {
+                $this->remainingHistoryMs($deadline);
+                return ($this->integer($right['completion_on'] ?? null, 1) ?? 0)
+                    <=> ($this->integer($left['completion_on'] ?? null, 1) ?? 0);
+            });
+            $rows = array_slice($rows, 0, self::HISTORY_MAX_ROWS - $offset);
             foreach ($rows as $row) {
+                $this->remainingHistoryMs($deadline);
                 $item = $this->torrent($row);
                 if ($item === null) {
                     continue;
@@ -275,7 +298,8 @@ final class QbittorrentProvider implements Provider
                     break;
                 }
             }
-            if (count($rows) < self::HISTORY_PAGE_SIZE) {
+            $this->remainingHistoryMs($deadline);
+            if ($unpaged || count($rows) < self::HISTORY_PAGE_SIZE) {
                 break;
             }
         }
@@ -325,7 +349,7 @@ final class QbittorrentProvider implements Provider
             throw new ProviderException('authentication_failed');
         }
         foreach ($response->header('set-cookie') as $cookie) {
-            if (preg_match('/(?:^|;\s*)(SID|QBT_SID(?:_[0-9]{1,5})?)=([^;]{8,256})(?:;|$)/', $cookie, $match) === 1
+            if (preg_match('/(?:^|;\s*)(SID|QBT_SID(?:_[0-9]{1,5})?)=([^;]{8,' . self::MAX_SID_BYTES . '})(?:;|$)/', $cookie, $match) === 1
                 && $this->validCookieName($match[1])
                 && $this->validSid($match[2])) {
                 return ['name' => $match[1], 'value' => $match[2]];
@@ -334,7 +358,7 @@ final class QbittorrentProvider implements Provider
         if ($response->status === 204) {
             return ['name' => '', 'value' => ''];
         }
-        throw new ProviderException('authentication_failed');
+        throw new ProviderException('session_unavailable');
     }
 
     /** @param array{name:string,value:string} $auth @param array<string,int|string> $query */
@@ -409,14 +433,51 @@ final class QbittorrentProvider implements Provider
         return $rows;
     }
 
-    private function plainText(HttpResponse $response, int $limit): string
+    /** @param array{name:string,value:string} $auth */
+    private function checkCompatibilityReads(Connection $connection, array $auth): void
+    {
+        $responses = $this->transport->requestMany([
+            $this->readRequest($connection, '/api/v2/transfer/info', $auth),
+            $this->readRequest($connection, '/api/v2/torrents/info', $auth, ['limit' => 1, 'offset' => 0]),
+        ]);
+        $transfer = $this->json($responses[0]);
+        if ($this->number($transfer['dl_info_speed'] ?? null, 0.0) === null) {
+            throw new ProviderException('invalid_response');
+        }
+        $rows = $this->listJson($responses[1]);
+        foreach (array_slice($rows, 0, self::MAX_BATCH_ROWS + 1) as $row) {
+            if ($this->torrent($row) === null || !is_string($row['name'] ?? null)
+                || !is_string($row['state'] ?? null) || $this->number($row['progress'] ?? null, 0.0, 1.0) === null) {
+                throw new ProviderException('invalid_response');
+            }
+        }
+    }
+
+    private function versionText(HttpResponse $response, bool $appVersion = false): string
     {
         $this->assertReadResponse($response);
         $value = trim($response->body);
-        if ($value === '' || strlen($value) > $limit || preg_match('/[\x00-\x1f\x7f]/', $value) === 1) {
+        if ($value === '' || strlen($value) > 64 || preg_match('/[\x00-\x1f\x7f]/', $value) === 1) {
             throw new ProviderException('invalid_response');
         }
-        return $value[0] === 'v' ? substr($value, 1) : $value;
+        if ($value[0] === '"') {
+            try {
+                $decoded = json_decode($value, true, 4, JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                throw new ProviderException('invalid_response');
+            }
+            if (!is_string($decoded)) {
+                throw new ProviderException('invalid_response');
+            }
+            $value = $decoded;
+        }
+        if ($appVersion && str_starts_with($value, 'v')) {
+            $value = substr($value, 1);
+        }
+        if (preg_match($appVersion ? '/^[0-9]+\.[0-9]+\.[0-9]+(?:\.[0-9]+)?$/D' : '/^[0-9]+\.[0-9]+(?:\.[0-9]+){0,2}$/D', $value) !== 1) {
+            throw new ProviderException('invalid_response');
+        }
+        return $value;
     }
 
     private function baseUrl(string $url): string
@@ -468,7 +529,7 @@ final class QbittorrentProvider implements Provider
 
     private function validSid(string $sid): bool
     {
-        return strlen($sid) >= 8 && strlen($sid) <= 256
+        return strlen($sid) >= 8 && strlen($sid) <= self::MAX_SID_BYTES
             && preg_match('~^[A-Za-z0-9+/_-]+={0,2}$~D', $sid) === 1;
     }
 

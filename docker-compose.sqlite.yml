@@ -19,6 +19,7 @@ services:
     environment:
       DB_DRIVER: sqlite3
       DB_NAME: /var/www/html/var/data/jellydash.sqlite
+      JELLYFIN_LINK_URL: "${JELLYFIN_LINK_URL:-}"
     volumes:
       - app_cache:/var/www/html/cache
       - app_runtime_cache:/var/www/html/var/cache

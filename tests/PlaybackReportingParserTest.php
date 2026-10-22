@@ -298,4 +298,53 @@ final class PlaybackReportingParserTest extends TestCase
         $this->assertSame('2026-08-31 20:24:00', $this->parser->parseTsv($longPause)[0]['updated_at']);
         $this->assertSame([], $this->parser->parseTsv($invalidPause));
     }
+
+    public function testImportDurationRejectsValuesOutsideTheHistoryIntegerContract(): void
+    {
+        $line = static fn (string $play, string $pause = '0'): string =>
+            "2026-08-31 20:14:00.1234567\t7654321\t1234567\tMovie\tArrival\tDirectPlay\tEmby Web\tChrome\t{$play}\t{$pause}";
+
+        $maximum = $this->parser->parseTsv($line('2147483647', '2147483646'));
+        $this->assertCount(1, $maximum);
+        $this->assertSame(1, $maximum[0]['watched_sec']);
+        $this->assertCount(1, $this->parser->parseTsv($line('000600', '000120')));
+
+        foreach ([
+            $line('2147483648'),
+            $line('999999999999999999999999999999999999'),
+            $line('-1'),
+            $line('600', '2147483648'),
+            $line('600', '999999999999999999999999999999999999'),
+            $line('600', '-1'),
+        ] as $invalid) {
+            $this->assertSame([], $this->parser->parseTsv($invalid));
+        }
+    }
+
+    public function testCanonicalImportIdentityPreservesFractionsAndLegacyEvidence(): void
+    {
+        $user = '0e394f8a9bc64abeba29f63cdc7a12a0';
+        $item = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        $line = static fn (string $stamp, string $rawUser, string $rawItem): string =>
+            "{$stamp}\t{$rawUser}\t{$rawItem}\tMovie\tDune\tDirectPlay\tWeb\tChrome\t600";
+        $first = $this->parser->parseTsv($line('2024-01-01 12:00:00', $user, $item))[0];
+        $equivalent = $this->parser->parseTsv($line(
+            '2024-01-01 12:00:00.000',
+            '0E394F8A-9BC6-4ABE-BA29-F63CDC7A12A0',
+            'AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA',
+        ))[0];
+        $fractionOne = $this->parser->parseTsv($line('2024-01-01 12:00:00.0010', $user, $item))[0];
+        $fractionOneShort = $this->parser->parseTsv($line('2024-01-01 12:00:00.001', $user, $item))[0];
+        $fractionTwo = $this->parser->parseTsv($line('2024-01-01 12:00:00.002', $user, $item))[0];
+
+        $this->assertStringStartsWith('pr-v2-', $first['session_key']);
+        $this->assertSame($first['session_key'], $equivalent['session_key']);
+        $this->assertNotSame($first['legacy_session_key'], $equivalent['legacy_session_key']);
+        $this->assertSame('pr-' . sha1('2024-01-01 12:00:00|' . $user . '|' . $item), $first['legacy_session_key']);
+        $this->assertSame($fractionOne['session_key'], $fractionOneShort['session_key']);
+        $this->assertNotSame($fractionOne['session_key'], $fractionTwo['session_key']);
+        $this->assertNotSame($first['session_key'], $fractionOne['session_key']);
+        $this->assertSame([], $this->parser->parseTsv($line('2024-01-01 12:00:00.bad', $user, $item)));
+        $this->assertSame([], $this->parser->parseTsv($line('2024-02-30 12:00:00', $user, $item)));
+    }
 }

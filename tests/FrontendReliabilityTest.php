@@ -51,7 +51,7 @@ final class FrontendReliabilityTest extends TestCase
 
         $this->assertStringContainsString('for="history-search"', $history);
         $this->assertStringContainsString('id="history-search"', $history);
-        $this->assertStringContainsString('<h2>General</h2>', $statistics);
+        $this->assertStringContainsString('<h2>Viewing activity</h2>', $statistics);
         $this->assertStringContainsString('class="visually-hidden"', $statistics);
         $this->assertStringContainsString('manageLink.hidden = true', $devices);
         $this->assertStringContainsString('.stats-devices-manage[hidden]', $css);

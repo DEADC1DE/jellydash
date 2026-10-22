@@ -28,8 +28,17 @@
                 <a href="{{ filters.media_clear_url }}" aria-label="Remove exact title filter">Clear</a>
             </div>
         {% endif %}
+        <div class="history-metadata-scopes">
+            {% for scope in filters.metadata_scopes %}
+                <div class="history-media-scope">
+                    <span>{{ scope.label }}: <strong>{{ scope.values|join(', ') }}</strong></span>
+                    <a href="{{ scope.clear_url }}" aria-label="Remove {{ scope.label|lower }} filter">Clear</a>
+                </div>
+            {% endfor %}
+        </div>
     </div>
     <form class="filter-bar" method="get" action="/history" data-history-filter-form>
+        {% include 'history/_metadata_fields.twig' %}
         {% if filters.is_exact %}
             <input type="hidden" name="start" value="{{ filters.start }}">
             <input type="hidden" name="end" value="{{ filters.end }}">
@@ -77,6 +86,9 @@
             <option value="all" {{ not filters.is_exact and filters.range == 'all' ? 'selected' : '' }}>All time</option>
         </select>
         <button type="submit" class="filter-submit">Apply</button>
+        {% if filters.search or filters.user or filters.library or filters.client or filters.method or filters.is_exact or filters.has_media or filters.metadata_scopes %}
+            <a class="history-clear-filters" href="/history?range=all">Clear filters</a>
+        {% endif %}
     </form>
 {% endblock %}
 

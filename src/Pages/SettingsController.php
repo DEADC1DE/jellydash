@@ -139,6 +139,7 @@ final class SettingsController extends Controller
             'import' => [
                 'inserted' => max(0, (int) (Main::captureGetString('imported') ?? 0)),
                 'skipped' => max(0, (int) (Main::captureGetString('skipped') ?? 0)),
+                'conflicts' => max(0, (int) (Main::captureGetString('conflicts') ?? 0)),
                 'unresolved' => max(0, (int) (Main::captureGetString('unresolved') ?? 0)),
                 'error' => trim((string) (Main::captureGetString('import_error') ?? '')),
             ],

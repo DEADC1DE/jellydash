@@ -10,6 +10,7 @@ final class ProviderException extends \RuntimeException
     {
         parent::__construct(match ($reason) {
             'authentication_failed' => 'The client rejected the credentials.',
+            'session_unavailable' => 'The client accepted the login but did not return a usable session cookie.',
             'timeout' => 'The client did not respond in time.',
             'invalid_response' => 'The client returned an unreadable response.',
             'response_too_large' => 'The client response exceeded the size limit.',

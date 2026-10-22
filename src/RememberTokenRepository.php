@@ -27,20 +27,33 @@ final class RememberTokenRepository
 
     public function issue(int $userId, int $now, int $lifetime): string
     {
+        $user = $this->database->getUser($userId);
+        $token = $user === null ? null : $this->issueForGeneration($userId, (int) $user['auth_generation'], $now, $lifetime);
+        if ($token === null) {
+            throw new \RuntimeException('Account changed while issuing a remembered login.');
+        }
+        return $token;
+    }
+
+    public function issueForGeneration(int $userId, int $generation, int $now, int $lifetime): ?string
+    {
         $this->removeExpired($now);
 
         $selector = bin2hex(random_bytes(self::SELECTOR_BYTES));
         $validator = bin2hex(random_bytes(self::VALIDATOR_BYTES));
         $timestamp = $this->timestamp($now);
 
-        $this->dibi->insert('auth_remember_tokens', [
-            'user_id' => $userId,
-            'selector' => $selector,
-            'validator_hash' => hash('sha256', $validator),
-            'expires_at' => $this->timestamp($now + $lifetime),
-            'created_at' => $timestamp,
-            'last_used_at' => $timestamp,
-        ])->execute();
+        // One statement binds the token to the authenticated generation. A
+        // concurrent reset either prevents this insert or revokes it afterward.
+        $this->dibi->query('INSERT INTO auth_remember_tokens
+            (user_id, auth_generation, selector, validator_hash, expires_at, created_at, last_used_at)
+            SELECT id, auth_generation, %s, %s, %s, %s, %s FROM users
+            WHERE id = %i AND auth_generation = %i',
+            $selector, hash('sha256', $validator), $this->timestamp($now + $lifetime), $timestamp, $timestamp,
+            $userId, $generation);
+        if ($this->dibi->getAffectedRows() !== 1) {
+            return null;
+        }
 
         return $selector . '.' . $validator;
     }
@@ -69,7 +82,7 @@ final class RememberTokenRepository
     /** @return array{user: array<string, mixed>, token: string}|false|null */
     private function consumeAttempt(string $selector, string $validator, int $now, int $lifetime): array|false|null
     {
-        $row = $this->dibi->select('user_id, validator_hash, expires_at, previous_validator_hash, rotation_nonce, rotation_valid_until')
+        $row = $this->dibi->select('user_id, validator_hash, expires_at, previous_validator_hash, rotation_nonce, rotation_valid_until, auth_generation')
             ->from('auth_remember_tokens')
             ->where('selector = %s', $selector)
             ->limit(1)
@@ -99,7 +112,7 @@ final class RememberTokenRepository
         }
 
         $user = $this->database->getUser((int) $row['user_id']);
-        if ($user === null) {
+        if ($user === null || (int) $user['auth_generation'] !== (int) $row['auth_generation']) {
             $this->deleteSelector($selector);
             return null;
         }

@@ -50,7 +50,7 @@
                 <path d="M3 3v5h5"></path>
                 <path d="M12 7v5l3 2"></path>
             </svg>
-            <span>Select a title, user, client or playback type to view matching plays in History.</span>
+            <span>Select a linked figure, chart bar or breakdown to view matching plays in History.</span>
         </p>
 
         {% if stats.hasTrending %}
@@ -117,7 +117,7 @@
             {% for kpi in stats.kpis %}
                 <article class="stats-kpi{{ kpi.href is defined ? ' has-link' : '' }}">
                     {% if kpi.href is defined %}
-                        <a class="stats-kpi-link" href="{{ kpi.href }}" aria-label="{{ kpi.label == 'Transcode Rate' ? 'View transcoded plays in History' : 'View plays in History' }}">
+                        <a class="stats-kpi-link" href="{{ kpi.href }}" aria-label="{{ kpi.label }}: {{ kpi.value }}. {{ kpi.label == 'Transcode Rate' ? 'View transcoded plays in History' : 'View plays in History' }}">
                     {% endif %}
                     <span class="stats-kpi-label"><i style="background: {{ kpi.color }}"></i>{{ kpi.label }}</span>
                     <strong>{{ kpi.value }}</strong>
@@ -130,27 +130,26 @@
         </section>
 
         <header class="stats-section-header">
-            <h2>General</h2>
-            <span>Total watch time - top users</span>
+            <h2>Viewing activity</h2>
+            <span>Watch time and viewers</span>
             <i></i>
         </header>
 
         <section class="stats-general-grid">
             <article class="stats-card stats-watch-card">
                 <div class="stats-card-head">
-                    <div>
-                        <span class="stats-eyebrow">{{ stats.watchTimeEstimated ? 'Estimated Watch Time' : 'Total Watch Time' }}</span>
-                        <strong>{{ stats.totalWatch }}</strong>
-                        <small style="color: {{ stats.totalWatchDeltaColor }}">{{ stats.totalWatchDelta }}</small>
+                    <div class="stats-chart-heading">
+                        <h3>Watch time over time</h3>
+                        <a class="stats-watch-total-link stats-drilldown-link" href="{{ stats.totalWatchHref }}" aria-label="{{ stats.watchTimeEstimated ? 'Estimated Watch Time' : 'Total Watch Time' }}: {{ stats.totalWatch }}. View contributing plays in History">{{ stats.totalWatch }}{% if stats.watchTimeEstimated %} estimated{% endif %} · View plays <span aria-hidden="true">↗</span></a>
                     </div>
                     <span class="stats-mono-chip">{{ stats.trendUnit }}</span>
                 </div>
                 <div class="stats-trend-bars" aria-label="Watch time trend" style="--trend-count: {{ stats.trend|length }}">
                     {% for bar in stats.trend %}
-                        <span role="img" tabindex="0" aria-label="{{ bar.label }}: {{ bar.value }}" title="{{ bar.label }}: {{ bar.value }}">
+                        <a href="{{ bar.href }}" aria-label="{{ bar.periodLabel }}: {{ bar.value }}. View plays in History" title="{{ bar.periodLabel }}: {{ bar.value }}" data-trend-detail="{{ bar.periodLabel }}: {{ bar.value }}">
                             <i style="height: {{ bar.h }}" title="{{ bar.value }}"></i>
                             <b aria-hidden="true">{{ bar.label }}</b>
-                        </span>
+                        </a>
                     {% endfor %}
                 </div>
                 <p class="stats-trend-detail" aria-live="polite"></p>
@@ -164,7 +163,7 @@
                 <div class="stats-user-list">
                     {% for user in stats.topUsers %}
                         {% if user.href is defined %}
-                            <a class="stats-user-row stats-user-link" href="{{ user.href }}" aria-label="View plays by {{ user.user }} in History">
+                            <a class="stats-user-row stats-user-link" href="{{ user.href }}" aria-label="{{ user.user }}: {{ user.watch }} watch time. View plays in History">
                         {% else %}
                             <div class="stats-user-row">
                         {% endif %}
@@ -199,7 +198,7 @@
                     </div>
                     <div class="stats-legend">
                         {% for item in stats.directnessLegend %}
-                            <a class="stats-legend-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.label }} sessions in History"><i style="background: {{ item.color }}"></i><span>{{ item.label }}</span><b>{{ item.pct }}</b></a>
+                            <a class="stats-legend-row stats-drilldown-link" href="{{ item.href }}" aria-label="{{ item.label }}: {{ item.pct }} of sessions. View plays in History"><i style="background: {{ item.color }}"></i><span>{{ item.label }}</span><b>{{ item.pct }}</b></a>
                         {% endfor %}
                     </div>
                 </div>
@@ -213,10 +212,10 @@
                 {% if stats.hasCodecData %}
                     <div class="stats-bars">
                         {% for item in stats.codecs %}
-                            <div class="stats-bar-row">
+                            <a class="stats-bar-row stats-drilldown-link" href="{{ item.href }}" aria-label="Source video codec {{ item.name }}: {{ item.pct }}. View matching plays in History">
                                 <p><span>{{ item.name }}</span><b>{{ item.pct }}</b></p>
                                 <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
-                            </div>
+                            </a>
                         {% endfor %}
                     </div>
                 {% else %}
@@ -232,10 +231,10 @@
                 {% if stats.hasReasonData %}
                     <div class="stats-bars">
                         {% for item in stats.reasons %}
-                            <div class="stats-bar-row">
+                            <a class="stats-bar-row stats-drilldown-link" href="{{ item.href }}" aria-label="Transcoding reason {{ item.name }}: {{ item.pct }} of logged reasons. View matching plays in History">
                                 <p><span>{{ item.name }}</span><b>{{ item.pct }}</b></p>
                                 <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
-                            </div>
+                            </a>
                         {% endfor %}
                     </div>
                 {% else %}
@@ -262,7 +261,7 @@
                     </div>
                     <div class="stats-legend">
                         {% for item in stats.clientBreakdown %}
-                            <a class="stats-legend-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.name }} sessions in History"><i style="background: {{ item.color }}"></i><span>{{ item.name }}</span><b>{{ item.pct }}</b></a>
+                            <a class="stats-legend-row stats-drilldown-link" href="{{ item.href }}" aria-label="{{ item.name }}: {{ item.pct }} of sessions. View plays in History"><i style="background: {{ item.color }}"></i><span>{{ item.name }}</span><b>{{ item.pct }}</b></a>
                         {% else %}
                             <p class="stats-empty-note">No clients in this range.</p>
                         {% endfor %}
@@ -277,7 +276,7 @@
                 </div>
                 <div class="stats-bars">
                     {% for item in stats.clientsRanked %}
-                        <a class="stats-ranked-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.name }} sessions in History">
+                        <a class="stats-ranked-row stats-drilldown-link" href="{{ item.href }}" aria-label="{{ item.name }}: {{ item.sessions }} sessions. View plays in History">
                             <b>{{ item.rank }}</b>
                             <div>
                                 <p><span>{{ item.name }}</span><small>{{ item.sessions }} sessions</small></p>
@@ -307,8 +306,8 @@
                                 <b style="width: {{ item.transcodePctStr }}"></b>
                             </span>
                             <span class="stats-stack-filter-links">
-                                <a href="{{ item.directHref }}" aria-label="View direct playback from {{ item.name }} in History">Direct {{ item.directPct }}</a>
-                                <a href="{{ item.transcodeHref }}" aria-label="View transcoded playback from {{ item.name }} in History">Transcode {{ item.transcodePctStr }}</a>
+                                <a href="{{ item.directHref }}" aria-label="{{ item.name }}: Direct {{ item.directPct }}. View plays in History">Direct {{ item.directPct }}</a>
+                                <a href="{{ item.transcodeHref }}" aria-label="{{ item.name }}: Transcode {{ item.transcodePctStr }}. View plays in History">Transcode {{ item.transcodePctStr }}</a>
                             </span>
                         </div>
                     {% else %}
@@ -324,7 +323,7 @@
                 </div>
                 <div class="stats-bars">
                     {% for item in stats.clientsUsage %}
-                        <a class="stats-bar-row stats-drilldown-link" href="{{ item.href }}" aria-label="View {{ item.name }} sessions in History">
+                        <a class="stats-bar-row stats-drilldown-link" href="{{ item.href }}" aria-label="{{ item.name }}: {{ item.watch }} watch time. View plays in History">
                             <p><span>{{ item.name }}</span><b>{{ item.watch }}</b></p>
                             <span class="stats-track"><i style="width: {{ item.w }}; background: {{ item.color }}"></i></span>
                         </a>
@@ -379,7 +378,7 @@
             </div>
             {% for user in stats.usersTable %}
                 {% if user.href is defined %}
-                    <a class="stats-user-table-row stats-user-table-link" href="{{ user.href }}" aria-label="View plays by {{ user.user }} in History">
+                    <a class="stats-user-table-row stats-user-table-link" href="{{ user.href }}" aria-label="{{ user.user }}: {{ user.watch }} watch time, {{ user.plays }} plays, {{ user.avg }} average per play, {{ user.share }} of watch time. View plays in History">
                 {% else %}
                     <article class="stats-user-table-row">
                 {% endif %}

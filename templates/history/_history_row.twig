@@ -21,4 +21,13 @@
         <strong>{{ play.watchedLabel }}{% if play.finished %}<span aria-label="Finished">&#10003;</span>{% endif %}</strong>
         <div class="mini-track"><span style="width: {{ play.completionPct }}%"></span></div>
     </div>
+    <details class="history-playback-details">
+        <summary>Playback details <span class="visually-hidden">for {{ play.title }}, {{ play.user }} at {{ play.time }}</span><span aria-hidden="true">+</span></summary>
+        <dl>
+            <div><dt>Playback</dt><dd>{{ play.methodLabel }}</dd></div>
+            <div><dt>Client</dt><dd>{{ play.client }}</dd></div>
+            <div><dt>Device</dt><dd>{{ play.device }}</dd></div>
+            {% if play.library %}<div><dt>Library</dt><dd>{{ play.library }}</dd></div>{% endif %}
+        </dl>
+    </details>
 </article>

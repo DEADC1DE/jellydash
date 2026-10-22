@@ -36,6 +36,8 @@ final class HistoryController extends Controller
             mediaItemType: $filters->mediaItemType,
             mediaTitle: $filters->mediaTitle,
             mediaLibrary: $filters->mediaLibrary,
+            codecs: $filters->codecs,
+            reasons: $filters->reasons,
         );
         $rows = $repository->historyRows($filters);
         $pages = max(1, (int) ceil($totalFiltered / max(1, $filters->limit)));
@@ -69,6 +71,7 @@ final class HistoryController extends Controller
                 'media_title' => $filters->mediaTitle,
                 'media_library' => $filters->mediaLibrary,
                 'media_clear_url' => $this->mediaClearUrl($filters),
+                'metadata_scopes' => $this->metadataScopes($filters),
             ],
         ]);
     }
@@ -126,6 +129,25 @@ final class HistoryController extends Controller
         );
 
         return '/history' . ($query === [] ? '' : '?' . http_build_query($query));
+    }
+
+    /** @return list<array{key: string, label: string, values: list<string>, clear_url: string}> */
+    private function metadataScopes(HistoryFilters $filters): array
+    {
+        $scopes = [];
+        foreach (['codec' => ['Source video codec', $filters->codecs], 'reason' => ['Transcoding reason', $filters->reasons]] as $key => [$label, $values]) {
+            if ($values === []) {
+                continue;
+            }
+            $query = $filters->queryParameters();
+            unset($query[$key]);
+            $scopes[] = [
+                'key' => $key, 'label' => $label, 'values' => $values,
+                'clear_url' => '/history' . ($query === [] ? '' : '?' . http_build_query($query)),
+            ];
+        }
+
+        return $scopes;
     }
 
     private function periodLabel(HistoryFilters $filters): string
@@ -243,7 +265,7 @@ final class HistoryController extends Controller
             'watchedLabel' => $this->durationLabel($viewingSec) . ($watchDuration === null ? ' estimated' : ' watched'),
             'completionPct' => $completion,
             'finished' => (bool) $row['is_finished'] || $completion >= 95,
-            'poster' => $this->poster((string) $row['item_id'], $itemType),
+            'poster' => $this->poster((string) ($row['resolved_item_id'] ?? $row['item_id']), $itemType),
         ];
     }
 

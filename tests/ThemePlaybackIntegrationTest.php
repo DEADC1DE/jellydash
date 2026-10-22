@@ -96,7 +96,7 @@ final class ThemePlaybackIntegrationTest extends TestCase
             ->where('session_key = %s', 'issue25-theme-live-again')->fetchSingle());
 
         $knownThemeImport = $this->importRow('issue25-theme-import', 'issue25-theme');
-        self::assertSame(['inserted' => 0, 'skipped' => 1, 'repaired' => 0], $this->history->importHistoricalPlays([$knownThemeImport]));
+        self::assertSame(['inserted' => 0, 'skipped' => 1, 'conflicts' => 0, 'repaired' => 0], $this->history->importHistoricalPlays([$knownThemeImport]));
         self::assertSame(['inserted' => 0, 'skipped' => 1], $this->history->importNativeHistoricalPlays([$knownThemeImport]));
     }
 

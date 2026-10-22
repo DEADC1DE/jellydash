@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mk\Framework\Jellyfin;
 
+use Mk\Framework\Config;
 use Mk\Framework\Log;
 
 final class NowPlayingService
@@ -14,6 +15,7 @@ final class NowPlayingService
         private ?PlayHistoryRepository $history = null,
         private ?LiveLibraryResolver $libraryResolver = null,
         private ?MonitoringExclusions $exclusions = null,
+        private ?\Closure $movieIdentityCapture = null,
     ) {
     }
 
@@ -34,6 +36,7 @@ final class NowPlayingService
             // If either is unavailable, unknown sessions remain visible.
             Log::logException($e);
         }
+        $this->captureMovieIdentities($sessions, $client);
         $mapped = $mapper->map($sessions);
         /** @var array<int, array<string, mixed>> $streams */
         $streams = $mapped['streams'];
@@ -91,6 +94,7 @@ final class NowPlayingService
         $history = $this->history ?? new PlayHistoryRepository();
         $sessions = ($this->exclusions ?? new MonitoringExclusions())->filterSessions($client->sessions());
         $sessions = $history->themePlaybackExclusions()->filterSessions($sessions, $client);
+        $this->captureMovieIdentities($sessions, $client);
         /** @var array<int, array<string, mixed>> $streams */
         $streams = $mapper->map($sessions)['streams'];
 
@@ -100,6 +104,24 @@ final class NowPlayingService
         $history->themePlaybackExclusions()->classifyHistoryBatch($client);
 
         return count($streams);
+    }
+
+    /** @param array<int, array<string, mixed>> $sessions */
+    private function captureMovieIdentities(array $sessions, JellyfinClient $client): void
+    {
+        if ($sessions === [] || ($this->movieIdentityCapture === null && trim((string) Config::get('JELLYFIN_URL', '')) === '')) {
+            return;
+        }
+        try {
+            if ($this->movieIdentityCapture !== null) {
+                ($this->movieIdentityCapture)($sessions);
+            } else {
+                (new MovieRecoveryService(client: $client))->captureSessions($sessions);
+            }
+        } catch (\Throwable $error) {
+            // Identity enrichment must not prevent recording a real play.
+            Log::logException($error);
+        }
     }
 
     /**

@@ -31,17 +31,8 @@ final class DeviceActivityService
 
     public function devicesDashboardUrl(string $baseUrl): ?string
     {
-        $baseUrl = rtrim(trim($baseUrl), '/');
-        $parts = parse_url($baseUrl);
-        if (
-            !is_array($parts)
-            || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['http', 'https'], true)
-            || (string) ($parts['host'] ?? '') === ''
-            || isset($parts['user'])
-            || isset($parts['pass'])
-            || isset($parts['query'])
-            || isset($parts['fragment'])
-        ) {
+        $baseUrl = JellyfinLinks::baseUrl($baseUrl);
+        if ($baseUrl === null) {
             return null;
         }
 

@@ -1,0 +1,23 @@
+{
+  "version": "1.14.1",
+  "auto_show": true,
+  "title": "Downloads fixes and dashboard refinements",
+  "summary": "More accurate SABnzbd activity, clearer phone layouts, and repairs for replaced movies and Jellyfin links.",
+  "highlights": [
+    "SABnzbd activity now follows progress between updates. SABnzbd and NZBGet cards no longer repeat the whole client's speed for each job.",
+    "History has expandable playback details on phones. Statistics, typography and mobile navigation have also been refined.",
+    "Now Playing keeps media details and avatars current while diagnostics are open. Downloads preserves keyboard focus during refresh, and Server Activity identifies cached timestamps.",
+    "Manually link a deleted movie to its replacement to combine Statistics and restore artwork while keeping the original History records.",
+    "Use the optional JELLYFIN_LINK_URL setting when your browser needs a different Jellyfin address from the one Jellydash uses for API requests."
+  ],
+  "links": [
+    {
+      "label": "Movie replacement guide",
+      "url": "https://github.com/themartz90/jellydash/blob/v1.14.1/docs/MOVIE_REPLACEMENTS.md"
+    },
+    {
+      "label": "Full release notes",
+      "url": "https://github.com/themartz90/jellydash/releases/tag/v1.14.1"
+    }
+  ]
+}

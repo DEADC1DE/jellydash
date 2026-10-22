@@ -113,24 +113,40 @@ final class DownloadScopedSpeedTest extends TestCase
         self::assertNull($overview['connections'][0]['speed']);
     }
 
-    public function testSabSelectedSpeedCanUseTotalOnlyWhenDownloadingJobsShareOneScope(): void
+    public function testSabSelectedSpeedCanUseTotalWhenOtherJobsAreExplicitlyPaused(): void
     {
         $connection = $this->connection('sabnzbd');
         $this->collect($connection, [
             $this->item('included', 'movies', [], null),
-            $this->item('queued-outside', 'other', [], null, 'queued'),
+            $this->item('paused-outside', 'other', [], null, 'paused'),
         ], 500.0);
         $included = (new OverviewService($this->connections, $this->downloads))->snapshot(1001);
         self::assertSame(500.0, $included['speed']);
         self::assertSame(0.0, $included['outside_speed']);
 
         $this->collect($connection, [
-            $this->item('queued-inside', 'movies', [], null, 'queued'),
+            $this->item('paused-inside', 'movies', [], null, 'paused'),
             $this->item('excluded', 'other', [], null),
         ], 600.0, 1016);
         $excluded = (new OverviewService($this->connections, $this->downloads))->snapshot(1017);
         self::assertSame(0.0, $excluded['speed']);
         self::assertSame(600.0, $excluded['outside_speed']);
+    }
+
+    public function testSabWaitingAndUnobservedJobsDoNotProveAClientSpeedSplit(): void
+    {
+        $connection = $this->connection('sabnzbd');
+        foreach (['queued', 'unknown'] as $index => $state) {
+            $this->collect($connection, [
+                $this->item('included', 'movies', [], null),
+                $this->item('excluded', 'other', [], null, $state),
+            ], 500.0, 1000 + 16 * $index);
+            $overview = (new OverviewService($this->connections, $this->downloads))->snapshot(1001 + 16 * $index);
+            self::assertNull($overview['speed']);
+            self::assertNull($overview['outside_speed']);
+            self::assertSame(500.0, $overview['connections'][0]['client_speed']);
+            self::assertSame(1, $overview['active_count']);
+        }
     }
 
     public function testIncompleteSelectedInventoryCannotClaimAnExactSpeed(): void

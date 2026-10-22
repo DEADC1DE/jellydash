@@ -22,6 +22,7 @@ final class SabnzbdProvider implements Provider
     private const CURRENT_HISTORY_LIMIT = 1001;
     private const CURRENT_HISTORY_STATUSES = 'Queued,QuickCheck,Verifying,Repairing,Fetching,Extracting,Moving,Running';
     private const MAX_BATCH_ROWS = 1000;
+    private const ACTIVITY_MAX_AGE = 45;
 
     public function __construct(private readonly DownloaderTransport $transport = new DownloaderHttpClient())
     {
@@ -67,18 +68,42 @@ final class SabnzbdProvider implements Provider
             throw new ProviderException('invalid_response');
         }
 
+        $now = time();
+        $speed = $this->number($queue['kbpersec'] ?? null, 0.0);
+        $speed = $speed === null ? null : $speed * 1024;
+        $activity = $cursor['sab_activity'] ?? null;
+        $previous = is_array($activity) && is_int($activity['at'] ?? null)
+            && $activity['at'] < $now && $activity['at'] >= $now - self::ACTIVITY_MAX_AGE
+            && is_array($activity['jobs'] ?? null) ? $activity['jobs'] : [];
+        $samples = [];
+        $paused = ($queue['paused'] ?? false) === true || ($queue['status'] ?? null) === 'Paused';
         $items = [];
         $seenItems = [];
         $queueRows = $this->rows($queue['slots'] ?? null);
-        foreach ($queueRows as $row) {
+        foreach (array_slice($queueRows, 0, self::MAX_BATCH_ROWS) as $row) {
             $item = $this->queueItem($row);
             if ($item !== null && !isset($seenItems[$item['source_id']])) {
                 $seenItems[$item['source_id']] = true;
+                if ($item['state'] === 'downloading') {
+                    if ($paused && ($row['priority'] ?? null) !== 'Force') {
+                        $item['state'] = 'paused';
+                    } else {
+                        $key = hash('sha256', $item['source_id']);
+                        $size = $item['size'];
+                        $downloaded = $item['downloaded'];
+                        if (is_int($size) && $size > 0 && is_int($downloaded)) {
+                            $samples[$key] = [$size, $downloaded];
+                        }
+                        $item['state'] = $this->observedState($samples[$key] ?? null, $previous[$key] ?? null, $speed);
+                    }
+                }
+                if ($item['state'] !== 'downloading') {
+                    $item['eta'] = null;
+                }
                 $items[] = $item;
             }
         }
 
-        $now = time();
         $completions = [];
         $deadline = microtime(true) + 5.0;
         $currentHistoryComplete = false;
@@ -120,8 +145,10 @@ final class SabnzbdProvider implements Provider
             }
         }
 
+        $cursor['sab_activity'] = ['at' => $now, 'jobs' => $samples];
         $queueTotal = $this->integer($queue['noofslots'] ?? null, 0);
-        $queueComplete = $queueTotal !== null && $queueTotal <= count($queueRows);
+        $queueComplete = $queueTotal !== null && $queueTotal <= count($queueRows)
+            && count($queueRows) <= self::MAX_BATCH_ROWS;
         $itemsTruncated = count($items) > self::MAX_BATCH_ROWS;
         $completions = array_slice($completions, 0, self::MAX_BATCH_ROWS);
         $items = array_slice($items, 0, self::MAX_BATCH_ROWS);
@@ -129,11 +156,27 @@ final class SabnzbdProvider implements Provider
         return new CollectionBatch(
             $items,
             $completions,
-            $this->number($queue['kbpersec'] ?? null, 0.0) === null ? null : $this->number($queue['kbpersec'], 0.0) * 1024,
+            $speed,
             $cursor,
             $queueComplete && $currentHistoryComplete && !$itemsTruncated,
             history: $cursor['history'],
         );
+    }
+
+    /** @param array{int,int}|null $sample */
+    private function observedState(?array $sample, mixed $previous, ?float $speed): string
+    {
+        // SAB labels eligible queue entries Downloading even while they wait.
+        // Byte changes show recent progress, but cannot supply a per-job rate.
+        if ($speed === 0.0) {
+            return 'queued';
+        }
+        if ($sample === null || !is_array($previous) || count($previous) !== 2
+            || ($previous[0] ?? null) !== $sample[0] || !is_int($previous[1] ?? null)
+            || $previous[1] < 0 || $previous[1] > $sample[1]) {
+            return 'unknown';
+        }
+        return $sample[1] > $previous[1] ? 'downloading' : 'queued';
     }
 
     /** @param list<array<string,mixed>> $items @param array<string,bool> $seenItems
@@ -337,6 +380,9 @@ final class SabnzbdProvider implements Provider
             return null;
         }
         $state = $this->sabState($row['status'] ?? null);
+        if ($state === 'downloading') {
+            $state = 'unknown';
+        }
         $completedAt = in_array($state, ['completed', 'failed'], true)
             ? $this->integer($row['completed'] ?? null, 1) : null;
         $downloaded = $this->integer($row['downloaded'] ?? null, 0);
