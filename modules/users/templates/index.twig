@@ -113,6 +113,7 @@
             </div>
         </div>
 
+        {% if can_manage_users %}
         <header class="stats-section-header" id="invitations">
             <strong>Invitations</strong>
             <span>Create invite links and manage account expiry</span>
@@ -193,52 +194,113 @@
                 </section>
             </div>
         {% endif %}
+        {% endif %}
 
         <header class="stats-section-header">
             <strong>All Users</strong>
-            <span>All-time stats - open for profile</span>
+            <span>{{ can_manage_users ? 'Select a user to manage access and permissions' : 'All-time stats - open for profile' }}</span>
             <i></i>
         </header>
 
         <div class="users-grid">
             {% for row in rows %}
                 <div class="users-card">
-                    <a class="users-card-name" href="/users?user={{ row.name|url_encode }}">{{ row.name }}</a>
+                    {% if can_manage_users %}
+                        <button type="button" class="users-card-name users-card-open" data-user-manager-open="user-manager-{{ row.id }}" aria-haspopup="dialog" title="Manage {{ row.name }}">{{ row.name }}</button>
+                    {% else %}
+                        <a class="users-card-name" href="/users?user={{ row.name|url_encode }}">{{ row.name }}</a>
+                    {% endif %}
                     <span class="users-card-stat">{{ row.plays }} plays</span>
                     <span class="users-card-stat">{{ (row.watchSec / 3600)|round(1) }}h watched</span>
                     <small class="users-card-lastseen">{{ row.lastSeen ? 'Last seen ' ~ row.lastSeen|date('Y-m-d') : 'No plays recorded' }}</small>
-                    {% if row.invite %}
-                        <small class="users-card-invite">
-                            {% if row.invite.expires_at %}Expires {{ row.invite.expires_at|date('Y-m-d') }}{% else %}Unlimited access{% endif %}
-                            {% if row.invite.disabled_at %} · Disabled{% endif %}
-                        </small>
-                        <div class="users-card-actions">
-                            <form method="post" action="/users">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                <input type="hidden" name="do" value="disable-user">
-                                <input type="hidden" name="id" value="{{ row.id }}">
-                                <button type="submit" class="invite-mini is-danger">Disable</button>
-                            </form>
-                            <form method="post" action="/users">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                <input type="hidden" name="do" value="enable-user">
-                                <input type="hidden" name="id" value="{{ row.id }}">
-                                <button type="submit" class="invite-mini">Enable</button>
-                            </form>
-                            <form method="post" action="/users">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                <input type="hidden" name="do" value="extend-user">
-                                <input type="hidden" name="id" value="{{ row.id }}">
-                                <input type="hidden" name="days" value="30">
-                                <button type="submit" class="invite-mini">+30 days</button>
-                            </form>
-                            <form method="post" action="/users">
-                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                                <input type="hidden" name="do" value="reset-password">
-                                <input type="hidden" name="id" value="{{ row.id }}">
-                                <button type="submit" class="invite-mini">Reset password</button>
-                            </form>
-                        </div>
+                    {% if can_manage_users %}
+                        <dialog id="user-manager-{{ row.id }}" class="users-manager-dialog" data-user-manager-dialog aria-labelledby="user-manager-title-{{ loop.index }}">
+                            {% set userDisabled = row.policy is defined and row.policy is not null and row.policy.IsDisabled|default(false) %}
+                            <header class="users-manager-head">
+                                <div>
+                                    <span>Manage account</span>
+                                    <h2 id="user-manager-title-{{ loop.index }}">{{ row.name }}</h2>
+                                    {% if row.policy is defined and row.policy is not null %}
+                                        <p class="users-manager-status">{{ userDisabled ? 'Disabled' : 'Active' }}{% if row.invite and row.invite.expires_at %} · Deactivates after {{ row.invite.expires_at|date('Y-m-d') }}{% endif %}</p>
+                                    {% endif %}
+                                </div>
+                                <button type="button" class="users-manager-close" data-user-manager-close aria-label="Close user settings">×</button>
+                            </header>
+
+                            <section class="users-manager-section">
+                                <h3>Account access</h3>
+                                <form method="post" action="/users" class="users-manager-expiry-form">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <input type="hidden" name="do" value="set-expiry">
+                                    <input type="hidden" name="id" value="{{ row.id }}">
+                                    <input type="hidden" name="username" value="{{ row.name }}">
+                                    <label class="users-manager-field">
+                                        <span>Deactivate on</span>
+                                        <input type="date" name="expires_on"
+                                               value="{% if row.invite and row.invite.expires_at %}{{ row.invite.expires_at|date('Y-m-d') }}{% endif %}"
+                                               min="{{ 'now'|date('Y-m-d') }}">
+                                    </label>
+                                    <button type="submit" class="invite-mini">Save date</button>
+                                    <small class="users-manager-help">Active through this date; leave blank to remove scheduled deactivation.</small>
+                                </form>
+
+                                <div class="users-manager-actions">
+                                    <form method="post" action="/users">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="do" value="{% if userDisabled %}enable-user{% else %}disable-user{% endif %}">
+                                        <input type="hidden" name="id" value="{{ row.id }}">
+                                        <button type="submit" class="invite-mini{% if not userDisabled %} is-danger{% endif %}">{{ userDisabled ? 'Enable account' : 'Disable account' }}</button>
+                                    </form>
+                                    <form method="post" action="/users">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="do" value="extend-user">
+                                        <input type="hidden" name="id" value="{{ row.id }}">
+                                        <input type="hidden" name="username" value="{{ row.name }}">
+                                        <input type="hidden" name="days" value="30">
+                                        <button type="submit" class="invite-mini">+30 days</button>
+                                    </form>
+                                    <form method="post" action="/users">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="do" value="reset-password">
+                                        <input type="hidden" name="id" value="{{ row.id }}">
+                                        <button type="submit" class="invite-mini">Reset password</button>
+                                    </form>
+                                </div>
+                            </section>
+
+                            <section class="users-manager-section">
+                                <h3>Jellyfin permissions</h3>
+                                {% if row.policy is defined and row.policy is not null and invite.libraries_available %}
+                                    {% set allLibraries = row.policy.EnableAllFolders|default(false) %}
+                                    {% set enabledLibraries = row.policy.EnabledFolders|default([]) %}
+                                    <form method="post" action="/users" class="users-manager-permissions-form">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="do" value="set-permissions">
+                                        <input type="hidden" name="id" value="{{ row.id }}">
+                                        <fieldset class="users-manager-libraries">
+                                            <legend>Media libraries</legend>
+                                            <label class="invite-check"><input type="checkbox" name="all_libraries" value="1" data-user-all-libraries {% if allLibraries %}checked{% endif %}> All libraries</label>
+                                            {% for lib in invite.libraries %}
+                                                <label class="invite-check"><input type="checkbox" name="libraries[]" value="{{ lib.id }}" data-user-library {% if not allLibraries and lib.id in enabledLibraries %}checked{% endif %}> {{ lib.name }}</label>
+                                            {% endfor %}
+                                            <small class="users-manager-library-hint">Choose all libraries or select specific ones. No selection means no library access.</small>
+                                        </fieldset>
+                                        <div class="users-manager-toggles">
+                                            <label class="invite-check"><input type="checkbox" name="downloads" value="1" {% if row.policy.EnableContentDownloading|default(false) %}checked{% endif %}> Allow downloads</label>
+                                            <label class="invite-check"><input type="checkbox" name="livetv" value="1" {% if row.policy.EnableLiveTvAccess|default(false) %}checked{% endif %}> Allow live TV</label>
+                                        </div>
+                                        <button type="submit" class="invite-mini">Save permissions</button>
+                                    </form>
+                                {% else %}
+                                    <p class="users-manager-unavailable">Current Jellyfin permissions could not be loaded.</p>
+                                {% endif %}
+                            </section>
+
+                            <footer class="users-manager-footer">
+                                <a href="/users?user={{ row.name|url_encode }}">View activity profile</a>
+                                <button type="button" class="invite-mini" data-user-manager-close>Done</button>
+                            </footer>
+                        </dialog>
                     {% endif %}
                 </div>
             {% else %}

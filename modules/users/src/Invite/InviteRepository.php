@@ -9,8 +9,7 @@ use Mk\Framework\Database;
 use Mk\Framework\DatabasePlatform;
 
 /**
- * Local persistence for the native invitation engine: open invitations and
- * the expiry bookkeeping for accounts created through them.
+ * Local persistence for native invitations and account expiry bookkeeping.
  *
  * Both tables are self-created (no migration runner in this app); the WeakMap
  * guard keeps concurrent first requests from re-running the DDL.
@@ -226,8 +225,8 @@ final class InviteRepository
     }
 
     /**
-     * Invite-managed accounts keyed by lowercased username (join key against
-     * the Jellyfin user list on the Users page).
+     * Accounts with expiry records keyed by lowercased username (join key
+     * against the Jellyfin user list on the Users page).
      *
      * @return array<string, array<string, mixed>>
      */
@@ -256,19 +255,59 @@ final class InviteRepository
      * Account expiry: base = the later of the stored expiry and now, so an
      * extension never shortens a still-valid term. Pass null to clear.
      */
-    public function extendAccount(string $jellyfinUserId, int $days): ?string
+    public function extendAccount(string $jellyfinUserId, int $days, ?string $username = null): ?string
     {
         $account = $this->accountByUserId($jellyfinUserId);
         if ($account === null) {
-            return null;
+            if ($username === null || trim($username) === '') {
+                return null;
+            }
+
+            $expires = date('Y-m-d H:i:s', time() + max(1, $days) * 86400);
+            $this->db->insert('invite_accounts', [
+                'jellyfin_user_id' => $jellyfinUserId,
+                'username' => trim($username),
+                'expires_at' => $expires,
+                'invited_at' => date('Y-m-d H:i:s'),
+            ])->execute();
+
+            return $expires;
         }
 
         $base = max(time(), strtotime((string) ($account['expires_at'] ?? '')) ?: time());
         $expires = date('Y-m-d H:i:s', $base + max(1, $days) * 86400);
-        $this->db->update('invite_accounts', ['expires_at' => $expires])
+        $changes = ['expires_at' => $expires];
+        if ($username !== null) {
+            $changes['username'] = trim($username);
+        }
+        $this->db->update('invite_accounts', $changes)
             ->where('id = %i', $account['id'])->execute();
 
         return $expires;
+    }
+
+    public function setAccountExpiry(string $jellyfinUserId, string $username, ?string $expiresAt): void
+    {
+        $account = $this->accountByUserId($jellyfinUserId);
+        if ($account === null) {
+            if ($expiresAt === null) {
+                return;
+            }
+
+            $this->db->insert('invite_accounts', [
+                'jellyfin_user_id' => $jellyfinUserId,
+                'username' => $username,
+                'expires_at' => $expiresAt,
+                'invited_at' => date('Y-m-d H:i:s'),
+            ])->execute();
+            return;
+        }
+
+        $this->db->update('invite_accounts', [
+            'username' => $username,
+            'expires_at' => $expiresAt,
+        ])
+            ->where('id = %i', $account['id'])->execute();
     }
 
     /**

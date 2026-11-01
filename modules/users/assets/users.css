@@ -383,6 +383,22 @@
     display: block;
 }
 
+.users-card-open {
+    width: 100%;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+}
+
+.users-card-open:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 3px;
+}
+
 .users-card:hover .users-card-name {
     color: #fff;
 }
@@ -392,7 +408,103 @@
     color: rgba(247, 185, 85, .8);
 }
 
-.users-card-actions {
+.users-manager-dialog {
+    width: min(620px, calc(100vw - 28px));
+    max-height: min(90vh, 780px);
+    margin: auto;
+    padding: 24px;
+    overflow: auto;
+    color: var(--color-text);
+    border: 1px solid #3e344e;
+    border-radius: 16px;
+    background: #14111d;
+    box-shadow: 0 24px 100px rgba(0, 0, 0, .6);
+}
+
+.users-manager-dialog::backdrop {
+    background: rgba(3, 2, 7, .73);
+    backdrop-filter: blur(5px);
+}
+
+.users-manager-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.users-manager-head > div > span {
+    color: var(--color-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+.users-manager-head h2 {
+    margin: 4px 0;
+    font-size: 21px;
+}
+
+.users-manager-status {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.users-manager-close {
+    padding: 0 5px;
+    color: var(--color-muted);
+    font: inherit;
+    font-size: 25px;
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+}
+
+.users-manager-section {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border);
+}
+
+.users-manager-section h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+}
+
+.users-manager-expiry-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 6px;
+    margin-top: 9px;
+}
+
+.users-manager-field {
+    display: grid;
+    gap: 4px;
+    color: var(--color-muted);
+    font-size: 11px;
+}
+
+.users-manager-field input {
+    min-height: 31px;
+    padding: 4px 8px;
+    color: rgba(255, 255, 255, .82);
+    font: inherit;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: rgba(8, 7, 12, .48);
+}
+
+.users-manager-help {
+    flex-basis: 100%;
+    color: var(--color-muted);
+    font-size: 10.5px;
+}
+
+.users-manager-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -401,8 +513,71 @@
     border-top: 1px solid var(--color-border);
 }
 
-.users-card-actions form {
+.users-manager-actions form {
     display: contents;
+}
+
+.users-manager-permissions-form {
+    display: grid;
+    gap: 13px;
+}
+
+.users-manager-libraries {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+}
+
+.users-manager-libraries legend {
+    padding: 0 5px;
+    color: var(--color-muted);
+    font-size: 11px;
+}
+
+.users-manager-library-hint {
+    color: var(--color-muted);
+    font-size: 10.5px;
+}
+
+.users-manager-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+}
+
+.users-manager-unavailable {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.users-manager-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 22px;
+    padding-top: 15px;
+    border-top: 1px solid var(--color-border);
+}
+
+.users-manager-footer a {
+    color: rgba(173, 150, 255, .95);
+    font-size: 12px;
+}
+
+@media (max-width: 520px) {
+    .users-manager-dialog {
+        padding: 18px;
+    }
+
+    .users-manager-toggles {
+        flex-direction: column;
+        gap: 8px;
+    }
 }
 
 .invite-mini {

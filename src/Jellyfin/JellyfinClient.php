@@ -110,11 +110,11 @@ final class JellyfinClient implements LibraryOverviewClient
     }
 
     /**
-     * Jellyfin users (id + name). Needs an admin API token.
+     * Jellyfin users. Needs an admin API token.
      *
-     * @return array<int, array{id: string, name: string}>
+     * @return array<int, array{id: string, name: string, policy?: array<string, mixed>|null}>
      */
-    public function users(): array
+    public function users(bool $includePolicy = false): array
     {
         $payload = $this->getJson('/Users');
         if (!is_array($payload)) {
@@ -129,7 +129,11 @@ final class JellyfinClient implements LibraryOverviewClient
             $id = (string) ($user['Id'] ?? '');
             $name = trim((string) ($user['Name'] ?? ''));
             if ($id !== '' && $name !== '') {
-                $users[] = ['id' => $id, 'name' => $name];
+                $entry = ['id' => $id, 'name' => $name];
+                if ($includePolicy) {
+                    $entry['policy'] = is_array($user['Policy'] ?? null) ? $user['Policy'] : null;
+                }
+                $users[] = $entry;
             }
         }
 

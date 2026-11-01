@@ -58,7 +58,7 @@ if [ "$workers_enabled" = "1" ]; then
             # Enforce stream rules against the same session snapshot: rules
             # stop/kick matching sessions and announce it to the admin.
             gosu www-data php /var/www/html/bin/console.php stream-control:enforce || true
-            # Disable invite-managed accounts past their expiry (native invite engine).
+            # Disable accounts past their scheduled expiry.
             gosu www-data php /var/www/html/bin/console.php invites:enforce || true
             sleep "${POLL_INTERVAL}"
         done

@@ -440,7 +440,7 @@ try {
             echo "  php bin/console.php libraries:warm (refresh the cached library overview)\n";
             echo "  php bin/console.php database:migrate-to-sqlite <file> --confirm-stopped\n";
             echo "  php bin/console.php seerr:poll     (sync Jellyseerr requests + alert on new ones)\n";
-            echo "  php bin/console.php invites:enforce (disable expired invite accounts)\n";
+            echo "  php bin/console.php invites:enforce (disable accounts past scheduled expiry)\n";
             echo "  php bin/console.php push:vapid     (generate a Web Push VAPID keypair)\n";
             echo "  php bin/console.php push:test      (send a test notification to subscribers)\n\n";
             echo "  php bin/console.php push:devices   (list safe notification device metadata)\n";

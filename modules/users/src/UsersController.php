@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Mk\Modules\Users;
 
+use Mk\Framework\Authorization;
 use Mk\Framework\Controller;
 use Mk\Framework\Csrf;
 use Mk\Framework\Jellyfin\JellyfinClient;
@@ -19,6 +20,7 @@ final class UsersController extends Controller
 
     public function handle(): void
     {
+        $canManageUsers = (new Authorization())->can(Authorization::CAPABILITY_MANAGE_GLOBAL);
         $selected = trim((string) ($_GET['user'] ?? ''));
         $repository = new UserStatsRepository();
 
@@ -29,6 +31,10 @@ final class UsersController extends Controller
         $inviteError = Main::captureGetString('invite_error');
         $inviteNotice = Main::captureSessionNotice();
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            if (!$canManageUsers) {
+                http_response_code(403);
+                exit('Forbidden');
+            }
             Csrf::check();
             try {
                 $error = $this->handleInviteAction($inviteNotice);
@@ -43,7 +49,17 @@ final class UsersController extends Controller
             if ($inviteNotice !== null) {
                 Main::putSessionNotice($inviteNotice);
             }
-            header('Location: /users' . ($error !== null ? '?' . http_build_query(['invite_error' => $error]) . '#invitations' : '#invitations'));
+            $action = (string) ($_POST['do'] ?? '');
+            $postId = (string) ($_POST['id'] ?? '');
+            $keepUserDialogOpen = $error === null
+                && $postId !== ''
+                && in_array($action, ['set-expiry', 'set-permissions', 'disable-user', 'enable-user', 'extend-user'], true);
+            $anchor = $keepUserDialogOpen ? '#user-manager-' . rawurlencode($postId) : '#invitations';
+            $location = '/users';
+            if ($error !== null) {
+                $location .= '?' . http_build_query(['invite_error' => $error]);
+            }
+            header('Location: ' . $location . $anchor);
             exit;
         }
 
@@ -86,7 +102,7 @@ final class UsersController extends Controller
             return;
         }
 
-        $jellyfinUsers = (new JellyfinClient())->users();
+        $jellyfinUsers = (new JellyfinClient())->users($canManageUsers);
         $rows = array_map(
             fn (array $user): array => array_merge($user, $repository->summaryForUser($user['name'])),
             $jellyfinUsers
@@ -107,10 +123,12 @@ final class UsersController extends Controller
             $overview['titles']
         );
 
-        $invite = $this->inviteState($inviteError, $inviteNotice);
+        $invite = $canManageUsers
+            ? $this->inviteState($inviteError, $inviteNotice)
+            : ['usersByName' => []];
 
-        // Invite expiry data keyed by lowercase username; invite accounts and
-        // Jellyfin accounts are the same accounts, so names are the join key.
+        // Expiry data keyed by lowercase username; Jellyfin account names are
+        // the join key for the list shown on this page.
         foreach ($rows as &$row) {
             $row['invite'] = $invite['usersByName'][mb_strtolower((string) $row['name'])] ?? null;
         }
@@ -121,6 +139,7 @@ final class UsersController extends Controller
             'rows' => $rows,
             'overview' => $overview,
             'invite' => $invite,
+            'can_manage_users' => $canManageUsers,
         ]);
     }
 
@@ -129,7 +148,7 @@ final class UsersController extends Controller
      * the template needs. A Jellyfin failure must never break the Users page
      * itself, so it degrades to an error note.
      *
-     * @return array{error: string|null, notice: string|null, usersByName: array<string, array<string, mixed>>, invitations: array<int, array<string, mixed>>, libraries: array<int, array<string, mixed>>}
+     * @return array{error: string|null, notice: string|null, usersByName: array<string, array<string, mixed>>, invitations: array<int, array<string, mixed>>, libraries: array<int, array<string, mixed>>, libraries_available: bool}
      */
     private function inviteState(?string $error, ?string $notice): array
     {
@@ -139,19 +158,22 @@ final class UsersController extends Controller
             'usersByName' => [],
             'invitations' => [],
             'libraries' => [],
+            'libraries_available' => false,
         ];
 
         try {
             $manager = new InviteManager();
             $state['usersByName'] = $manager->repository()->accountsByName();
             $state['invitations'] = $manager->invitations(InviteManager::publicBaseUrl());
+            $folders = (new JellyfinClient())->mediaFolders();
+            $state['libraries_available'] = true;
             $state['libraries'] = array_map(
                 static fn (array $folder): array => [
                     'id' => (string) ($folder['Id'] ?? ''),
                     'name' => (string) ($folder['Name'] ?? $folder['Id']),
                 ],
                 array_values(array_filter(
-                    (new JellyfinClient())->mediaFolders(),
+                    $folders,
                     static fn (array $folder): bool => (string) ($folder['Id'] ?? '') !== ''
                 ))
             );
@@ -202,7 +224,34 @@ final class UsersController extends Controller
                 return null;
             case 'extend-user':
                 if ($id !== '') {
-                    $manager->extend($id, (int) ($_POST['days'] ?? 30));
+                    $manager->extend($id, (int) ($_POST['days'] ?? 30), (string) ($_POST['username'] ?? ''));
+                }
+                return null;
+            case 'set-expiry':
+                if ($id !== '') {
+                    $username = (string) ($_POST['username'] ?? '');
+                    $date = trim((string) ($_POST['expires_on'] ?? ''));
+                    $manager->setExpiryDate($id, $username, $date !== '' ? $date : null);
+                }
+                return null;
+            case 'set-permissions':
+                if ($id !== '') {
+                    $postedLibraries = $_POST['libraries'] ?? [];
+                    if (!is_array($postedLibraries)) {
+                        return 'Choose valid media libraries.';
+                    }
+                    foreach ($postedLibraries as $libraryId) {
+                        if (!is_string($libraryId)) {
+                            return 'Choose valid media libraries.';
+                        }
+                    }
+                    $manager->setAccountPermissions(
+                        $id,
+                        $postedLibraries,
+                        ($_POST['all_libraries'] ?? '') === '1',
+                        ($_POST['downloads'] ?? '') === '1',
+                        ($_POST['livetv'] ?? '') === '1',
+                    );
                 }
                 return null;
             case 'reset-password':

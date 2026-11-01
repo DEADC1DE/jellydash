@@ -172,14 +172,97 @@ final class InviteManager
      * Extend an invite-managed account. Re-enables it when the extension
      * clears the expiry that had it disabled.
      */
-    public function extend(string $jellyfinUserId, int $days): ?string
+    public function extend(string $jellyfinUserId, int $days, ?string $username = null): ?string
     {
-        $expires = $this->repository->extendAccount($jellyfinUserId, $days);
+        if ($username !== null) {
+            $username = trim($username);
+            if ($username === '' || strlen($username) > 100) {
+                throw new \InvalidArgumentException('A valid Jellyfin username is required.');
+            }
+        }
+
+        $expires = $this->repository->extendAccount($jellyfinUserId, $days, $username);
         if ($expires !== null && strtotime($expires) > time()) {
             $this->setDisabled($jellyfinUserId, false);
         }
 
         return $expires;
+    }
+
+    /**
+     * Set the calendar date through which a tracked account remains active.
+     * A blank date clears the expiry. The stored timestamp is the last second of
+     * the selected date, so the account stays active for that full calendar day.
+     */
+    public function setExpiryDate(string $jellyfinUserId, string $username, ?string $date): ?string
+    {
+        $username = trim($username);
+        if ($username === '' || strlen($username) > 100) {
+            throw new \InvalidArgumentException('A valid Jellyfin username is required.');
+        }
+
+        $expiresAt = null;
+        if ($date !== null && $date !== '') {
+            $timezone = new \DateTimeZone(date_default_timezone_get());
+            $selectedDay = \DateTimeImmutable::createFromFormat('!Y-m-d', $date, $timezone);
+            $errors = \DateTimeImmutable::getLastErrors();
+
+            if ($selectedDay === false
+                || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
+                || $selectedDay->format('Y-m-d') !== $date
+            ) {
+                throw new \InvalidArgumentException('Choose a valid deactivation date.');
+            }
+
+            if ($selectedDay < new \DateTimeImmutable('today', $timezone)) {
+                throw new \InvalidArgumentException('Choose today or a future date.');
+            }
+
+            $expiresAt = $selectedDay->setTime(23, 59, 59)->format('Y-m-d H:i:s');
+        }
+
+        $this->repository->setAccountExpiry($jellyfinUserId, $username, $expiresAt);
+
+        return $expiresAt;
+    }
+
+    /**
+     * Update the user-visible media permissions while preserving every other
+     * field in Jellyfin's full user policy.
+     *
+     * @param array<int, string> $libraryIds
+     */
+    public function setAccountPermissions(
+        string $jellyfinUserId,
+        array $libraryIds,
+        bool $allLibraries,
+        bool $allowDownloads,
+        bool $allowLiveTv,
+    ): void {
+        $selectedLibraries = [];
+        if (!$allLibraries) {
+            $availableLibraries = [];
+            foreach ($this->jellyfin->mediaFolders() as $folder) {
+                $id = (string) ($folder['Id'] ?? '');
+                if ($id !== '') {
+                    $availableLibraries[$id] = true;
+                }
+            }
+
+            foreach ($libraryIds as $libraryId) {
+                if (!is_string($libraryId) || $libraryId === '' || !isset($availableLibraries[$libraryId])) {
+                    throw new \InvalidArgumentException('Choose valid media libraries.');
+                }
+                $selectedLibraries[$libraryId] = $libraryId;
+            }
+        }
+
+        $this->applyPolicyUpdate($jellyfinUserId, [
+            'EnableAllFolders' => $allLibraries,
+            'EnabledFolders' => array_values($selectedLibraries),
+            'EnableContentDownloading' => $allowDownloads,
+            'EnableLiveTvAccess' => $allowLiveTv,
+        ]);
     }
 
     /**
