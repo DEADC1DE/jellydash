@@ -170,6 +170,11 @@ You do not need to migrate. Existing MariaDB installations continue working exac
 
 Stop Jellydash first so no plays or settings change during the copy. The migration checks every copied value and leaves the original MariaDB data untouched.
 
+Before stopping, let any History restore finish and wait for a successful
+Jellyfin collection check in System status. This lets queued playback samples
+reach the database. The migration copies database rows, not the
+[pending sample files](docs/HISTORY_CSV.md#importing).
+
 First preserve your current MariaDB Compose file for rollback. This will not overwrite an existing backup. Continue only when it prints `MariaDB Compose backup verified`:
 
 ```bash
@@ -358,6 +363,10 @@ Confirmed background theme songs and videos are excluded automatically. The hist
 
 To silence music alerts without hiding music activity, select the library under **Settings > Exclusions > Notifications**. Library names match exactly, ignoring letter case. If Jellydash cannot identify a new play's library, it waits for that information before sending an alert. An unresolved play expires without an alert after 10 minutes.
 For manually entered names or `PUSH_IGNORE_LIBRARIES`, put a library name containing a comma in double quotes.
+
+Under **Settings > Exclusions > Short plays**, set **Minimum viewing time** to hide brief playback checks from History, Statistics, Trending, Most Watched, library activity and CSV exports. The value is in seconds; 0 keeps every play visible. Try 60 or 120 seconds for encoding or HDR checks. The filter applies to all media, including music.
+
+Plays stay in the database, so lowering the value makes them visible again. The cutoff uses sampled viewing time rather than playback position; paused time and skipped portions do not count as time watched. Older plays without measured viewing time remain visible. Live sessions and playback-start notifications are unchanged. Set the value to 0 before exporting if you want to include short plays in a backup.
 
 ## Exporting History
 
