@@ -230,7 +230,7 @@ final class InviteManager
      * Update the user-visible media permissions while preserving every other
      * field in Jellyfin's full user policy.
      *
-     * @param array<int, string> $libraryIds
+     * @param array<int, mixed> $libraryIds
      */
     public function setAccountPermissions(
         string $jellyfinUserId,
